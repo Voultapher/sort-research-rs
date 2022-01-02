@@ -113,12 +113,20 @@ int int_cmp_func(const void* a_ptr, const void* b_ptr) {
   const T b = *static_cast<const T*>(b_ptr);
 
   // Yeah I know everyone does a - b, but that invokes UB.
-  if (a < b) {
-    return -1;
-  } else if (a > b) {
-    return 1;
-  }
-  return 0;
+  // if (a < b) {
+  //   return -1;
+  // } else if (a > b) {
+  //   return 1;
+  // }
+  // return 0;
+
+  // This optimizes particularly well with clang.
+  // gcc sees a 2x speedup for random inputs with this.
+
+  // Alternative branchless version.
+  const bool is_less = a < b;
+  const bool is_more = a > b;
+  return (is_less * -1) + (is_more * 1);
 }
 
 // This is broken, crumsort and fluxsort break the individual F128 values.
