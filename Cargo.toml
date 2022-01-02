@@ -12,6 +12,7 @@ doctest = false
 [dependencies]
 rand = "0.8"
 once_cell = "1.15"
+paste = "1.0"
 radsort = { version = "0.1", optional = true }
 dmsort = { version = "1.0", optional = true }
 
@@ -32,7 +33,6 @@ default = [
     # "cpp_pdqsort",
     # "cpp_powersort",
     # "cpp_simdsort",
-    # "cpp_ips4o",
     # "cpp_ips4o",
     # "c_crumsort",
     # "c_fluxsort",

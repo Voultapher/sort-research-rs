@@ -4,21 +4,7 @@
 
 #include <stdint.h>
 
-struct CompResult;
-
-template <typename T>
-auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                     uint8_t* ctx) {
-  return [cmp_fn, ctx](const T& a, const T& b) mutable -> bool {
-    const auto comp_result = cmp_fn(a, b, ctx);
-
-    if (comp_result.is_panic) {
-      throw std::runtime_error{"panic in Rust comparison function"};
-    }
-
-    return comp_result.cmp_result == -1;
-  };
-}
+#include "shared.h"
 
 template <typename T>
 uint32_t sort_by_impl(T* data,
@@ -35,11 +21,6 @@ uint32_t sort_by_impl(T* data,
 }
 
 extern "C" {
-struct CompResult {
-  int8_t cmp_result;
-  bool is_panic;
-};
-
 // --- i32 ---
 
 void ips4o_unstable_i32(int32_t* data, size_t len) {
@@ -67,6 +48,22 @@ uint32_t ips4o_unstable_u64_by(uint64_t* data,
                                                     const uint64_t&,
                                                     uint8_t*),
                                uint8_t* ctx) {
+  return sort_by_impl(data, len, cmp_fn, ctx);
+}
+
+// --- ffi_string ---
+
+void ips4o_unstable_ffi_string(FFIString* data, size_t len) {
+  ips4o::sort(reinterpret_cast<FFIStringCpp*>(data),
+              reinterpret_cast<FFIStringCpp*>(data) + len);
+}
+
+uint32_t ips4o_unstable_ffi_string_by(FFIString* data,
+                                      size_t len,
+                                      CompResult (*cmp_fn)(const FFIString&,
+                                                           const FFIString&,
+                                                           uint8_t*),
+                                      uint8_t* ctx) {
   return sort_by_impl(data, len, cmp_fn, ctx);
 }
 }  // extern "C"

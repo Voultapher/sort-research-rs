@@ -13,6 +13,15 @@ fn link_simple_cpp_sort(file_name: &str, specialize_fn: Option<fn(&mut cc::Build
     // Tell Cargo that if the given file changes, to rerun this build script.
     println!("cargo:rerun-if-changed={}", file_path.display());
 
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir
+            .join("src")
+            .join("cpp")
+            .join("shared.h")
+            .display()
+    );
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let mut builder = cc::Build::new();

@@ -8,14 +8,9 @@
 
 #include <stdint.h>
 
-struct CompResult;
+#include "shared.h"
 
 extern "C" {
-struct CompResult {
-  int8_t cmp_result;
-  bool is_panic;
-};
-
 // --- i32 ---
 
 void simdsort_avx2_unstable_i32(int32_t* data, size_t len) {
@@ -44,6 +39,21 @@ uint32_t simdsort_avx2_unstable_u64_by(uint64_t* data,
                                                             const uint64_t&,
                                                             uint8_t*),
                                        uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
+}
+
+// --- ffi_string ---
+
+void simdsort_avx2_unstable_ffi_string(FFIString* data, size_t len) {
+  printf("Not supported\n");
+}
+
+uint32_t simdsort_avx2_unstable_ffi_string_by(
+    FFIString* data,
+    size_t len,
+    CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
+    uint8_t* ctx) {
   printf("Not supported\n");
   return 1;
 }

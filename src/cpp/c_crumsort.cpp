@@ -6,31 +6,7 @@
 #include <stdint.h>
 #include <stdexcept>
 
-struct CompResult;
-
-template <typename T>
-CMPFUNC* make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                         uint8_t* ctx) {
-  thread_local static CompResult (*cmp_fn_local)(const T&, const T&, uint8_t*) =
-      nullptr;
-  thread_local static uint8_t* ctx_local = nullptr;
-
-  cmp_fn_local = cmp_fn;
-  ctx_local = ctx;
-
-  return [](const void* a_ptr, const void* b_ptr) -> int {
-    const T a = *static_cast<const T*>(a_ptr);
-    const T b = *static_cast<const T*>(b_ptr);
-
-    const auto comp_result = cmp_fn_local(a, b, ctx_local);
-
-    if (comp_result.is_panic) {
-      throw std::runtime_error{"panic in Rust comparison function"};
-    }
-
-    return comp_result.cmp_result;
-  };
-}
+#include "shared.h"
 
 template <typename T>
 uint32_t sort_by_impl(T* data,
@@ -39,7 +15,7 @@ uint32_t sort_by_impl(T* data,
                       uint8_t* ctx) noexcept {
   try {
     crumsort(static_cast<void*>(data), len, sizeof(T),
-             make_compare_fn(cmp_fn, ctx));
+             make_compare_fn_c(cmp_fn, ctx));
   } catch (...) {
     return 1;
   }
@@ -62,11 +38,6 @@ int int_cmp_func(const void* a_ptr, const void* b_ptr) {
 }
 
 extern "C" {
-struct CompResult {
-  int8_t cmp_result;
-  bool is_panic;
-};
-
 // --- i32 ---
 
 void crumsort_unstable_i32(int32_t* data, size_t len) {
@@ -101,5 +72,21 @@ uint32_t crumsort_unstable_u64_by(uint64_t* data,
                                                        uint8_t*),
                                   uint8_t* ctx) {
   return sort_by_impl(data, len, cmp_fn, ctx);
+}
+
+// --- ffi_string ---
+
+void crumsort_unstable_ffi_string(FFIString* data, size_t len) {
+  printf("Not supported\n");
+}
+
+uint32_t crumsort_unstable_ffi_string_by(FFIString* data,
+                                         size_t len,
+                                         CompResult (*cmp_fn)(const FFIString&,
+                                                              const FFIString&,
+                                                              uint8_t*),
+                                         uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
 }
 }  // extern "C"

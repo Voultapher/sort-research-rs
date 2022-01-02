@@ -10,7 +10,8 @@
     specialization,
     sized_type_properties,
     portable_simd,
-    const_mut_refs
+    const_mut_refs,
+    vec_into_raw_parts
 )]
 
 pub trait Sort {
@@ -56,7 +57,7 @@ macro_rules! sort_impl {
 }
 
 #[macro_use]
-mod ffi_util;
+pub mod ffi_util;
 
 // Copy the stdlib implementations to have comparable builds.
 // The stdlib is compiled with unknown optimizations such as PGO.

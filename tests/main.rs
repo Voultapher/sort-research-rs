@@ -8,6 +8,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::sync::Mutex;
 
+use sort_comp::ffi_util::FFIString;
 use sort_comp::patterns;
 
 use sort_comp::unstable::rust_new as test_sort;
@@ -322,6 +323,16 @@ fn stability() {
                 .all(|w| i32_tup_from_u64(w[0]) <= i32_tup_from_u64(w[1])));
         }
     }
+}
+
+#[test]
+fn random_ffi_str() {
+    test_impl(|test_size| {
+        patterns::random(test_size)
+            .into_iter()
+            .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
+            .collect::<Vec<_>>()
+    });
 }
 
 #[test]

@@ -3,21 +3,7 @@
 
 #include <stdint.h>
 
-struct CompResult;
-
-template <typename T>
-auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                     uint8_t* ctx) {
-  return [cmp_fn, ctx](const T& a, const T& b) mutable -> bool {
-    const auto comp_result = cmp_fn(a, b, ctx);
-
-    if (comp_result.is_panic) {
-      throw std::runtime_error{"panic in Rust comparison function"};
-    }
-
-    return comp_result.cmp_result == -1;
-  };
-}
+#include "shared.h"
 
 template <typename T>
 uint32_t sort_stable_by_impl(T* data,
@@ -50,37 +36,31 @@ uint32_t sort_unstable_by_impl(T* data,
 }
 
 #if defined(STD_LIB_SYS)
-#define MAKE_FUNC_NAME(name) name##_sys
+#define MAKE_FUNC_NAME(name, suffix) name##_sys_##suffix
 #elif defined(STD_LIB_LIBCXX)
-#define MAKE_FUNC_NAME(name) name##_libcxx
+#define MAKE_FUNC_NAME(name, suffix) name##_libcxx_##suffix
 #endif
 
 extern "C" {
-struct CompResult {
-  int8_t cmp_result;
-  bool is_panic;
-};
-
 // --- i32 ---
 
-void MAKE_FUNC_NAME(sort_stable_i32)(int32_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_stable, i32)(int32_t* data, size_t len) {
   std::stable_sort(data, data + len);
 }
 
-uint32_t MAKE_FUNC_NAME(sort_stable_i32_by)(int32_t* data,
-                                            size_t len,
-                                            CompResult (*cmp_fn)(const int32_t&,
-                                                                 const int32_t&,
-                                                                 uint8_t*),
-                                            uint8_t* ctx) {
+uint32_t MAKE_FUNC_NAME(sort_stable, i32_by)(
+    int32_t* data,
+    size_t len,
+    CompResult (*cmp_fn)(const int32_t&, const int32_t&, uint8_t*),
+    uint8_t* ctx) {
   return sort_stable_by_impl(data, len, cmp_fn, ctx);
 }
 
-void MAKE_FUNC_NAME(sort_unstable_i32)(int32_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_unstable, i32)(int32_t* data, size_t len) {
   std::sort(data, data + len);
 }
 
-uint32_t MAKE_FUNC_NAME(sort_unstable_i32_by)(
+uint32_t MAKE_FUNC_NAME(sort_unstable, i32_by)(
     int32_t* data,
     size_t len,
     CompResult (*cmp_fn)(const int32_t&, const int32_t&, uint8_t*),
@@ -90,11 +70,11 @@ uint32_t MAKE_FUNC_NAME(sort_unstable_i32_by)(
 
 // --- u64 ---
 
-void MAKE_FUNC_NAME(sort_stable_u64)(uint64_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_stable, u64)(uint64_t* data, size_t len) {
   std::stable_sort(data, data + len);
 }
 
-uint32_t MAKE_FUNC_NAME(sort_stable_u64_by)(
+uint32_t MAKE_FUNC_NAME(sort_stable, u64_by)(
     uint64_t* data,
     size_t len,
     CompResult (*cmp_fn)(const uint64_t&, const uint64_t&, uint8_t*),
@@ -102,14 +82,42 @@ uint32_t MAKE_FUNC_NAME(sort_stable_u64_by)(
   return sort_stable_by_impl(data, len, cmp_fn, ctx);
 }
 
-void MAKE_FUNC_NAME(sort_unstable_u64)(uint64_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_unstable, u64)(uint64_t* data, size_t len) {
   std::sort(data, data + len);
 }
 
-uint32_t MAKE_FUNC_NAME(sort_unstable_u64_by)(
+uint32_t MAKE_FUNC_NAME(sort_unstable, u64_by)(
     uint64_t* data,
     size_t len,
     CompResult (*cmp_fn)(const uint64_t&, const uint64_t&, uint8_t*),
+    uint8_t* ctx) {
+  return sort_unstable_by_impl(data, len, cmp_fn, ctx);
+}
+
+// --- FFIString ---
+
+void MAKE_FUNC_NAME(sort_stable, ffi_string)(FFIString* data, size_t len) {
+  std::stable_sort(reinterpret_cast<FFIStringCpp*>(data),
+                   reinterpret_cast<FFIStringCpp*>(data) + len);
+}
+
+uint32_t MAKE_FUNC_NAME(sort_stable, ffi_string_by)(
+    FFIString* data,
+    size_t len,
+    CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
+    uint8_t* ctx) {
+  return sort_stable_by_impl(data, len, cmp_fn, ctx);
+}
+
+void MAKE_FUNC_NAME(sort_unstable, ffi_string)(FFIString* data, size_t len) {
+  std::sort(reinterpret_cast<FFIStringCpp*>(data),
+            reinterpret_cast<FFIStringCpp*>(data) + len);
+}
+
+uint32_t MAKE_FUNC_NAME(sort_unstable, ffi_string_by)(
+    FFIString* data,
+    size_t len,
+    CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
     uint8_t* ctx) {
   return sort_unstable_by_impl(data, len, cmp_fn, ctx);
 }

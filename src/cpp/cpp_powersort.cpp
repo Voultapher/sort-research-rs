@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-struct CompResult;
+#include "shared.h"
 
 template <typename T>
 using vec_iter = std::vector<T>::iterator;
@@ -88,11 +88,6 @@ uint32_t sort_by_impl(T* data,
 }
 
 extern "C" {
-struct CompResult {
-  int8_t cmp_result;
-  bool is_panic;
-};
-
 // --- i32 ---
 
 void powersort_stable_i32(int32_t* data, size_t len) {
@@ -125,6 +120,23 @@ uint32_t powersort_stable_u64_by(uint64_t* data,
                                                       uint8_t*),
                                  uint8_t* ctx) {
   return sort_by_impl<uint64_t, powersort>(data, len, cmp_fn, ctx);
+}
+
+// --- ffi_string ---
+
+void powersort_stable_ffi_string(FFIString* data, size_t len) {
+  using iter_t = vec_iter<FFIStringCpp>;
+  powersort<iter_t>{}.sort(iter_t{reinterpret_cast<FFIStringCpp*>(data)},
+                           iter_t{reinterpret_cast<FFIStringCpp*>(data) + len});
+}
+
+uint32_t powersort_stable_ffi_string_by(FFIString* data,
+                                        size_t len,
+                                        CompResult (*cmp_fn)(const FFIString&,
+                                                             const FFIString&,
+                                                             uint8_t*),
+                                        uint8_t* ctx) {
+  return sort_by_impl<FFIString, powersort>(data, len, cmp_fn, ctx);
 }
 
 // --- 4 way merging ---
@@ -161,6 +173,23 @@ uint32_t powersort_4way_stable_u64_by(uint64_t* data,
                                                            uint8_t*),
                                       uint8_t* ctx) {
   return sort_by_impl<uint64_t, powersort_4way>(data, len, cmp_fn, ctx);
+}
+
+// --- ffi_string ---
+
+void powersort_4way_stable_ffi_string(FFIString* data, size_t len) {
+  using iter_t = vec_iter<FFIStringCpp>;
+  powersort_4way<iter_t>{}.sort(
+      iter_t{reinterpret_cast<FFIStringCpp*>(data)},
+      iter_t{reinterpret_cast<FFIStringCpp*>(data) + len});
+}
+
+uint32_t powersort_4way_stable_ffi_string_by(
+    FFIString* data,
+    size_t len,
+    CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
+    uint8_t* ctx) {
+  return sort_by_impl<FFIString, powersort_4way>(data, len, cmp_fn, ctx);
 }
 
 }  // extern "C"

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 #[allow(unused_imports)]
-use sort_comp::{patterns, stable, unstable};
+use sort_comp::{ffi_util::FFIString, patterns, stable, unstable};
 
 mod trash_prediction;
 use trash_prediction::trash_prediction_state;
@@ -179,7 +179,7 @@ fn split_len(size: usize, part_a_percent: f64) -> (usize, usize) {
     (len_a, len_b)
 }
 
-fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
+fn bench_patterns<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
     test_size: usize,
     transform_name: &str,
@@ -612,6 +612,13 @@ fn criterion_benchmark(c: &mut Criterion) {
             values
                 .iter()
                 .map(|val| format!("{:010}", val.saturating_abs()))
+                .collect()
+        });
+        // FFI String
+        bench_patterns(c, test_size, "ffi_string", |values| {
+            values
+                .iter()
+                .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
                 .collect()
         });
         // Very large stack value.
