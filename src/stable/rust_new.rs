@@ -2,7 +2,6 @@
 
 use std::alloc;
 use std::cmp::Ordering;
-use std::intrinsics;
 use std::mem::{self, SizedTypeProperties};
 use std::ptr;
 
@@ -136,11 +135,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     RunAllocF: Fn(usize) -> *mut TimSortRun,
     RunDeallocF: Fn(*mut TimSortRun, usize),
 {
-    // Slices of up to this length get sorted using insertion sort.
-    const MAX_INSERTION: usize = 20;
-    // Very short runs are extended using insertion sort to span at least this many elements.
-    const MIN_RUN: usize = 10;
-
     // The caller should have already checked that.
     debug_assert!(!T::IS_ZST);
 
@@ -249,35 +243,37 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     // Extremely basic versions of Vec.
     // Their use is super limited and by having the code here, it allows reuse between the sort
     // implementations.
-    struct BufGuard<T, ElemAllocF, ElemDeallocF>
+    struct BufGuard<T, ElemDeallocF>
     where
-        ElemAllocF: Fn(usize) -> *mut T,
         ElemDeallocF: Fn(*mut T, usize),
     {
         buf_ptr: *mut T,
         capacity: usize,
-        elem_alloc_fn: ElemAllocF,
         elem_dealloc_fn: ElemDeallocF,
     }
 
-    impl<T, ElemAllocF, ElemDeallocF> BufGuard<T, ElemAllocF, ElemDeallocF>
+    impl<T, ElemDeallocF> BufGuard<T, ElemDeallocF>
     where
-        ElemAllocF: Fn(usize) -> *mut T,
         ElemDeallocF: Fn(*mut T, usize),
     {
-        fn new(len: usize, elem_alloc_fn: ElemAllocF, elem_dealloc_fn: ElemDeallocF) -> Self {
+        fn new<ElemAllocF>(
+            len: usize,
+            elem_alloc_fn: ElemAllocF,
+            elem_dealloc_fn: ElemDeallocF,
+        ) -> Self
+        where
+            ElemAllocF: Fn(usize) -> *mut T,
+        {
             Self {
                 buf_ptr: elem_alloc_fn(len),
                 capacity: len,
-                elem_alloc_fn,
                 elem_dealloc_fn,
             }
         }
     }
 
-    impl<T, ElemAllocF, ElemDeallocF> Drop for BufGuard<T, ElemAllocF, ElemDeallocF>
+    impl<T, ElemDeallocF> Drop for BufGuard<T, ElemDeallocF>
     where
-        ElemAllocF: Fn(usize) -> *mut T,
         ElemDeallocF: Fn(*mut T, usize),
     {
         fn drop(&mut self) {
@@ -446,10 +442,7 @@ where
 
             let mut merge_count = 0;
             for chunk in v.chunks_exact_mut(8) {
-                // SAFETY: chunks_exact_mut promised to give us slices of len 8.
-                unsafe {
-                    sort8_stable(chunk, is_less);
-                }
+                sort8_stable(chunk, is_less);
                 merge_count += 1;
             }
 
@@ -1086,16 +1079,17 @@ where
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact.
 #[inline(never)]
-unsafe fn sort8_stable<T, F>(v: &mut [T], is_less: &mut F)
+fn sort8_stable<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: caller must ensure v is at least len 8.
+    // SAFETY: caller must ensure v.len() >= 8.
+    assert!(v.len() == 8);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: We checked the len.
     unsafe {
-        debug_assert!(v.len() == 8);
-
-        let arr_ptr = v.as_mut_ptr();
-
         // Transposition sorting-network, by only comparing and swapping adjacent wires we have a stable
         // sorting-network. Sorting-networks are great at leveraging Instruction-Level-Parallelism
         // (ILP), they expose multiple comparisons in straight-line code with builtin data-dependency
