@@ -139,6 +139,23 @@ uint32_t powersort_stable_ffi_string_by(FFIString* data,
   return sort_by_impl<FFIString, powersort>(data, len, cmp_fn, ctx);
 }
 
+// --- f128 ---
+
+void powersort_stable_f128(F128* data, size_t len) {
+  using iter_t = vec_iter<F128Cpp>;
+  powersort<iter_t>{}.sort(iter_t{reinterpret_cast<F128Cpp*>(data)},
+                           iter_t{reinterpret_cast<F128Cpp*>(data) + len});
+}
+
+uint32_t powersort_stable_f128_by(F128* data,
+                                  size_t len,
+                                  CompResult (*cmp_fn)(const F128&,
+                                                       const F128&,
+                                                       uint8_t*),
+                                  uint8_t* ctx) {
+  return sort_by_impl<F128, powersort>(data, len, cmp_fn, ctx);
+}
+
 // --- 4 way merging ---
 
 // --- i32 ---
@@ -192,4 +209,20 @@ uint32_t powersort_4way_stable_ffi_string_by(
   return sort_by_impl<FFIString, powersort_4way>(data, len, cmp_fn, ctx);
 }
 
+// --- f128 ---
+
+void powersort_4way_stable_f128(F128* data, size_t len) {
+  using iter_t = vec_iter<F128Cpp>;
+  powersort_4way<iter_t>{}.sort(iter_t{reinterpret_cast<F128Cpp*>(data)},
+                                iter_t{reinterpret_cast<F128Cpp*>(data) + len});
+}
+
+uint32_t powersort_4way_stable_f128_by(F128* data,
+                                       size_t len,
+                                       CompResult (*cmp_fn)(const F128&,
+                                                            const F128&,
+                                                            uint8_t*),
+                                       uint8_t* ctx) {
+  return sort_by_impl<F128, powersort_4way>(data, len, cmp_fn, ctx);
+}
 }  // extern "C"

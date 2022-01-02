@@ -53,7 +53,7 @@ uint32_t pdqsort_unstable_u64_by(uint64_t* data,
 
 // --- ffi_string ---
 
-void pdqsort_unstable_ffi_string(FFIString* data, size_t len) {
+void pdqsort_unstable_ffi_string(F128* data, size_t len) {
   pdqsort(reinterpret_cast<FFIStringCpp*>(data),
           reinterpret_cast<FFIStringCpp*>(data) + len);
 }
@@ -64,6 +64,22 @@ uint32_t pdqsort_unstable_ffi_string_by(FFIString* data,
                                                              const FFIString&,
                                                              uint8_t*),
                                         uint8_t* ctx) {
+  return sort_by_impl(data, len, cmp_fn, ctx);
+}
+
+// --- f128 ---
+
+void pdqsort_unstable_f128(F128* data, size_t len) {
+  pdqsort(reinterpret_cast<F128Cpp*>(data),
+          reinterpret_cast<F128Cpp*>(data) + len);
+}
+
+uint32_t pdqsort_unstable_f128_by(F128* data,
+                                  size_t len,
+                                  CompResult (*cmp_fn)(const F128&,
+                                                       const F128&,
+                                                       uint8_t*),
+                                  uint8_t* ctx) {
   return sort_by_impl(data, len, cmp_fn, ctx);
 }
 }  // extern "C"

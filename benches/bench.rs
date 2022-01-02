@@ -5,7 +5,7 @@ use std::rc::Rc;
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 #[allow(unused_imports)]
-use sort_comp::{ffi_util::FFIString, patterns, stable, unstable};
+use sort_comp::{ffi_util::FFIString, ffi_util::F128, patterns, stable, unstable};
 
 mod trash_prediction;
 use trash_prediction::trash_prediction_state;
@@ -530,45 +530,6 @@ impl Ord for OneKiloByte {
     }
 }
 
-// 16 byte stack value, with more expensive comparison.
-#[derive(PartialEq, Debug, Clone, Copy)]
-struct F128 {
-    x: f64,
-    y: f64,
-}
-
-impl F128 {
-    fn new(val: i32) -> Self {
-        let val_f = (val as f64) + (i32::MAX as f64) + 6.0;
-
-        let x = val_f + 0.1;
-        let y = val_f.log(4.1);
-
-        debug_assert!(y < x);
-
-        Self { x, y }
-    }
-}
-
-// This is kind of hacky, but we know we only have normal comparable floats in there.
-impl Eq for F128 {}
-
-impl PartialOrd for F128 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        // Simulate expensive comparison function.
-        let this_div = self.x / self.y;
-        let other_div = other.x / other.y;
-
-        this_div.partial_cmp(&other_div)
-    }
-}
-
-impl Ord for F128 {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
 fn ensure_true_random() {
     // Ensure that random vecs are actually different.
     let random_vec_a = patterns::random(5);
@@ -591,6 +552,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     for test_size in test_sizes {
         // Basic type often used to test sorting algorithms.
         bench_patterns(c, test_size, "i32", |values| values);
+
         // Common type for usize on 64-bit machines.
         // Sorting indices is very common.
         bench_patterns(c, test_size, "u64", |values| {
@@ -604,27 +566,31 @@ fn criterion_benchmark(c: &mut Criterion) {
                 })
                 .collect()
         });
+
+        // bench_patterns(c, test_size, "rust_string", |values| {
+        //     // Strings are compared lexicographically, so we zero extend them to maintain the input
+        //     // order.
+        //     // See: https://godbolt.org/z/M38zTK6nv and https://godbolt.org/z/G18Yb7zoE
+        //     values
+        //         .iter()
+        //         .map(|val| format!("{:010}", val.saturating_abs()))
+        //         .collect()
+        // });
+
         // Larger type that is not Copy and does heap access.
-        bench_patterns(c, test_size, "string", |values| {
-            // Strings are compared lexicographically, so we zero extend them to maintain the input
-            // order.
-            // See: https://godbolt.org/z/M38zTK6nv and https://godbolt.org/z/G18Yb7zoE
-            values
-                .iter()
-                .map(|val| format!("{:010}", val.saturating_abs()))
-                .collect()
-        });
         // FFI String
-        bench_patterns(c, test_size, "ffi_string", |values| {
+        bench_patterns(c, test_size, "string", |values| {
             values
                 .iter()
                 .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
                 .collect()
         });
+
         // Very large stack value.
         bench_patterns(c, test_size, "1k", |values| {
             values.iter().map(|val| OneKiloByte::new(*val)).collect()
         });
+
         // 16 byte stack value that is Copy but has a relatively expensive cmp implementation.
         bench_patterns(c, test_size, "f128", |values| {
             values.iter().map(|val| F128::new(*val)).collect()

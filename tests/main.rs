@@ -8,7 +8,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use sort_comp::ffi_util::FFIString;
+use sort_comp::ffi_util::{FFIString, F128};
 use sort_comp::patterns;
 
 use sort_comp::unstable::rust_new as test_sort;
@@ -331,6 +331,16 @@ fn random_ffi_str() {
         patterns::random(test_size)
             .into_iter()
             .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
+            .collect::<Vec<_>>()
+    });
+}
+
+#[test]
+fn random_f128() {
+    test_impl(|test_size| {
+        patterns::random(test_size)
+            .into_iter()
+            .map(|val| F128::new(val))
             .collect::<Vec<_>>()
     });
 }

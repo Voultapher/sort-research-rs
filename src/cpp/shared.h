@@ -13,6 +13,11 @@ struct FFIString {
   size_t len;
   size_t capacity;
 };
+
+struct F128 {
+  double x;
+  double y;
+};
 }
 
 #ifdef __cplusplus
@@ -35,10 +40,30 @@ struct FFIStringCpp : public FFIString {
     return as_str() > other.as_str();
   }
   bool operator>=(const FFIStringCpp& other) const noexcept {
-    return as_str() > other.as_str();
+    return as_str() >= other.as_str();
   }
   bool operator==(const FFIStringCpp& other) const noexcept {
     return as_str() == other.as_str();
+  }
+};
+
+struct F128Cpp : public F128 {
+  double as_div_val() const noexcept { return x / y; }
+
+  bool operator<(const F128Cpp& other) const noexcept {
+    return as_div_val() < other.as_div_val();
+  }
+  bool operator<=(const F128Cpp& other) const noexcept {
+    return as_div_val() <= other.as_div_val();
+  }
+  bool operator>(const F128Cpp& other) const noexcept {
+    return as_div_val() > other.as_div_val();
+  }
+  bool operator>=(const F128Cpp& other) const noexcept {
+    return as_div_val() >= other.as_div_val();
+  }
+  bool operator==(const F128Cpp& other) const noexcept {
+    return as_div_val() == other.as_div_val();
   }
 };
 
@@ -81,5 +106,41 @@ CMPFUNC* make_compare_fn_c(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
     return comp_result.cmp_result;
   };
 }
+
+template <typename T>
+int int_cmp_func(const void* a_ptr, const void* b_ptr) {
+  const T a = *static_cast<const T*>(a_ptr);
+  const T b = *static_cast<const T*>(b_ptr);
+
+  // Yeah I know everyone does a - b, but that invokes UB.
+  if (a < b) {
+    return -1;
+  } else if (a > b) {
+    return 1;
+  }
+  return 0;
+}
+
+// This is broken, crumsort and fluxsort break the individual F128 values.
+//
+// static constexpr bool F128_SUPPORT = sizeof(F128) == sizeof(long double) &&
+//                                      alignof(F128) <= alignof(max_align_t);
+
+// int f128_c_cmp_func(const void* a_ptr, const void* b_ptr) {
+//   const F128Cpp a = *static_cast<const F128Cpp*>(a_ptr);
+//   const F128Cpp b = *static_cast<const F128Cpp*>(b_ptr);
+
+//   printf("a.x: %f, a.y: %f\n", a.x, a.y);
+//   printf("b.x: %f, b.y: %f\n", b.x, b.y);
+//   const int is_less = a < b;
+//   printf("Is less: %d\n", is_less);
+
+//   if (a < b) {
+//     return -1;
+//   } else if (a > b) {
+//     return 1;
+//   }
+//   return 0;
+// }
 
 #endif

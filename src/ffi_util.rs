@@ -77,6 +77,53 @@ impl Drop for FFIString {
     }
 }
 
+// 16 byte stack value, with more expensive comparison.
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct F128 {
+    x: f64,
+    y: f64,
+}
+
+impl F128 {
+    pub fn new(val: i32) -> Self {
+        let val_f = (val as f64) + (i32::MAX as f64) + 10.0;
+
+        let x = val_f + 0.1;
+        let y = val_f.log(4.1);
+
+        assert!(y < x);
+        assert!(x.is_normal() && y.is_normal());
+
+        Self { x, y }
+    }
+}
+
+// This is kind of hacky, but we know we only have normal comparable floats in there.
+impl Eq for F128 {}
+
+// Goal is similar code-gen between Rust and C++
+// - Rust https://godbolt.org/z/3YM3xenPP
+// - C++ https://godbolt.org/z/178M6j1zz
+impl PartialOrd for F128 {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Simulate expensive comparison function.
+        let this_div = self.x / self.y;
+        let other_div = other.x / other.y;
+
+        // SAFETY: We checked in the ctor that both are normal.
+        let cmp_result = unsafe { this_div.partial_cmp(&other_div).unwrap_unchecked() };
+
+        Some(cmp_result)
+    }
+}
+
+impl Ord for F128 {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 pub(crate) unsafe extern "C" fn rust_fn_cmp<T, F: FnMut(&T, &T) -> Ordering>(
     a: &T,
     b: &T,
@@ -133,7 +180,7 @@ macro_rules! ffi_sort_impl {
     ) => {
         use std::cmp::Ordering;
 
-        use crate::ffi_util::{rust_fn_cmp, CompResult, FFIString};
+        use crate::ffi_util::{rust_fn_cmp, CompResult, FFIString, F128};
 
         sort_impl!($name);
 
@@ -158,6 +205,13 @@ macro_rules! ffi_sort_impl {
                     data: *mut FFIString,
                     len: usize,
                     cmp_fn: unsafe extern "C" fn(&FFIString, &FFIString, *mut u8) -> CompResult,
+                    cmp_fn_ctx: *mut u8,
+                ) -> u32;
+                fn [<$sort_name_prefix _f128>](data: *mut F128, len: usize);
+                fn [<$sort_name_prefix _f128_by>](
+                    data: *mut F128,
+                    len: usize,
+                    cmp_fn: unsafe extern "C" fn(&F128, &F128, *mut u8) -> CompResult,
                     cmp_fn_ctx: *mut u8,
                 ) -> u32;
             }
@@ -202,7 +256,7 @@ macro_rules! ffi_sort_impl {
             }
 
             impl CppSort for FFIString {
-                fn sort(data: &mut [FFIString]) {
+                fn sort(data: &mut [Self]) {
                     unsafe {
                         [<$sort_name_prefix _ffi_string>](data.as_mut_ptr(), data.len());
                     }
@@ -210,6 +264,18 @@ macro_rules! ffi_sort_impl {
 
                 fn sort_by<F: FnMut(&Self, &Self) -> Ordering>(data: &mut [Self], compare: F) {
                     make_cpp_sort_by!([<$sort_name_prefix _ffi_string_by>], data, compare, Self);
+                }
+            }
+
+            impl CppSort for F128 {
+                fn sort(data: &mut [Self]) {
+                    unsafe {
+                        [<$sort_name_prefix _f128>](data.as_mut_ptr(), data.len());
+                    }
+                }
+
+                fn sort_by<F: FnMut(&Self, &Self) -> Ordering>(data: &mut [Self], compare: F) {
+                    make_cpp_sort_by!([<$sort_name_prefix _f128_by>], data, compare, Self);
                 }
             }
 

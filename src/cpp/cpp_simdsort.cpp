@@ -57,4 +57,20 @@ uint32_t simdsort_avx2_unstable_ffi_string_by(
   printf("Not supported\n");
   return 1;
 }
+
+// --- f128 ---
+
+void simdsort_avx2_unstable_f128(F128* data, size_t len) {
+  printf("Not supported\n");
+}
+
+uint32_t simdsort_avx2_unstable_f128_by(F128* data,
+                                        size_t len,
+                                        CompResult (*cmp_fn)(const F128&,
+                                                             const F128&,
+                                                             uint8_t*),
+                                        uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
+}
 }  // extern "C"

@@ -66,4 +66,20 @@ uint32_t ips4o_unstable_ffi_string_by(FFIString* data,
                                       uint8_t* ctx) {
   return sort_by_impl(data, len, cmp_fn, ctx);
 }
+
+// --- f128 ---
+
+void ips4o_unstable_f128(F128* data, size_t len) {
+  ips4o::sort(reinterpret_cast<F128Cpp*>(data),
+              reinterpret_cast<F128Cpp*>(data) + len);
+}
+
+uint32_t ips4o_unstable_f128_by(F128* data,
+                                size_t len,
+                                CompResult (*cmp_fn)(const F128&,
+                                                     const F128&,
+                                                     uint8_t*),
+                                uint8_t* ctx) {
+  return sort_by_impl(data, len, cmp_fn, ctx);
+}
 }  // extern "C"

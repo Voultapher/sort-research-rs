@@ -24,20 +24,6 @@ uint32_t sort_by_impl(T* data,
   return 0;
 }
 
-template <typename T>
-int int_cmp_func(const void* a_ptr, const void* b_ptr) {
-  const T a = *static_cast<const T*>(a_ptr);
-  const T b = *static_cast<const T*>(b_ptr);
-
-  // Yeah I know everyone does a - b, but that invokes UB.
-  if (a < b) {
-    return -1;
-  } else if (a > b) {
-    return 1;
-  }
-  return 0;
-}
-
 extern "C" {
 // --- i32 ---
 
@@ -87,6 +73,23 @@ uint32_t fluxsort_stable_ffi_string_by(FFIString* data,
                                                             const FFIString&,
                                                             uint8_t*),
                                        uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
+}
+
+// --- f128 ---
+
+void fluxsort_stable_f128(F128* data, size_t len) {
+  // Swaps values incorrectly, or my implementation is wrong.
+  printf("Not supported\n");
+}
+
+uint32_t fluxsort_stable_f128_by(F128* data,
+                                 size_t len,
+                                 CompResult (*cmp_fn)(const F128&,
+                                                      const F128&,
+                                                      uint8_t*),
+                                 uint8_t* ctx) {
   printf("Not supported\n");
   return 1;
 }
