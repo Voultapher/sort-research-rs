@@ -792,8 +792,8 @@ fn sort_vs_sort_by() {
     let _seed = get_or_init_random_seed();
 
     // Ensure that sort and sort_by produce the same result.
-    let mut input_normal = [i32::MAX, 3, i32::MIN, 5, i32::MIN, -3, 60, 200, 50, 7, 10];
-    let expected = [i32::MIN, i32::MIN, -3, 3, 5, 7, 10, 50, 60, 200, i32::MAX];
+    let mut input_normal = [800, 3, -801, 5, -801, -3, 60, 200, 50, 7, 10];
+    let expected = [-801, -801, -3, 3, 5, 7, 10, 50, 60, 200, 800];
 
     let mut input_sort_by = input_normal.to_vec();
 
@@ -802,4 +802,38 @@ fn sort_vs_sort_by() {
 
     assert_eq!(input_normal, expected);
     assert_eq!(input_sort_by, expected);
+}
+
+#[test]
+fn int_edge() {
+    let _seed = get_or_init_random_seed();
+
+    // Ensure that the sort can handle integer edge cases.
+    sort_comp(&mut [i32::MIN, i32::MAX]);
+    sort_comp(&mut [i32::MAX, i32::MIN]);
+    sort_comp(&mut [i32::MIN, 3]);
+    sort_comp(&mut [i32::MIN, -3]);
+    sort_comp(&mut [i32::MIN, -3, i32::MAX]);
+    sort_comp(&mut [i32::MIN, -3, i32::MAX, i32::MIN, 5]);
+    sort_comp(&mut [i32::MAX, 3, i32::MIN, 5, i32::MIN, -3, 60, 200, 50, 7, 10]);
+
+    sort_comp(&mut [u64::MIN, u64::MAX]);
+    sort_comp(&mut [u64::MAX, u64::MIN]);
+    sort_comp(&mut [u64::MIN, 3]);
+    sort_comp(&mut [u64::MIN, u64::MAX - 3]);
+    sort_comp(&mut [u64::MIN, u64::MAX - 3, u64::MAX]);
+    sort_comp(&mut [u64::MIN, u64::MAX - 3, u64::MAX, u64::MIN, 5]);
+    sort_comp(&mut [
+        u64::MAX,
+        3,
+        u64::MIN,
+        5,
+        u64::MIN,
+        u64::MAX - 3,
+        60,
+        200,
+        50,
+        7,
+        10,
+    ]);
 }

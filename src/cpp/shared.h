@@ -122,6 +122,7 @@ int int_cmp_func(const void* a_ptr, const void* b_ptr) {
 
   // This optimizes particularly well with clang.
   // gcc sees a 2x speedup for random inputs with this.
+  // https://godbolt.org/z/ETdbYoMTK
 
   // Alternative branchless version.
   const bool is_less = a < b;
