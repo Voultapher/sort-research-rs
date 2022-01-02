@@ -150,6 +150,8 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         // The input was either fully ascending or descending. It is now sorted and we can
         // return without allocating.
         return;
+    } else if sort_small_stable(v, start, is_less) {
+        return;
     }
 
     let buf = BufGuard::new(len / 2, elem_alloc_fn, elem_dealloc_fn);
