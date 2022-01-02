@@ -1683,8 +1683,9 @@ where
         return;
     }
 
+    // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
     let even_len = len - (len % 2 != 0) as usize;
-    let len_div_2 = even_len / 2; // TODO check optimization because we know it is even.
+    let len_div_2 = even_len / 2;
 
     let mid = if even_len <= 30 {
         sort12_optimal(&mut v[0..12], is_less);

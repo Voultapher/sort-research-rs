@@ -429,8 +429,6 @@ where
     let len = v.len();
 
     if qualifies_for_parity_merge::<T>() {
-        // TODO rework this.
-
         // Testing showed that even though this incurs more comparisons, up to size 32 (4 * 8),
         // avoiding the allocation and sticking with simple code is worth it. Going further eg. 40
         // is still worth it for u64 or even types with more expensive comparisons, but risks
@@ -440,31 +438,39 @@ where
             if len < 8 {
                 insertion_sort_shift_right(v, start, is_less);
                 return true;
+            } else if len < 16 {
+                sort8_stable(&mut v[0..8], is_less);
+                insertion_sort_shift_left(v, 8, is_less);
+                return true;
             }
 
-            let mut merge_count = 0;
-            for chunk in v.chunks_exact_mut(8) {
-                sort8_stable(chunk, is_less);
-                merge_count += 1;
-            }
+            // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
+            let even_len = len - (len % 2 != 0) as usize;
+            let len_div_2 = even_len / 2;
 
-            let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
+            sort8_stable(&mut v[0..8], is_less);
+            sort8_stable(&mut v[len_div_2..(len_div_2 + 8)], is_less);
+
+            insertion_sort_shift_left(&mut v[0..len_div_2], 8, is_less);
+            insertion_sort_shift_left(&mut v[len_div_2..], 8, is_less);
+
+            let mut swap = mem::MaybeUninit::<[T; MAX_NO_ALLOC_SIZE]>::uninit();
             let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-            let mut i = 8;
-            while merge_count > 1 {
-                // SAFETY: We know the smaller side will be of size 8 because mid is 8. And both
-                // sides are non empty because of merge_count, and the right side will always be of
-                // size 8 and the left size of 8 or greater. Thus the smaller side will always be
-                // exactly 8 long, the size of swap.
-                unsafe {
-                    merge(&mut v[0..(i + 8)], i, swap_ptr, is_less);
-                }
-                i += 8;
-                merge_count -= 1;
+            // SAFETY: We checked that T is Copy and thus observation safe.
+            // Should is_less panic v was not modified in parity_merge and retains it's original input.
+            // swap and v must not alias and swap has v.len() space.
+            unsafe {
+                parity_merge(&mut v[..even_len], swap_ptr, is_less);
+                ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
             }
 
-            insertion_sort_shift_left(v, i, is_less);
+            if len != even_len {
+                // SAFETY: We know len >= 2.
+                unsafe {
+                    insert_tail(v, is_less);
+                }
+            }
 
             return true;
         }
