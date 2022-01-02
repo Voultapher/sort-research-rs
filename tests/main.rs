@@ -39,6 +39,8 @@ fn get_or_init_random_seed() -> u64 {
                 .as_bytes(),
             )
             .unwrap();
+        io::stdout().flush().unwrap();
+
         *seed_writer = true;
     }
 
