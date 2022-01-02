@@ -869,7 +869,7 @@ where
         return true;
     }
 
-    if start < cmp::min(len / 2, 8) {
+    if !is_cheap_to_move::<T>() || start < cmp::min(len / 2, 8) {
         insertion_sort_shift_right(v, start, is_less);
         return true;
     }
