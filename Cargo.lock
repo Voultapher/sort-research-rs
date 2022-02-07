@@ -212,9 +212,9 @@ dependencies = [
 
 [[package]]
 name = "glidesort"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aab9ea6a43fb9b2140aee56599223507ef5ec7bfe7a2f97ceea9c4f919d71b31"
+checksum = "f2e102e6eb644d3e0b186fc161e4460417880a0a0b87d235f2e5b8fb30f2e9e0"
 
 [[package]]
 name = "half"
