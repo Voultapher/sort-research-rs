@@ -769,9 +769,10 @@ unsafe fn merge_equal_runs<T, F>(
     let total_run_len = v.len() - left_most_run.start;
     debug_assert!(total_run_len <= buf_len);
 
-    // Figure out the required oder by sorting via indirection. We can use unstable sort because we
-    // are guaranteed the runs only contain unique values. This also avoids additional memory usage.
-    heapsort(runs, &mut |a, b| {
+    // Figure out the required oder by sorting via indirection. The heuristic should give us at most
+    // 16 runs with equal elements, for that range, insertion sort is cheap on binary size and
+    // relatively fast.
+    insertion_sort_shift_left(runs, 1, &mut |a, b| {
         // SAFETY: The caller must ensure that the runs are valid within `v`.
         unsafe {
             let a_val = v.get_unchecked(a.start);
@@ -802,50 +803,6 @@ unsafe fn merge_equal_runs<T, F>(
             );
             dest_ptr = dest_ptr.add(run.len);
         }
-    }
-}
-
-/// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
-///
-/// Never inline this, it sits the main hot-loop in `recurse` and is meant as unlikely algorithmic
-/// fallback.
-#[inline(never)]
-pub fn heapsort<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // This binary heap respects the invariant `parent >= child`.
-    let mut sift_down = |v: &mut [T], mut node| {
-        loop {
-            // Children of `node`.
-            let mut child = 2 * node + 1;
-            if child >= v.len() {
-                break;
-            }
-
-            // Choose the greater child.
-            child += (child + 1 < v.len() && is_less(&v[child], &v[child + 1])) as usize;
-
-            // Stop if the invariant holds at `node`.
-            if !is_less(&v[node], &v[child]) {
-                break;
-            }
-
-            // Swap `node` with the greater child, move one step down, and continue sifting.
-            v.swap(node, child);
-            node = child;
-        }
-    };
-
-    // Build the heap in linear time.
-    for i in (0..v.len() / 2).rev() {
-        sift_down(v, i);
-    }
-
-    // Pop maximal elements from the heap.
-    for i in (1..v.len()).rev() {
-        v.swap(0, i);
-        sift_down(&mut v[..i], 0);
     }
 }
 
