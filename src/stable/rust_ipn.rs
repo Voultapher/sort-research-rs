@@ -233,7 +233,7 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
     let (buf_ptr, buf_len) = unpack_maybe_unit_slice(buf);
 
     // Limit the possibility of doing consecutive ineffective partitions.
-    let min_good_partiton_len = (len.ilog2() * 2) as usize;
+    let min_good_partiton_len = len / 16;
     let min_re_probe_distance = cmp::max(256, min_good_partiton_len);
 
     let mut runs = TimSortRunVec::new(&run_alloc_fn, &run_dealloc_fn);
@@ -241,15 +241,20 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
 
     let mut start = 0;
     let mut end = 0;
-    let mut next_probe_spot = 0;
     let mut run_end = len;
+
+    // The logic for this get's hairy if buf_len is not the full length of v. If the fallback
+    // allocation size was used, common value filtering doesn't work anymore. Plus if memory is that
+    // constrained the extra allocations needed for equal_runs may be problematic too.
+    let mut next_probe_spot = if buf_len == len { 0 } else { usize::MAX };
 
     // Scan forward. Memory pre-fetching prefers forward scanning vs backwards scanning, and the
     // code-gen is usually better. For the most sensitive types such as integers, these are merged
     // bidirectionally at once. So there is no benefit in scanning backwards.
     while end < run_end {
         let local_v = &mut v[start..run_end];
-        let probe_for_common = start >= next_probe_spot && local_v.len() <= buf_len;
+
+        let probe_for_common = start >= next_probe_spot;
 
         // Probe for common value with priority over streak analysis.
         if probe_for_common {
@@ -305,22 +310,53 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
         }
 
         // Merge some pairs of adjacent runs to satisfy the invariants.
-        collapse_loop(v, buf_ptr, buf_len, run_end, &mut runs, &mut |a, b| {
-            compare(a, b) == Ordering::Less
-        });
+        while let Some(r) = collapse(runs.as_slice(), run_end) {
+            let left = runs[r];
+            let right = runs[r + 1];
+            let merge_slice = &mut v[left.start..right.start + right.len];
+
+            // check_vec = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec() };
+
+            // SAFETY: TODO
+            unsafe {
+                merge(merge_slice, left.len, buf_ptr, buf_len, &mut |a, b| {
+                    compare(a, b) == Ordering::Less
+                });
+            }
+            runs[r + 1] = TimSortRun {
+                start: left.start,
+                len: left.len + right.len,
+            };
+            runs.remove(r);
+
+            // check_vec.sort();
+            // let x = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice) };
+            // assert_eq!(x, check_vec);
+        }
     }
 
     if equal_runs.len != 0 {
         // Now take care of all the fully equal runs that were put at the end of v.
 
         // TODO this could be done more efficiently sorting only the runs.
-        equal_runs.as_mut_slice().reverse();
+        // equal_runs.as_mut_slice().reverse();
 
-        collapse_loop(v, buf_ptr, buf_len, len, &mut equal_runs, &mut |a, b| {
-            compare(a, b) == Ordering::Less
-        });
+        // collapse_loop(v, buf_ptr, buf_len, len, &mut equal_runs, &mut |a, b| {
+        //     compare(a, b) == Ordering::Less
+        // });
 
-        debug_assert!(runs.len() <= 1 && equal_runs.len() == 1 && equal_runs[0].start == run_end);
+        // SAFETY: TODO
+        unsafe {
+            merge_equal_runs(
+                v,
+                equal_runs.as_mut_slice(),
+                buf_ptr,
+                buf_len,
+                &mut |a, b| compare(a, b) == Ordering::Less,
+            );
+        }
+
+        debug_assert!(runs.len() <= 1);
 
         if run_end > 0 {
             // SAFETY: TODO
@@ -336,74 +372,36 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
     }
 }
 
-fn collapse_loop<T, F, RunAllocF, RunDeallocF>(
-    v: &mut [T],
-    buf_ptr: *mut T,
-    buf_len: usize,
-    stop: usize,
-    runs: &mut TimSortRunVec<RunAllocF, RunDeallocF>,
-    is_less: &mut F,
-) where
-    F: FnMut(&T, &T) -> bool,
-    RunAllocF: Fn(usize) -> *mut TimSortRun,
-    RunDeallocF: Fn(*mut TimSortRun, usize),
-{
-    // type DebugT =
-    // let mut check_vec = Vec::new();
-
-    while let Some(r) = collapse(runs.as_slice(), stop) {
-        let left = runs[r];
-        let right = runs[r + 1];
-        let merge_slice = &mut v[left.start..right.start + right.len];
-
-        // check_vec = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec() };
-
-        // SAFETY: TODO
-        unsafe {
-            merge(merge_slice, left.len, buf_ptr, buf_len, is_less);
-        }
-        runs[r + 1] = TimSortRun {
-            start: left.start,
-            len: left.len + right.len,
-        };
-        runs.remove(r);
-
-        // check_vec.sort();
-        // let x = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice) };
-        // assert_eq!(x, check_vec);
-    }
-
-    // Examines the stack of runs and identifies the next pair of runs to merge. More specifically,
-    // if `Some(r)` is returned, that means `runs[r]` and `runs[r + 1]` must be merged next. If the
-    // algorithm should continue building a new run instead, `None` is returned.
-    //
-    // TimSort is infamous for its buggy implementations, as described here:
-    // http://envisage-project.eu/timsort-specification-and-verification/
-    //
-    // The gist of the story is: we must enforce the invariants on the top four runs on the stack.
-    // Enforcing them on just top three is not sufficient to ensure that the invariants will still
-    // hold for *all* runs in the stack.
-    //
-    // This function correctly checks invariants for the top four runs. Additionally, if the top
-    // run ends at stop, it will always demand a merge operation until the stack is fully
-    // collapsed, in order to complete the sort.
-    #[inline(always)]
-    fn collapse(runs: &[TimSortRun], stop: usize) -> Option<usize> {
-        let n = runs.len();
-        if n >= 2
-            && (runs[n - 1].start + runs[n - 1].len == stop
-                || runs[n - 2].len <= runs[n - 1].len
-                || (n >= 3 && runs[n - 3].len <= runs[n - 2].len + runs[n - 1].len)
-                || (n >= 4 && runs[n - 4].len <= runs[n - 3].len + runs[n - 2].len))
-        {
-            if n >= 3 && runs[n - 3].len < runs[n - 1].len {
-                Some(n - 3)
-            } else {
-                Some(n - 2)
-            }
+// Examines the stack of runs and identifies the next pair of runs to merge. More specifically,
+// if `Some(r)` is returned, that means `runs[r]` and `runs[r + 1]` must be merged next. If the
+// algorithm should continue building a new run instead, `None` is returned.
+//
+// TimSort is infamous for its buggy implementations, as described here:
+// http://envisage-project.eu/timsort-specification-and-verification/
+//
+// The gist of the story is: we must enforce the invariants on the top four runs on the stack.
+// Enforcing them on just top three is not sufficient to ensure that the invariants will still
+// hold for *all* runs in the stack.
+//
+// This function correctly checks invariants for the top four runs. Additionally, if the top
+// run ends at stop, it will always demand a merge operation until the stack is fully
+// collapsed, in order to complete the sort.
+#[inline(always)]
+fn collapse(runs: &[TimSortRun], stop: usize) -> Option<usize> {
+    let n = runs.len();
+    if n >= 2
+        && (runs[n - 1].start + runs[n - 1].len == stop
+            || runs[n - 2].len <= runs[n - 1].len
+            || (n >= 3 && runs[n - 3].len <= runs[n - 2].len + runs[n - 1].len)
+            || (n >= 4 && runs[n - 4].len <= runs[n - 3].len + runs[n - 2].len))
+    {
+        if n >= 3 && runs[n - 3].len < runs[n - 1].len {
+            Some(n - 3)
         } else {
-            None
+            Some(n - 2)
         }
+    } else {
+        None
     }
 }
 
@@ -744,6 +742,110 @@ where
         }
 
         r_count
+    }
+}
+
+/// Merge the `runs` of `v` assuming they all each contain only equal elements and each run has a
+/// unique value. The runs must be contiguous in `v`.
+///
+/// SAFETY: The caller must ensure that buf_ptr is valid to write for the total length of the runs.
+unsafe fn merge_equal_runs<T, F>(
+    v: &mut [T],
+    runs: &mut [TimSortRun],
+    buf_ptr: *mut T,
+    buf_len: usize,
+    is_less: &mut F,
+) where
+    F: FnMut(&T, &T) -> bool,
+{
+    if runs.len() <= 1 {
+        return;
+    }
+
+    // The way it was added this is the left-most run.
+    // Create a copy for later.
+    let left_most_run: TimSortRun = runs[runs.len() - 1];
+    // The partitioned runs are always put at the end.
+    let total_run_len = v.len() - left_most_run.start;
+    debug_assert!(total_run_len <= buf_len);
+
+    // Figure out the required oder by sorting via indirection. We can use unstable sort because we
+    // are guaranteed the runs only contain unique values. This also avoids additional memory usage.
+    heapsort(runs, &mut |a, b| {
+        // SAFETY: The caller must ensure that the runs are valid within `v`.
+        unsafe {
+            let a_val = v.get_unchecked(a.start);
+            let b_val = v.get_unchecked(b.start);
+
+            is_less(a_val, b_val)
+        }
+    });
+
+    // Now that the runs have the order as they should be when merged, and all comparisons could
+    // have been observed. We can 'swap' them in the input. This is achieved efficiently by first
+    // copying out the total run area and. Then copying over the relevant areas. None of the
+    // following operation is allowed to panic.
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: TODO
+    unsafe {
+        let mut dest_ptr = arr_ptr.add(left_most_run.start);
+
+        // First save the full region that will be overwritten.
+        ptr::copy_nonoverlapping(dest_ptr, buf_ptr, total_run_len);
+
+        for run in runs {
+            ptr::copy_nonoverlapping(
+                buf_ptr.add(run.start - left_most_run.start),
+                dest_ptr,
+                run.len,
+            );
+            dest_ptr = dest_ptr.add(run.len);
+        }
+    }
+}
+
+/// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
+///
+/// Never inline this, it sits the main hot-loop in `recurse` and is meant as unlikely algorithmic
+/// fallback.
+#[inline(never)]
+pub fn heapsort<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // This binary heap respects the invariant `parent >= child`.
+    let mut sift_down = |v: &mut [T], mut node| {
+        loop {
+            // Children of `node`.
+            let mut child = 2 * node + 1;
+            if child >= v.len() {
+                break;
+            }
+
+            // Choose the greater child.
+            child += (child + 1 < v.len() && is_less(&v[child], &v[child + 1])) as usize;
+
+            // Stop if the invariant holds at `node`.
+            if !is_less(&v[node], &v[child]) {
+                break;
+            }
+
+            // Swap `node` with the greater child, move one step down, and continue sifting.
+            v.swap(node, child);
+            node = child;
+        }
+    };
+
+    // Build the heap in linear time.
+    for i in (0..v.len() / 2).rev() {
+        sift_down(v, i);
+    }
+
+    // Pop maximal elements from the heap.
+    for i in (1..v.len()).rev() {
+        v.swap(0, i);
+        sift_down(&mut v[..i], 0);
     }
 }
 
