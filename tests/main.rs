@@ -211,10 +211,54 @@ fn random() {
 }
 
 #[test]
-fn random_dense() {
+fn random_4() {
     test_impl(|size| {
         if size > 3 {
-            patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32))
+            patterns::random_uniform(size, 0..4)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_8() {
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_uniform(size, 0..8)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_16() {
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_uniform(size, 0..16)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_256() {
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_uniform(size, 0..256)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_1024() {
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_uniform(size, 0..1024)
         } else {
             Vec::new()
         }

@@ -205,6 +205,18 @@ fn split_len(size: usize, part_a_percent: f64) -> (usize, usize) {
     (len_a, len_b)
 }
 
+fn random_x_percent(size: usize, percent: f64) -> Vec<i32> {
+    assert!(percent > 0.0 && percent < 100.0);
+
+    let (len_zero, len_random_p) = split_len(size, 100.0 - percent);
+    let v: Vec<i32> = std::iter::repeat(0)
+        .take(len_zero)
+        .chain(patterns::random(len_random_p))
+        .collect();
+
+    shuffle_vec(v)
+}
+
 fn bench_patterns<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
     test_size: usize,
@@ -218,21 +230,9 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
     let mut pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
         ("random", patterns::random),
-        ("random_dense", |size| {
-            patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32) as i32)
-        }),
-        ("random_binary", |size| {
-            patterns::random_uniform(size, 0..=1 as i32)
-        }),
-        ("random_5p", |size| {
-            let (len_95p, len_5p) = split_len(size, 95.0);
-            let v: Vec<i32> = std::iter::repeat(0)
-                .take(len_95p)
-                .chain(patterns::random(len_5p))
-                .collect();
-
-            shuffle_vec(v)
-        }),
+        ("random_d2", |size| patterns::random_uniform(size, 0..2)),
+        ("random_d20", |size| patterns::random_uniform(size, 0..20)),
+        ("random_p5", |size| random_x_percent(size, 5.0)),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
         ("saws_long", |size| {
@@ -327,15 +327,44 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
         }),
         ("pipe_organ", patterns::pipe_organ),
-        ("random_div3", |size| {
+        ("random__div3", |size| {
             patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
-        ("random_div5", |size| {
+        ("random__div5", |size| {
             patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
-        ("random_div8", |size| {
+        ("random__div8", |size| {
             patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
+        ("random_d4", |size| patterns::random_uniform(size, 0..4)),
+        ("random_d8", |size| patterns::random_uniform(size, 0..8)),
+        ("random_d10", |size| patterns::random_uniform(size, 0..10)),
+        ("random_d16", |size| patterns::random_uniform(size, 0..16)),
+        ("random_d32", |size| patterns::random_uniform(size, 0..32)),
+        ("random_d64", |size| patterns::random_uniform(size, 0..64)),
+        ("random_d128", |size| patterns::random_uniform(size, 0..128)),
+        ("random_d256", |size| patterns::random_uniform(size, 0..256)),
+        ("random_d512", |size| patterns::random_uniform(size, 0..512)),
+        ("random_d1024", |size| {
+            patterns::random_uniform(size, 0..1024)
+        }),
+        ("random_p1", |size| random_x_percent(size, 1.0)),
+        ("random_p2", |size| random_x_percent(size, 2.0)),
+        ("random_p4", |size| random_x_percent(size, 4.0)),
+        ("random_p6", |size| random_x_percent(size, 6.0)),
+        ("random_p8", |size| random_x_percent(size, 8.0)),
+        ("random_p10", |size| random_x_percent(size, 10.0)),
+        ("random_p15", |size| random_x_percent(size, 15.0)),
+        ("random_p20", |size| random_x_percent(size, 20.0)),
+        ("random_p30", |size| random_x_percent(size, 30.0)),
+        ("random_p40", |size| random_x_percent(size, 40.0)),
+        ("random_p50", |size| random_x_percent(size, 50.0)),
+        ("random_p60", |size| random_x_percent(size, 60.0)),
+        ("random_p70", |size| random_x_percent(size, 70.0)),
+        ("random_p80", |size| random_x_percent(size, 80.0)),
+        ("random_p90", |size| random_x_percent(size, 90.0)),
+        ("random_p95", |size| random_x_percent(size, 95.0)),
+        ("random_p99", |size| random_x_percent(size, 99.0)),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {
