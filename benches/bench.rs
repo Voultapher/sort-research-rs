@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion
 use sort_comp::patterns;
 
 fn bench_impl<T>(c: &mut Criterion, name: &str, sort_func: impl Fn(&mut [i32]) -> T) {
-    // let test_sizes = [8, 9, 10, 11, 13, 15];
+    // let test_sizes = [1, 2, 5, 8, 15, 200];
 
     let test_sizes = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17, 20, 24, 28, 30, 35, 36, 50, 100, 200,
@@ -80,7 +80,7 @@ fn bench_impl<T>(c: &mut Criterion, name: &str, sort_func: impl Fn(&mut [i32]) -
 
 fn criterion_benchmark(c: &mut Criterion) {
     bench_impl(c, "flux", |arr| {
-        sort_comp::fluxsort::sort(arr, |a, b| a.lt(b))
+        sort_comp::fluxsort::sort_by(arr, |a, b| a.cmp(b))
     });
     bench_impl(c, "std_stable", |arr| arr.sort());
     bench_impl(c, "std_unstable", |arr| arr.sort_unstable());

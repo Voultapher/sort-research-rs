@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::mem;
 use std::ptr;
 
@@ -199,7 +201,7 @@ where
     // 	FUNC(quadsort_swap)(pts, pts + sqrt, sqrt, sqrt, cmp);
     todo!();
 
-    mem::MaybeUninit::new(s_ptr.add(sqrt / 2).read())
+    // mem::MaybeUninit::new(s_ptr.add(sqrt / 2).read())
 }
 
 // void FUNC(quadsort_swap)(void *array, void *swap, size_t swap_size, size_t nmemb, CMPFUNC *cmp)

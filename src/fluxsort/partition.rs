@@ -1,4 +1,6 @@
-use std::mem;
+#![allow(unused)]
+
+// use std::mem;
 use std::ptr;
 
 use crate::fluxsort::median;

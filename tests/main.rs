@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::fs;
+use std::panic::{self, AssertUnwindSafe};
+use std::rc::Rc;
 
 use sort_comp::fluxsort;
 use sort_comp::patterns;
@@ -28,7 +30,7 @@ where
     stdlib_sorted.sort();
 
     let fluxsort_sorted = v;
-    fluxsort::sort(fluxsort_sorted, |a, b| a.lt(b));
+    fluxsort::sort_by(fluxsort_sorted, |a, b| a.cmp(b));
 
     assert_eq!(stdlib_sorted.len(), fluxsort_sorted.len());
 
@@ -63,7 +65,7 @@ where
 
 // The idea of this struct is to have something that might look the same, based on the sort property
 // but can still be different. This helps test that the stable sort algorithm is actually stable.
-#[derive(Clone, Debug, Eq, Ord)]
+#[derive(Clone, Debug, Eq)]
 struct ValueWithExtra {
     key: i32,
     extra: i32,
@@ -72,6 +74,12 @@ struct ValueWithExtra {
 impl PartialOrd for ValueWithExtra {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.key.partial_cmp(&other.key)
+    }
+}
+
+impl Ord for ValueWithExtra {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 
@@ -124,6 +132,57 @@ fn test_impl<T: Ord + Clone + DeepEqual + Debug>(pattern_fn: impl Fn(usize) -> V
     for test_size in TEST_SIZES {
         let mut test_data = pattern_fn(test_size);
         sort_comp(test_data.as_mut_slice());
+    }
+}
+
+pub trait DynTrait: Debug {
+    fn get_val(&self) -> i32;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct DynValA {
+    value: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct DynValB {
+    value: i32,
+}
+
+impl DynTrait for DynValA {
+    fn get_val(&self) -> i32 {
+        self.value
+    }
+}
+impl DynTrait for DynValB {
+    fn get_val(&self) -> i32 {
+        self.value
+    }
+}
+
+impl PartialOrd for dyn DynTrait {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.get_val().partial_cmp(&other.get_val())
+    }
+}
+
+impl Ord for dyn DynTrait {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl PartialEq for dyn DynTrait {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_val() == other.get_val()
+    }
+}
+
+impl Eq for dyn DynTrait {}
+
+impl DeepEqual for Rc<dyn DynTrait> {
+    fn deep_equal(&self, other: &Self) -> bool {
+        self.eq(other)
     }
 }
 
@@ -216,9 +275,8 @@ fn random_duplicates() {
 
 #[test]
 fn random_str() {
-    // Much smaller test size to minimize runtime cost, test sorting heap backed values.
     test_impl(|test_size| {
-        patterns::random(test_size / 50)
+        patterns::random(test_size)
             .into_iter()
             .map(|val| format!("{}", val))
             .collect::<Vec<_>>()
@@ -227,14 +285,18 @@ fn random_str() {
 
 #[test]
 fn random_large_val() {
-    // Much smaller test size to minimize runtime cost, test sorting large stack values.
     test_impl(|test_size| {
-        patterns::random(test_size / 50)
+        patterns::random(test_size)
             .into_iter()
             .map(|val| {
                 let val_abs = val.abs() as u128;
                 LargeStackVal {
-                    val: [val_abs - 6, val_abs + 3, val_abs - 2, val_abs],
+                    val: [
+                        val_abs.wrapping_sub(6),
+                        val_abs.wrapping_add(3),
+                        val_abs.wrapping_sub(2),
+                        val_abs,
+                    ],
                 }
             })
             .collect::<Vec<_>>()
@@ -243,10 +305,52 @@ fn random_large_val() {
 
 #[test]
 fn dyn_val() {
-    todo!("dyn vals");
+    // Dyn values are fat pointers, something the implementation might have overlooked.
+    test_impl(|test_size| {
+        patterns::random(test_size)
+            .into_iter()
+            .map(|val| -> Rc<dyn DynTrait> {
+                if val < (i32::MAX / 2) {
+                    Rc::new(DynValA { value: val })
+                } else {
+                    Rc::new(DynValB { value: val })
+                }
+            })
+            .collect::<Vec<Rc<dyn DynTrait>>>()
+    });
 }
 
 #[test]
 fn comp_panic() {
-    todo!("comp panic");
+    // Test that sorting upholds panic safety.
+    // This means, no non trivial duplicates even if a comparison panics.
+    // The invariant being checked is, will miri complain.
+
+    let seed = patterns::random_init_seed();
+
+    for test_size in TEST_SIZES {
+        // Needs to be non trivial dtor.
+        let mut values = patterns::random(test_size)
+            .into_iter()
+            .map(|val| vec![val, val, val])
+            .collect::<Vec<Vec<i32>>>();
+
+        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+            fluxsort::sort_by(&mut values, |a, b| {
+                if a[0].abs() < (i32::MAX / test_size as i32) {
+                    panic!(
+                        "Explicit panic. Seed: {}. test_size: {}. a: {} b: {}",
+                        seed, test_size, a[0], b[0]
+                    );
+                }
+
+                a[0].cmp(&b[0])
+            });
+
+            values
+                .get(values.len().saturating_sub(1))
+                .map(|val| val[0])
+                .unwrap_or(66)
+        }));
+    }
 }

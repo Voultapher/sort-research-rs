@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::mem;
 use std::ptr;
 
@@ -277,6 +278,7 @@ where
 }
 
 #[inline]
+#[allow(dead_code)]
 fn flux_sort<T, F>(arr: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -295,13 +297,31 @@ where
     }
 }
 
-pub fn sort<T, F>(arr: &mut [T], mut is_less: F)
+// #[inline]
+// fn std_sort<T, F>(arr: &mut [T], is_less: &mut F)
+// where
+//     F: FnMut(&T, &T) -> bool,
+// {
+//     use std::cmp::Ordering;
+//     arr.sort_by(|a, b| {
+//         // This is a crime, should use proper underlying function.
+//         if is_less(a, b) {
+//             Ordering::Less
+//         } else {
+//             Ordering::Greater
+//         }
+//     });
+// }
+
+// Returns true if sorted false otherwise.
+#[inline]
+fn sort_small<T, F>(arr: &mut [T], mut is_less: F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
 {
     if mem::size_of::<T>() == 0 {
         // Sorting has no meaningful behavior on zero-sized types. Do nothing.
-        return;
+        return true;
     }
 
     // Slices of up to this length get sorted using insertion sort.
@@ -339,12 +359,23 @@ where
                         arr.reverse();
                     }
                     SortStrategy::Quick => {
-                        flux_sort(arr, &mut is_less);
+                        return false;
                     }
                 }
             } else {
-                flux_sort(arr, &mut is_less);
+                return false;
             }
         }
+    }
+
+    true
+}
+
+pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
+where
+    F: FnMut(&T, &T) -> Ordering,
+{
+    if !sort_small(arr, |a, b| compare(a, b) == Ordering::Less) {
+        arr.sort_by(compare);
     }
 }
