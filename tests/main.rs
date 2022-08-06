@@ -4,8 +4,9 @@ use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 
-use sort_comp::fluxsort;
+use sort_comp::new_stable_sort;
 use sort_comp::patterns;
+use sort_comp::stdlib_stable;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 23] = [
@@ -13,9 +14,9 @@ const TEST_SIZES: [usize; 23] = [
 ];
 
 #[cfg(not(miri))]
-const TEST_SIZES: [usize; 28] = [
+const TEST_SIZES: [usize; 29] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500, 1_000,
-    2_048, 10_000, 100_000,
+    2_048, 10_000, 100_000, 1_000_000,
 ];
 
 fn sort_comp<T>(v: &mut [T])
@@ -27,10 +28,10 @@ where
 
     let mut stdlib_sorted_vec = v.to_vec();
     let stdlib_sorted = stdlib_sorted_vec.as_mut_slice();
-    stdlib_sorted.sort();
+    stdlib_stable::sort_by(stdlib_sorted, |a, b| a.cmp(b));
 
     let fluxsort_sorted = v;
-    fluxsort::sort_by(fluxsort_sorted, |a, b| a.cmp(b));
+    new_stable_sort::sort_by(fluxsort_sorted, |a, b| a.cmp(b));
 
     assert_eq!(stdlib_sorted.len(), fluxsort_sorted.len());
 
@@ -336,7 +337,7 @@ fn comp_panic() {
             .collect::<Vec<Vec<i32>>>();
 
         let _ = panic::catch_unwind(AssertUnwindSafe(|| {
-            fluxsort::sort_by(&mut values, |a, b| {
+            new_stable_sort::sort_by(&mut values, |a, b| {
                 if a[0].abs() < (i32::MAX / test_size as i32) {
                     panic!(
                         "Explicit panic. Seed: {}. test_size: {}. a: {} b: {}",

@@ -70,36 +70,36 @@ where
     }
 }
 
-// unsafe fn quad_swap_four<T, F>(arr: &mut [T], is_less: &mut F)
-// where
-//     F: FnMut(&T, &T) -> bool,
-// {
-//     debug_assert!(arr.len() >= 4);
+unsafe fn quad_swap_four<T, F>(arr: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    debug_assert!(arr.len() >= 4);
 
-//     let mut arr_ptr = arr.as_mut_ptr();
+    let mut arr_ptr = arr.as_mut_ptr();
 
-//     // Important to only swap if it is more and not if it is equal.
-//     // is_less should return false for equal, so we don't swap.
-//     swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[0/1]
+    // Important to only swap if it is more and not if it is equal.
+    // is_less should return false for equal, so we don't swap.
+    swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[0/1]
 
-//     arr_ptr = arr_ptr.add(2); // Total offset
-//     swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[2/3]
+    arr_ptr = arr_ptr.add(2); // Total offset
+    swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[2/3]
 
-//     arr_ptr = arr_ptr.offset(-1); // Total offset 1
+    arr_ptr = arr_ptr.offset(-1); // Total offset 1
 
-//     if !is_less(&*arr_ptr, &*arr_ptr.add(1)) {
-//         arr_ptr.swap(arr_ptr.add(1)); // arr[1/2]
+    if !is_less(&*arr_ptr, &*arr_ptr.add(1)) {
+        arr_ptr.swap(arr_ptr.add(1)); // arr[1/2]
 
-//         arr_ptr = arr_ptr.offset(-1); // Total offset 0
-//         swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[0/1]
+        arr_ptr = arr_ptr.offset(-1); // Total offset 0
+        swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[0/1]
 
-//         arr_ptr = arr_ptr.add(2); // Total offset 2
-//         swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[2/3]
+        arr_ptr = arr_ptr.add(2); // Total offset 2
+        swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[2/3]
 
-//         arr_ptr = arr_ptr.offset(-1); // Total offset 1
-//         swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[1/2]
-//     }
-// }
+        arr_ptr = arr_ptr.offset(-1); // Total offset 1
+        swap_next_if(arr_ptr, !is_less(&*arr_ptr, &*arr_ptr.add(1))); // arr[1/2]
+    }
+}
 
 // BUGGY not stable.
 /// Sort the remaining elements after offset in arr.

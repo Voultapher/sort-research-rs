@@ -240,13 +240,13 @@ mod std_lib {
     }
 }
 
-pub enum SortStrategy {
+pub enum Pattern {
     AlreadySorted,
     Reverse,
-    Quick,
+    None,
 }
 
-fn flux_analyze<T, F>(arr: &[T], mut is_less: F) -> SortStrategy
+fn pattern_analyze<T, F>(arr: &[T], mut is_less: F) -> Pattern
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -271,9 +271,9 @@ where
     }
 
     match sorted {
-        0 => SortStrategy::Reverse,
-        _ if sorted == len - 1 => SortStrategy::AlreadySorted,
-        _ => SortStrategy::Quick,
+        0 => Pattern::Reverse,
+        _ if sorted == len - 1 => Pattern::AlreadySorted,
+        _ => Pattern::None,
     }
 }
 
@@ -353,12 +353,12 @@ where
             // For small slices that easily fit into L1 it's faster to analyze before sorting.
             // Even if that means walking through the array multiple times.
             if slice_bytes <= 2048 {
-                match flux_analyze(arr, &mut is_less) {
-                    SortStrategy::AlreadySorted => (),
-                    SortStrategy::Reverse => {
+                match pattern_analyze(arr, &mut is_less) {
+                    Pattern::AlreadySorted => (),
+                    Pattern::Reverse => {
                         arr.reverse();
                     }
-                    SortStrategy::Quick => {
+                    Pattern::None => {
                         return false;
                     }
                 }
@@ -371,11 +371,12 @@ where
     true
 }
 
+#[inline]
 pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
 {
-    if !sort_small(arr, |a, b| compare(a, b) == Ordering::Less) {
+    if !std::intrinsics::likely(sort_small(arr, |a, b| compare(a, b) == Ordering::Less)) {
         arr.sort_by(compare);
     }
 }

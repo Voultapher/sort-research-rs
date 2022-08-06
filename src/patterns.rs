@@ -28,6 +28,16 @@ pub fn random_uniform(size: usize, mut range: std::ops::Range<i32>) -> Vec<i32> 
     (0..size).map(|_| dist.sample(&mut rng)).collect()
 }
 
+pub fn random_random_size(max_size: usize) -> Vec<i32> {
+    //     .
+    // : . : :
+    // :.:::.::
+    // < size > is random from call to call, with max_size as maximum size.
+
+    let random_size = random_uniform(1, 0..(max_size as i32));
+    random(random_size[0] as usize)
+}
+
 pub fn all_equal(size: usize) -> Vec<i32> {
     // ......
     // ::::::
