@@ -1,16 +1,19 @@
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::fs;
+use std::io::{self, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
+use std::sync::Mutex;
 
 use sort_comp::new_stable_sort;
 use sort_comp::patterns;
 use sort_comp::stdlib_stable;
 
 #[cfg(miri)]
-const TEST_SIZES: [usize; 23] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200,
+const TEST_SIZES: [usize; 24] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500,
 ];
 
 #[cfg(not(miri))]
@@ -19,10 +22,24 @@ const TEST_SIZES: [usize; 29] = [
     2_048, 10_000, 100_000, 1_000_000,
 ];
 
+static SEED_WRITTEN: Mutex<bool> = Mutex::new(false);
+
 fn sort_comp<T>(v: &mut [T])
 where
     T: Ord + Clone + DeepEqual + Debug,
 {
+    let seed = patterns::random_init_seed();
+    {
+        let mut seed_writer = SEED_WRITTEN.lock().unwrap();
+        if !*seed_writer {
+            // Always write the seed before doing anything to ensure reproducibility of crashes.
+            io::stdout()
+                .write_all(format!("Seed: {seed}\n").as_bytes())
+                .unwrap();
+            *seed_writer = true;
+        }
+    }
+
     let is_small_test = v.len() <= 100;
     let original_clone = v.to_vec();
 
@@ -37,10 +54,7 @@ where
 
     for (a, b) in stdlib_sorted.iter().zip(fluxsort_sorted.iter()) {
         if !a.deep_equal(b) {
-            let seed = patterns::random_init_seed();
-
             if is_small_test {
-                eprintln!("Seed: {seed}");
                 eprintln!("Orginal:  {:?}", original_clone);
                 eprintln!("Expected: {:?}", stdlib_sorted);
                 eprintln!("Got:      {:?}", fluxsort_sorted);
@@ -92,7 +106,22 @@ impl PartialEq for ValueWithExtra {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct LargeStackVal {
-    val: [u128; 4],
+    vals: [i128; 4],
+}
+
+impl LargeStackVal {
+    fn new(val: i32) -> Self {
+        let val_abs = val.saturating_abs() as i128;
+
+        Self {
+            vals: [
+                val_abs.wrapping_add(123),
+                val_abs.wrapping_mul(7),
+                val_abs.wrapping_sub(6),
+                val_abs,
+            ],
+        }
+    }
 }
 
 trait DeepEqual {
@@ -183,7 +212,7 @@ impl Eq for dyn DynTrait {}
 
 impl DeepEqual for Rc<dyn DynTrait> {
     fn deep_equal(&self, other: &Self) -> bool {
-        self.eq(other)
+        self == other
     }
 }
 
@@ -201,6 +230,14 @@ fn basic() {
     sort_comp(&mut [2, 3, 99, 6]);
     sort_comp(&mut [2, 7709, 400, 90932]);
     sort_comp(&mut [15, -1, 3, -1, -3, -1, 7]);
+}
+
+#[test]
+fn fixed_seed() {
+    let fixed_seed_a = patterns::random_init_seed();
+    let fixed_seed_b = patterns::random_init_seed();
+
+    assert_eq!(fixed_seed_a, fixed_seed_b);
 }
 
 #[test]
@@ -289,17 +326,7 @@ fn random_large_val() {
     test_impl(|test_size| {
         patterns::random(test_size)
             .into_iter()
-            .map(|val| {
-                let val_abs = val.abs() as u128;
-                LargeStackVal {
-                    val: [
-                        val_abs.wrapping_sub(6),
-                        val_abs.wrapping_add(3),
-                        val_abs.wrapping_sub(2),
-                        val_abs,
-                    ],
-                }
-            })
+            .map(|val| LargeStackVal::new(val))
             .collect::<Vec<_>>()
     });
 }
@@ -354,4 +381,50 @@ fn comp_panic() {
                 .unwrap_or(66)
         }));
     }
+}
+
+#[test]
+fn observable_is_less() {
+    // This test, tests that every is_less is actually observable.
+    // Ie. this can go wrong if a hole is created using temporary memory and,
+    // the whole is used as comparison but not copied back.
+
+    #[derive(PartialEq, Eq, Debug, Clone)]
+    struct CompCount {
+        val: i32,
+        comp_count: Cell<u32>,
+    }
+
+    impl CompCount {
+        fn new(val: i32) -> Self {
+            Self {
+                val,
+                comp_count: Cell::new(0),
+            }
+        }
+    }
+
+    // I tried thread local statics but they were noticeably slower.
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static COMP_COUNT_GLOBAL: AtomicU32 = AtomicU32::new(0);
+
+    COMP_COUNT_GLOBAL.store(0, Ordering::SeqCst);
+
+    let mut test_input = patterns::random(TEST_SIZES[TEST_SIZES.len() - 1])
+        .into_iter()
+        .map(|val| CompCount::new(val))
+        .collect::<Vec<_>>();
+
+    stdlib_stable::sort_by(&mut test_input, |a, b| {
+        a.comp_count.replace(a.comp_count.get() + 1);
+        b.comp_count.replace(b.comp_count.get() + 1);
+        COMP_COUNT_GLOBAL.fetch_add(1, Ordering::SeqCst);
+
+        a.val.cmp(&b.val)
+    });
+
+    let total_inner: u32 = test_input.iter().map(|c| c.comp_count.get()).sum();
+    let total_global = COMP_COUNT_GLOBAL.load(Ordering::SeqCst);
+
+    assert_eq!(total_inner, total_global * 2);
 }

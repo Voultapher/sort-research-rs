@@ -38,7 +38,7 @@ use std::ptr;
 ///
 /// [pdqsort]: https://github.com/orlp/pdqsort
 #[inline]
-pub fn sort_unstable<T>(arr: &mut [T])
+pub fn sort<T>(arr: &mut [T])
 where
     T: Ord,
 {
@@ -92,7 +92,7 @@ where
 ///
 /// [pdqsort]: https://github.com/orlp/pdqsort
 #[inline]
-pub fn sort_unstable_by<T, F>(arr: &mut [T], mut compare: F)
+pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
 {

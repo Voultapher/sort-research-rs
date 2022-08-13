@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use rand::prelude::*;
 
 use once_cell::sync::OnceCell;
@@ -112,10 +114,19 @@ pub fn pipe_organ(size: usize) -> Vec<i32> {
     vals
 }
 
-static SEED: OnceCell<u64> = OnceCell::new();
+static USE_FIXED_SEED: AtomicBool = AtomicBool::new(true);
+
+pub fn disable_fixed_seed() {
+    USE_FIXED_SEED.store(false, Ordering::Release);
+}
 
 pub fn random_init_seed() -> u64 {
-    *SEED.get_or_init(|| -> u64 { thread_rng().gen() })
+    if USE_FIXED_SEED.load(Ordering::Acquire) {
+        static SEED: OnceCell<u64> = OnceCell::new();
+        *SEED.get_or_init(|| -> u64 { thread_rng().gen() })
+    } else {
+        thread_rng().gen()
+    }
 }
 
 // --- Private ---

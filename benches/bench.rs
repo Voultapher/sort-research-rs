@@ -1,14 +1,143 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use std::env;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 use sort_comp::patterns;
 
-fn bench_patterns<T: Ord>(
+mod trash_prediction;
+use trash_prediction::trash_prediction_state;
+
+fn bench_sort<T: Ord + std::fmt::Debug>(
+    c: &mut Criterion,
+    test_size: usize,
+    transform_name: &str,
+    transform: &fn(Vec<i32>) -> Vec<T>,
+    pattern_name: &str,
+    pattern_provider: &fn(usize) -> Vec<i32>,
+    bench_name: &str,
+    sort_func: impl Fn(&mut [T]),
+) {
+    let batch_size = if test_size > 30 {
+        BatchSize::LargeInput
+    } else {
+        BatchSize::SmallInput
+    };
+
+    c.bench_function(
+        &format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}"),
+        |b| {
+            b.iter_batched(
+                || transform(pattern_provider(test_size)),
+                |mut test_data| sort_func(test_data.as_mut_slice()),
+                batch_size,
+            )
+        },
+    );
+
+    c.bench_function(
+        &format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_size}"),
+        |b| {
+            b.iter_batched(
+                || {
+                    let mut test_ints = pattern_provider(test_size);
+
+                    if test_ints.len() == 0 {
+                        return vec![];
+                    }
+
+                    // Try as best as possible to trash all prediction state in the CPU, to simulate
+                    // calling the benchmark function as part of a larger program. Caveat, memory
+                    // caches. We don't want to benchmark how expensive it is to load something from
+                    // main memory.
+                    let first_val = black_box(trash_prediction_state(test_ints[0]));
+
+                    // Limit the optimizer in getting rid of trash_prediction_state,
+                    // by tying its output to the test input.
+                    test_ints[0] = first_val;
+
+                    transform(test_ints)
+                },
+                |mut test_data| sort_func(test_data.as_mut_slice()),
+                BatchSize::PerIteration,
+            )
+        },
+    );
+}
+
+// This thing only makes sense on a single thread.
+static COMP_COUNT: AtomicU64 = AtomicU64::new(0);
+
+fn measure_comp_count(name: &str, test_size: usize, instrumented_sort_func: impl Fn()) {
+    // Measure how many comparisons are performed by a specific implementation and input
+    // combination.
+    let run_count: usize = if test_size <= 10_000 { 100 } else { 10 };
+
+    COMP_COUNT.store(0, Ordering::Release);
+    for _ in 0..run_count {
+        instrumented_sort_func();
+    }
+
+    // If there is on average less than a single comparison this will be wrong.
+    // But that's such a corner case I don't care about it.
+    let total = COMP_COUNT.load(Ordering::Acquire) / (run_count as u64);
+    println!("{name}: mean comparisons: {total}");
+}
+
+macro_rules! bench_func {
+    (
+        $c:expr,
+        $test_size:expr,
+        $transform_name:expr,
+        $transform:expr,
+        $pattern_name:expr,
+        $pattern_provider:expr,
+        $bench_name:expr,
+        $bench_module:ident,
+    ) => {
+        if env::var("MEASURE_COMP").is_ok() {
+            // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
+            let name = format!(
+                "{}-comp-{}-{}-{}",
+                $bench_name, $transform_name, $pattern_name, $test_size
+            );
+            // Instrument via sort_by to ensure the type properties such as Copy of the type
+            // that is being sorted doesn't change. And we get representative numbers.
+            let instrumented_sort_func = || {
+                let mut test_data = $transform($pattern_provider($test_size));
+                $bench_module::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
+                    COMP_COUNT.fetch_add(1, Ordering::Relaxed);
+                    a.cmp(b)
+                })
+            };
+            measure_comp_count(&name, $test_size, instrumented_sort_func);
+        } else {
+            bench_sort(
+                $c,
+                $test_size,
+                $transform_name,
+                $transform,
+                $pattern_name,
+                $pattern_provider,
+                $bench_name,
+                $bench_module::sort,
+            );
+        }
+    };
+}
+
+fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
     c: &mut Criterion,
     test_size: usize,
     transform_name: &str,
     transform: fn(Vec<i32>) -> Vec<T>,
 ) {
-    let pattern_providers = [
+    if test_size > 100_000 && !(transform_name == "i32" || transform_name == "u64") {
+        // These are just too expensive.
+        return;
+    }
+
+    let pattern_providers: Vec<fn(usize) -> Vec<i32>> = vec![
         patterns::random,
         |size| patterns::random_uniform(size, 0..(size / 10) as i32),
         patterns::random_random_size,
@@ -42,59 +171,56 @@ fn bench_patterns<T: Ord>(
             continue;
         }
 
-        let batch_size = if test_size > 30 {
-            BatchSize::LargeInput
-        } else {
-            BatchSize::SmallInput
-        };
-
         use sort_comp::new_stable_sort;
-        c.bench_function(
-            &format!("new_stable-{transform_name}-{pattern_name}-{test_size}"),
-            |b| {
-                b.iter_batched(
-                    || transform(pattern_provider(test_size)),
-                    |mut test_data| new_stable_sort::sort(test_data.as_mut_slice()),
-                    batch_size,
-                )
-            },
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "new_stable",
+            new_stable_sort,
         );
 
         use sort_comp::stdlib_stable;
-        c.bench_function(
-            &format!("std_stable-{transform_name}-{pattern_name}-{test_size}"),
-            |b| {
-                b.iter_batched(
-                    || transform(pattern_provider(test_size)),
-                    |mut test_data| stdlib_stable::sort(test_data.as_mut_slice()),
-                    batch_size,
-                )
-            },
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "std_stable",
+            stdlib_stable,
         );
 
-        // use sort_comp::stdlib_unstable;
-        // c.bench_function(
-        //     &format!("std_unstable-{transform_name}-{pattern_name}-{test_size}"),
-        //     |b| {
-        //         b.iter_batched(
-        //             || transform(pattern_provider(test_size)),
-        //             |mut test_data| stdlib_unstable::sort_unstable(test_data.as_mut_slice()),
-        //             batch_size,
-        //         )
-        //     },
-        // );
+        use sort_comp::stdlib_unstable;
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "std_unstable",
+            stdlib_unstable,
+        );
     }
 }
 
 // Very large stack value.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 struct OneKiloByte {
     values: [i32; 256],
 }
 
 impl OneKiloByte {
     fn new(val: i32) -> Self {
-        Self { values: [val; 256] }
+        let mut values = [val; 256];
+        values[54] = 6i32.wrapping_mul(val);
+        values[100] = 18i32.wrapping_sub(val);
+        Self { values }
     }
 
     fn as_i32(&self) -> i32 {
@@ -114,57 +240,98 @@ impl Ord for OneKiloByte {
     }
 }
 
-// Very large stack value.
-#[derive(PartialEq)]
-struct F64 {
-    value: f64,
+// 16 byte stack value, with more expensive comparison.
+#[derive(PartialEq, Debug, Clone, Copy)]
+struct F128 {
+    x: f64,
+    y: f64,
 }
 
-impl F64 {
+impl F128 {
     fn new(val: i32) -> Self {
-        Self {
-            value: val as f64 + 0.1,
-        }
+        let x = val.saturating_abs() as f64 + 0.1;
+        let y = (val.saturating_abs().saturating_add(1) as f64).log(4.1);
+
+        debug_assert!(y < x);
+
+        Self { x, y }
     }
 }
 
 // This is kind of hacky, but we know we only have normal comparable floats in there.
-impl Eq for F64 {}
+impl Eq for F128 {}
 
-impl PartialOrd for F64 {
+impl PartialOrd for F128 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.value.partial_cmp(&other.value)
+        // Simulate expensive comparison function.
+        let this_div = self.x / self.y;
+        let other_div = other.x / other.y;
+
+        this_div.partial_cmp(&other_div)
     }
 }
 
-impl Ord for F64 {
+impl Ord for F128 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
+fn ensure_true_random() {
+    // Ensure that random vecs are actually different.
+    let random_vec_a = patterns::random(5);
+    let random_vec_b = patterns::random(5);
+
+    // I had a bug, where the test logic for fixed seeds, made the benchmarks always use the same
+    // numbers, and random wasn't random at all anymore.
+    assert_ne!(random_vec_a, random_vec_b);
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
+    // let test_sizes = [
+    //     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 16, 17, 19, 20, 24, 28, 30, 35, 36, 50, 101, 200,
+    //     500, 1_000, 2_048, 10_000, 100_000, 1_000_000,
+    // ];
+
     let test_sizes = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17, 20, 24, 28, 30, 35, 36, 50, 101, 200,
-        500, 1_000, 2_048, 10_000, 100_000, 1_000_000,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 17, 19, 20, 24, 36, 50, 101, 200, 500, 1_000, 2_048,
+        10_000, 100_000, 1_000_000,
     ];
 
+    patterns::disable_fixed_seed();
+    ensure_true_random();
+
     for test_size in test_sizes {
+        // Basic type often used to test sorting algorithms.
         bench_patterns(c, test_size, "i32", |values| values);
-        bench_patterns(c, test_size, "string", |values| {
-            values.iter().map(|val| val.to_string()).collect()
+        // Common type for usize on 64-bit machines.
+        // Sorting indices is very common.
+        bench_patterns(c, test_size, "u64", |values| {
+            values
+                .iter()
+                .map(|val| {
+                    let x = val.saturating_abs();
+                    x.wrapping_mul(x) // Extends the value into the 64 bit range.
+                })
+                .collect()
         });
+        // Larger type that is not Copy and does heap access.
+        bench_patterns(c, test_size, "string", |values| {
+            // Strings are compared lexicographically, so we zero extend them to maintain the input
+            // order.
+            // See: https://godbolt.org/z/M38zTK6nv and https://godbolt.org/z/G18Yb7zoE
+            values
+                .iter()
+                .map(|val| format!("{:010}", val.saturating_abs()))
+                .collect()
+        });
+        // Very large stack value.
         bench_patterns(c, test_size, "1k", |values| {
             values.iter().map(|val| OneKiloByte::new(*val)).collect()
         });
-        bench_patterns(c, test_size, "box_str", |values| {
-            values
-                .iter()
-                .map(|val| val.to_string().into_boxed_str())
-                .collect()
-        });
-        bench_patterns(c, test_size, "f64", |values| {
-            values.iter().map(|val| F64::new(*val)).collect()
+        // 16 byte stack value that is Copy but has a relatively expensive cmp implementation.
+        bench_patterns(c, test_size, "f128", |values| {
+            values.iter().map(|val| F128::new(*val)).collect()
         });
     }
 }
