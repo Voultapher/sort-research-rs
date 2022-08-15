@@ -309,9 +309,11 @@ fn criterion_benchmark(c: &mut Criterion) {
         bench_patterns(c, test_size, "u64", |values| {
             values
                 .iter()
-                .map(|val| {
-                    let x = val.saturating_abs();
-                    x.wrapping_mul(x) // Extends the value into the 64 bit range.
+                .map(|val| -> u64 {
+                    // Extends the value into the 64 bit range,
+                    // while preserving input order.
+                    let x = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
+                    x.checked_mul(i32::MAX as u64).unwrap()
                 })
                 .collect()
         });
