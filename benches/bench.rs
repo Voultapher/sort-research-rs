@@ -71,7 +71,7 @@ static COMP_COUNT: AtomicU64 = AtomicU64::new(0);
 fn measure_comp_count(name: &str, test_size: usize, instrumented_sort_func: impl Fn()) {
     // Measure how many comparisons are performed by a specific implementation and input
     // combination.
-    let run_count: usize = if test_size <= 10_000 { 100 } else { 10 };
+    let run_count: usize = if test_size < 10_000 { 500 } else { 50 };
 
     COMP_COUNT.store(0, Ordering::Release);
     for _ in 0..run_count {
@@ -249,8 +249,10 @@ struct F128 {
 
 impl F128 {
     fn new(val: i32) -> Self {
-        let x = val.saturating_abs() as f64 + 0.1;
-        let y = (val.saturating_abs().saturating_add(1) as f64).log(4.1);
+        let val_f = (val as f64) + (i32::MAX as f64) + 6.0;
+
+        let x = val_f + 0.1;
+        let y = val_f.log(4.1);
 
         debug_assert!(y < x);
 
