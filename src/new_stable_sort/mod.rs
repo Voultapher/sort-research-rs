@@ -195,7 +195,7 @@ where
 }
 
 /// Takes a range as denoted by start and end, that is already sorted and extends it if necessary
-/// with insertion sort, which is considerably faster than merge sort for small ranges.
+/// with sorts optimized for smaller ranges such as insertion sort.
 #[inline]
 unsafe fn provide_sorted_batch<T, F>(
     v: &mut [T],
@@ -208,8 +208,12 @@ where
 {
     debug_assert!(end > start);
 
-    // If possible extend sorted batch size to MAX_INSERTION.
     const MAX_PRE_SORT16: usize = 8;
+
+    // Testing showed that using MAX_INSERTION here yields the best performance for many types, but
+    // incurs more total comparisons. A balance between least comparisons and best performance, as
+    // influenced by for example cache locality.
+    const MIN_INSERTION_RUN: usize = 10;
 
     // Insert some more elements into the run if it's too short. Insertion sort is faster than
     // merge sort on short sequences, so this significantly improves performance.
@@ -222,8 +226,8 @@ where
             sort16(&mut v[start..start_found], is_less);
         }
         insertion_sort_remaining(&mut v[start..end], 16, is_less);
-    } else if start_end_diff < MAX_INSERTION {
-        start = start.saturating_sub(MAX_INSERTION - start_end_diff);
+    } else if start_end_diff < MIN_INSERTION_RUN {
+        start = start.saturating_sub(MIN_INSERTION_RUN - start_end_diff);
 
         for i in (start..start_found).rev() {
             // We ensured that the slice length is always at lest 2 long.
