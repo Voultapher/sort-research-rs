@@ -647,162 +647,200 @@ where
 
 #[inline]
 pub unsafe fn merge_up<T, F>(
-    mut ptr_left: *mut T,
-    mut ptr_right: *mut T,
-    mut ptr_swap: *mut T,
+    mut src_left: *const T,
+    mut src_right: *const T,
+    mut dest_ptr: *mut T,
     is_less: &mut F,
-) -> (*mut T, *mut T, *mut T)
+) -> (*const T, *const T, *mut T)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // C: x = cmp(ptl, ptr) <= 0; y = !x; pts[x] = *ptr; ptr += y; pts[y] = *ptl; ptl += x; pts++;
-    let x = !is_less(&*ptr_right, &*ptr_left);
-    let y = !x;
-    ptr::copy_nonoverlapping(ptr_right, ptr_swap.add(x as usize), 1);
-    ptr_right = ptr_right.add(y as usize);
-    ptr::copy_nonoverlapping(ptr_left, ptr_swap.add(y as usize), 1);
-    ptr_left = ptr_left.add(x as usize);
-    ptr_swap = ptr_swap.add(1);
+    // This is a branchless merge utility function.
+    // The equivalent code with a branch would be:
+    //
+    // if is_less(&*src_right, &*src_left) {
+    //     // x == 0 && y == 1
+    //     // Elements should be swapped in final order.
+    //
+    //     // Copy right side into dest[0] and the left side into dest[1]
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr.add(1), 1);
+    //
+    //     // Move right cursor one further, because we swapped.
+    //     src_right = src_right.add(1);
+    // } else {
+    //     // x == 1 && y == 0
+    //     // Elements are in order and don't need to be swapped.
+    //
+    //     // Copy left side into dest[0] and the right side into dest[1]
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr.add(1), 1);
+    //
+    //     // Move left cursor one further, because we didn't swap.
+    //     src_left = src_left.add(1);
+    // }
+    //
+    // dest_ptr = dest_ptr.add(1);
 
-    (ptr_left, ptr_right, ptr_swap)
+    let x = !is_less(&*src_right, &*src_left);
+    let y = !x;
+    ptr::copy_nonoverlapping(src_right, dest_ptr.add(x as usize), 1);
+    ptr::copy_nonoverlapping(src_left, dest_ptr.add(y as usize), 1);
+    src_right = src_right.add(y as usize);
+    src_left = src_left.add(x as usize);
+    dest_ptr = dest_ptr.add(1);
+
+    (src_left, src_right, dest_ptr)
 }
 
 #[inline]
 pub unsafe fn merge_down<T, F>(
-    mut ptr_left: *mut T,
-    mut ptr_right: *mut T,
-    mut ptr_swap: *mut T,
+    mut src_left: *const T,
+    mut src_right: *const T,
+    mut dest_ptr: *mut T,
     is_less: &mut F,
-) -> (*mut T, *mut T, *mut T)
+) -> (*const T, *const T, *mut T)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // C: x = cmp(ptl, ptr) <= 0; y = !x; pts--; pts[x] = *ptr; ptr -= x; pts[y] = *ptl; ptl -= y;
-    let x = !is_less(&*ptr_right, &*ptr_left);
-    let y = !x;
-    ptr_swap = ptr_swap.offset(-1);
-    ptr::copy_nonoverlapping(ptr_right, ptr_swap.add(x as usize), 1);
-    ptr_right = ptr_right.offset(-(x as isize));
-    ptr::copy_nonoverlapping(ptr_left, ptr_swap.add(y as usize), 1);
-    ptr_left = ptr_left.offset(-(y as isize));
+    // This is a branchless merge utility function.
+    // The equivalent code with a branch would be:
+    //
+    // dest_ptr = dest_ptr.sub(1);
+    //
+    // if is_less(&*src_right, &*src_left) {
+    //     // x == 0 && y == 1
+    //     // Elements should be swapped in final order.
+    //
+    //     // Copy right side into dest[0] and the left side into dest[1]
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr.add(1), 1);
+    //
+    //     // Move left cursor one back, because we swapped.
+    //     src_left = src_left.sub(1);
+    // } else {
+    //     // x == 1 && y == 0
+    //     // Elements are in order and don't need to be swapped.
+    //
+    //     // Copy left side into dest[0] and the right side into dest[1]
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr.add(1), 1);
+    //
+    //     // Move right cursor one back, because we didn't swap.
+    //     src_right = src_right.sub(1);
+    // }
 
-    (ptr_left, ptr_right, ptr_swap)
+    let x = !is_less(&*src_right, &*src_left);
+    let y = !x;
+    dest_ptr = dest_ptr.sub(1);
+    ptr::copy_nonoverlapping(src_right, dest_ptr.add(x as usize), 1);
+    ptr::copy_nonoverlapping(src_left, dest_ptr.add(y as usize), 1);
+    src_right = src_right.sub(x as usize);
+    src_left = src_left.sub(y as usize);
+
+    (src_left, src_right, dest_ptr)
 }
 
 #[inline]
 pub unsafe fn finish_up<T, F>(
-    ptr_left: *mut T,
-    ptr_right: *mut T,
-    ptr_swap: *mut T,
+    src_left: *const T,
+    src_right: *const T,
+    dest_ptr: *mut T,
     is_less: &mut F,
 ) where
     F: FnMut(&T, &T) -> bool,
 {
-    // C: *pts = cmp(ptl, ptr) <= 0 ? *ptl : *ptr;
-    let copy_ptr = if is_less(&*ptr_right, &*ptr_left) {
-        ptr_right
+    let copy_ptr = if is_less(&*src_right, &*src_left) {
+        src_right
     } else {
-        ptr_left
+        src_left
     };
-    ptr::copy_nonoverlapping(copy_ptr, ptr_swap, 1);
+    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
 }
 
 #[inline]
 pub unsafe fn finish_down<T, F>(
-    ptr_left: *mut T,
-    ptr_right: *mut T,
-    ptr_swap: *mut T,
+    src_left: *const T,
+    src_right: *const T,
+    dest_ptr: *mut T,
     is_less: &mut F,
 ) where
     F: FnMut(&T, &T) -> bool,
 {
-    // C: *pts = cmp(ptl, ptr)  > 0 ? *ptl : *ptr;
-    let copy_ptr = if is_less(&*ptr_right, &*ptr_left) {
-        ptr_left
+    let copy_ptr = if is_less(&*src_right, &*src_left) {
+        src_left
     } else {
-        ptr_right
+        src_right
     };
-    ptr::copy_nonoverlapping(copy_ptr, ptr_swap, 1);
+    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
 }
 
-unsafe fn parity_merge2<T, F>(arr_ptr: *mut T, swap_ptr: *mut T, is_less: &mut F)
+unsafe fn parity_merge8<T, F>(src_ptr: *const T, dest_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: the caller must guarantee that `arr_ptr` and `swap_ptr` are valid for writes and
-    // properly aligned. And they point to a contiguous owned region of memory each at least 4
-    // elements long.
-
-    let mut ptr_left = arr_ptr;
-    let mut ptr_right = arr_ptr.add(2);
-    let mut ptr_swap = swap_ptr;
-
-    (ptr_left, ptr_right, ptr_swap) = merge_up(ptr_left, ptr_right, ptr_swap, is_less);
-
-    finish_up(ptr_left, ptr_right, ptr_swap, is_less);
-
-    // ---
-
-    ptr_left = arr_ptr.add(1);
-    ptr_right = arr_ptr.add(3);
-    ptr_swap = swap_ptr.add(3);
-
-    (ptr_left, ptr_right, ptr_swap) = merge_down(ptr_left, ptr_right, ptr_swap, is_less);
-
-    finish_down(ptr_left, ptr_right, ptr_swap, is_less);
-}
-
-unsafe fn parity_merge4<T, F>(arr_ptr: *mut T, swap_ptr: *mut T, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: the caller must guarantee that `arr_ptr` and `swap_ptr` are valid for writes and
+    // SAFETY: the caller must guarantee that `arr_ptr` and `dest_ptr` are valid for writes and
     // properly aligned. And they point to a contiguous owned region of memory each at least 8
-    // elements long.
+    // elements long. Also `src_ptr` and `dest_ptr` must not alias.
+    //
+    // The caller must guarantee that the values of `dest_ptr[0..len]` have trivial
+    // destructors that are sound to be called on a shallow copy of T.
 
-    let mut ptr_left = arr_ptr;
-    let mut ptr_right = arr_ptr.add(4);
-    let mut ptr_swap = swap_ptr;
+    // Eg. src == [2, 3, 4, 7, 0, 1, 6, 8]
+    //
+    // in: ptr_left = src[0] ptr_right = src[4] ptr_dest = dest[0]
+    // mu: ptr_left = src[0] ptr_right = src[5] ptr_dest = dest[1] dest == [0, 2, u, u, u, u, u, u]
+    // mu: ptr_left = src[0] ptr_right = src[6] ptr_dest = dest[2] dest == [0, 1, 2, u, u, u, u, u]
+    // mu: ptr_left = src[1] ptr_right = src[6] ptr_dest = dest[3] dest == [0, 1, 2, 6, u, u, u, u]
+    // fu: dest == [0, 1, 2, 3, u, u, u, u]
+    // in: ptr_left = src[3] ptr_right = src[7] ptr_dest = dest[7]
+    // md: ptr_left = src[3] ptr_right = src[6] ptr_dest = dest[6] dest == [0, 1, 2, 6, u, u, 7, 8]
+    // md: ptr_left = src[2] ptr_right = src[6] ptr_dest = dest[5] dest == [0, 1, 2, 6, u, 6, 7, 8]
+    // md: ptr_left = src[2] ptr_right = src[5] ptr_dest = dest[4] dest == [0, 1, 2, 3, 4, 6, 7, 8]
+    // fd: dest == [0, 1, 2, 3, 4, 6, 7, 8]
 
-    (ptr_left, ptr_right, ptr_swap) = merge_up(ptr_left, ptr_right, ptr_swap, is_less);
-    (ptr_left, ptr_right, ptr_swap) = merge_up(ptr_left, ptr_right, ptr_swap, is_less);
-    (ptr_left, ptr_right, ptr_swap) = merge_up(ptr_left, ptr_right, ptr_swap, is_less);
+    let mut ptr_left = src_ptr;
+    let mut ptr_right = src_ptr.add(4);
+    let mut ptr_dest = dest_ptr;
 
-    finish_up(ptr_left, ptr_right, ptr_swap, is_less);
+    (ptr_left, ptr_right, ptr_dest) = merge_up(ptr_left, ptr_right, ptr_dest, is_less);
+    (ptr_left, ptr_right, ptr_dest) = merge_up(ptr_left, ptr_right, ptr_dest, is_less);
+    (ptr_left, ptr_right, ptr_dest) = merge_up(ptr_left, ptr_right, ptr_dest, is_less);
+
+    finish_up(ptr_left, ptr_right, ptr_dest, is_less);
 
     // ---
 
-    ptr_left = arr_ptr.add(3);
-    ptr_right = arr_ptr.add(7);
-    ptr_swap = swap_ptr.add(7);
+    ptr_left = src_ptr.add(3);
+    ptr_right = src_ptr.add(7);
+    ptr_dest = dest_ptr.add(7);
 
-    (ptr_left, ptr_right, ptr_swap) = merge_down(ptr_left, ptr_right, ptr_swap, is_less);
-    (ptr_left, ptr_right, ptr_swap) = merge_down(ptr_left, ptr_right, ptr_swap, is_less);
-    (ptr_left, ptr_right, ptr_swap) = merge_down(ptr_left, ptr_right, ptr_swap, is_less);
+    (ptr_left, ptr_right, ptr_dest) = merge_down(ptr_left, ptr_right, ptr_dest, is_less);
+    (ptr_left, ptr_right, ptr_dest) = merge_down(ptr_left, ptr_right, ptr_dest, is_less);
+    (ptr_left, ptr_right, ptr_dest) = merge_down(ptr_left, ptr_right, ptr_dest, is_less);
 
-    finish_down(ptr_left, ptr_right, ptr_swap, is_less);
+    finish_down(ptr_left, ptr_right, ptr_dest, is_less);
 }
 
-unsafe fn parity_merge<T, F>(
-    arr_ptr: *mut T,
-    swap_ptr: *mut T,
-    mut block: usize,
-    len: usize,
-    is_less: &mut F,
-) where
+unsafe fn parity_merge<T, F>(src_ptr: *const T, dest_ptr: *mut T, len: usize, is_less: &mut F)
+where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: the caller must guarantee that `arr_ptr` and `swap_ptr` are valid for writes and
+    // SAFETY: the caller must guarantee that `src_ptr` and `dest_ptr` are valid for writes and
     // properly aligned. And they point to a contiguous owned region of memory each at least len
-    // elements long.
+    // elements long. Also `src_ptr` and `dest_ptr` must not alias.
+    //
+    // The caller must guarantee that the values of `dest_ptr[0..len]` have trivial
+    // destructors that are sound to be called on a shallow copy of T.
+    let mut block = len / 2;
 
-    let mut ptr_left = swap_ptr;
-    let mut ptr_right = swap_ptr.add(block);
-    let mut ptr_data = arr_ptr;
+    let mut ptr_left = src_ptr;
+    let mut ptr_right = src_ptr.add(block);
+    let mut ptr_data = dest_ptr;
 
-    let mut t_ptr_left = swap_ptr.add(block - 1);
-    let mut t_ptr_right = swap_ptr.add(len - 1);
-    let mut t_ptr_data = arr_ptr.add(len - 1);
+    let mut t_ptr_left = src_ptr.add(block - 1);
+    let mut t_ptr_right = src_ptr.add(len - 1);
+    let mut t_ptr_data = dest_ptr.add(len - 1);
 
     block -= 1;
     while block != 0 {
@@ -838,10 +876,10 @@ where
     let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    parity_merge2(arr_ptr, swap_ptr, is_less);
-    parity_merge2(arr_ptr.add(4), swap_ptr.add(4), is_less);
-
-    parity_merge4(swap_ptr, arr_ptr, is_less);
+    // We know the two parts v[0..4] and v[4..8] are already sorted.
+    // So just create the scratch space.
+    ptr::copy_nonoverlapping(arr_ptr, swap_ptr, 8);
+    parity_merge8(swap_ptr, arr_ptr, is_less);
 }
 
 // This implementation is only valid for Copy types. For these reasons:
@@ -854,11 +892,14 @@ where
     // SAFETY: caller must ensure v is at least len 16.
     debug_assert!(v.len() == 16);
 
+    // Sort the 4 parts of v individually.
     sort4(v, is_less);
     sort4(&mut v[4..], is_less);
     sort4(&mut v[8..], is_less);
     sort4(&mut v[12..], is_less);
 
+    // If all 3 pairs of border elements are sorted, we know the whole 16 elements are now sorted.
+    // Doing this check reduces the total comparisons done on average for different input patterns.
     let arr_ptr = v.as_mut_ptr();
     if !is_less(&*arr_ptr.add(4), &*arr_ptr.add(3))
         && !is_less(&*arr_ptr.add(8), &*arr_ptr.add(7))
@@ -870,8 +911,13 @@ where
     let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    parity_merge4(arr_ptr, swap_ptr, is_less);
-    parity_merge4(arr_ptr.add(8), swap_ptr.add(8), is_less);
+    // Merge the already sorted v[0..4] with v[4..8] into swap.
+    parity_merge8(arr_ptr, swap_ptr, is_less);
+    // Merge the already sorted v[8..12] with v[12..16] into swap.
+    parity_merge8(arr_ptr.add(8), swap_ptr.add(8), is_less);
 
-    parity_merge(arr_ptr, swap_ptr, 8, 16, is_less);
+    // v is still the same as before parity_merge8
+    // swap now contains a shallow copy of v and is sorted in v[0..8] and v[8..16]
+    // Merge the two partitions.
+    parity_merge(swap_ptr, arr_ptr, 16, is_less);
 }

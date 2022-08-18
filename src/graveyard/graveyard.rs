@@ -888,3 +888,46 @@ where
         }
     }
 }
+
+// Not actually any faster.
+unsafe fn parity_merge_non_copy_safe<T: Debug, F, const LEN: usize>(
+    src_ptr: *const T,
+    dest_ptr: *mut T,
+    is_less: &mut F,
+) where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: the caller must guarantee that `src_ptr` and `dest_ptr` are valid for writes and
+    // properly aligned. And they point to a contiguous owned region of memory each at least len
+    // elements long. Also `src_ptr` and `dest_ptr` must not alias.
+
+    // Setup call to parity_merge in a way that ensures two properties, that are not normally given
+    // by parity_merge:
+    // A) T is allowed to have non trivial destructors.
+    // B) Uniqueness preservation for types with interior mutability.
+
+    // Create another scratch area that is used to write into, and ignored when a panic occurs.
+    let mut swap = mem::MaybeUninit::<[T; LEN]>::uninit();
+    let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+    // Write sorted result into swap.
+    // If is_less panics, dest_ptr which holds the initialized memory was not touched.
+    //
+    // is_less was called only using addresses from the original v slice to populate src_ptr.
+    // src_ptr is now used as the sole source of addresses used for is_less.
+    // Honestly something screwy is going on.
+    parity_merge(src_ptr, swap_ptr, LEN, is_less);
+
+    ptr::copy_nonoverlapping(swap_ptr, dest_ptr, LEN);
+    mem::forget(swap);
+}
+
+#[test]
+fn xx() {
+    // let mut input = patterns::random_uniform(16, 10..100);
+    // let mut input = (0..8).rev().collect::<Vec<i32>>();
+    let mut input = vec![3, 7, 2, 4, 8, 0, 6, 1];
+    sort_comp::new_stable_sort::sort(&mut input);
+
+    // panic!();
+}

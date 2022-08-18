@@ -22,23 +22,27 @@ const TEST_SIZES: [usize; 29] = [
     2_048, 10_000, 100_000, 1_000_000,
 ];
 
-static SEED_WRITTEN: Mutex<bool> = Mutex::new(false);
+fn get_or_init_random_seed() -> u64 {
+    static SEED_WRITTEN: Mutex<bool> = Mutex::new(false);
+    let seed = patterns::random_init_seed();
+
+    let mut seed_writer = SEED_WRITTEN.lock().unwrap();
+    if !*seed_writer {
+        // Always write the seed before doing anything to ensure reproducibility of crashes.
+        io::stdout()
+            .write_all(format!("Seed: {seed}\n").as_bytes())
+            .unwrap();
+        *seed_writer = true;
+    }
+
+    seed
+}
 
 fn sort_comp<T>(v: &mut [T])
 where
     T: Ord + Clone + DeepEqual + Debug,
 {
-    let seed = patterns::random_init_seed();
-    {
-        let mut seed_writer = SEED_WRITTEN.lock().unwrap();
-        if !*seed_writer {
-            // Always write the seed before doing anything to ensure reproducibility of crashes.
-            io::stdout()
-                .write_all(format!("Seed: {seed}\n").as_bytes())
-                .unwrap();
-            *seed_writer = true;
-        }
-    }
+    let seed = get_or_init_random_seed();
 
     let is_small_test = v.len() <= 100;
     let original_clone = v.to_vec();
@@ -354,7 +358,7 @@ fn comp_panic() {
     // This means, no non trivial duplicates even if a comparison panics.
     // The invariant being checked is, will miri complain.
 
-    let seed = patterns::random_init_seed();
+    let seed = get_or_init_random_seed();
 
     for test_size in TEST_SIZES {
         // Needs to be non trivial dtor.
@@ -415,7 +419,7 @@ fn observable_is_less() {
         .map(|val| CompCount::new(val))
         .collect::<Vec<_>>();
 
-    stdlib_stable::sort_by(&mut test_input, |a, b| {
+    new_stable_sort::sort_by(&mut test_input, |a, b| {
         a.comp_count.replace(a.comp_count.get() + 1);
         b.comp_count.replace(b.comp_count.get() + 1);
         COMP_COUNT_GLOBAL.fetch_add(1, Ordering::SeqCst);
