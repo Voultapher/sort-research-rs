@@ -115,8 +115,8 @@ def add_plot_line(p, filter_fn, name, group, color):
 def make_detail_plot(bench_name, name_a, group_a, name_b, group_b):
     def produce_plot(p, filter_fn):
         for name, group, color in [
-            (name_a, group_a, "green"),  # I hope these are readable
-            (name_b, group_b, "orange"),
+            (name_a, group_a, "orange"),  # I hope these are readable
+            (name_b, group_b, "green"),
         ]:
             add_plot_line(p, filter_fn, name, group, color)
 
@@ -168,7 +168,7 @@ def plot_detailed(name_a, groups_a, name_b, groups_b):
 
             grid_plot = gridplot(detail_plots)
             html = file_html(grid_plot, CDN, transform)
-            with open(f"{temp}-{transform}.html", "w+") as outfile:
+            with open(f"{temp}-{transform}-detail.html", "w+") as outfile:
                 outfile.write(html)
 
 
@@ -252,8 +252,6 @@ def plot_distribution(temp, transform, name_a, groups_a, name_b, groups_b):
 
 
 def plot_overview(name_a, groups_a, name_b, groups_b):
-    from bokeh.plotting import show
-
     for temp in ["hot", "cold"]:
         init_tools_overview()
         distribution_plots = [
@@ -263,8 +261,10 @@ def plot_overview(name_a, groups_a, name_b, groups_b):
             for transform in TRANSFORMS
         ]
 
-        grid_plot = gridplot(distribution_plots, ncols=3)
-        show(grid_plot)
+        grid_plot = gridplot(distribution_plots, ncols=2)
+        html = file_html(grid_plot, CDN, f"{temp}-overview")
+        with open(f"{temp}-overview.html", "w+") as outfile:
+            outfile.write(html)
 
 
 if __name__ == "__main__":
@@ -281,5 +281,5 @@ if __name__ == "__main__":
     for bench_name, group_a in groups_a.items():
         assert len(group_a) == len(groups_b[bench_name])
 
-    # plot_detailed(name_a, groups_a, name_b, groups_b)
+    plot_detailed(name_a, groups_a, name_b, groups_b)
     plot_overview(name_a, groups_a, name_b, groups_b)
