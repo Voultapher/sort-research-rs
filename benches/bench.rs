@@ -205,6 +205,18 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             "std_unstable",
             stdlib_unstable,
         );
+
+        use sort_comp::wpwoodjr_stable_sort;
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "wpwoodjr_stable",
+            wpwoodjr_stable_sort,
+        );
     }
 }
 
