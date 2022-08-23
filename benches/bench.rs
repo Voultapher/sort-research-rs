@@ -163,7 +163,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
         "descending_saw_5",
         "descending_saw_20",
         "pipe_organ",
-        "variable_size_0_to",
     ];
 
     for (pattern_provider, pattern_name) in pattern_providers.iter().zip(pattern_names.iter()) {
