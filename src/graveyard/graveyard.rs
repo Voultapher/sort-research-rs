@@ -931,3 +931,30 @@ fn xx() {
 
     // panic!();
 }
+
+// branchless main merge
+
+fn merge() {
+    let should_swap = is_less(&*right, &**left);
+
+    let to_copy: *mut T = (((right as *mut T as usize) * should_swap as usize)
+        + ((*left as *mut T as usize) * !should_swap as usize)) as *mut T;
+
+    ptr::copy_nonoverlapping(to_copy, get_and_increment(out), 1);
+
+    right = right.add(should_swap as usize);
+    *left = left.add(!should_swap as usize);
+
+    // ...
+
+    let should_swap = is_less(&*right.offset(-1), &*left.offset(-1));
+
+    *left = left.offset(-(should_swap as isize));
+    *right = right.offset(-(!should_swap as isize));
+
+    let to_copy: *mut T = (((*left as *mut T as usize) * should_swap as usize)
+        + ((*right as *mut T as usize) * !should_swap as usize))
+        as *mut T;
+
+    ptr::copy_nonoverlapping(to_copy, decrement_and_get(&mut out), 1);
+}
