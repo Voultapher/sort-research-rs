@@ -37,7 +37,6 @@ where
 const MAX_INSERTION: usize = 20;
 
 // Sort a small number of elements as fast as possible, without allocations.
-#[inline]
 fn sort_small<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -282,7 +281,6 @@ where
 
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
 /// becomes sorted.
-#[inline]
 unsafe fn insert_tail<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -340,7 +338,6 @@ where
 /// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
 ///
 /// This is the integral subroutine of insertion sort.
-#[inline]
 unsafe fn insert_head<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -537,38 +534,11 @@ impl<T: Copy> IsCopy<T> for T {
 
 // --- Branchless sorting (less branches not zero) ---
 
-/// Swap value with next value in array pointed to by arr_ptr if the next element is less than a.
-#[inline]
-pub unsafe fn swap_next_if_less<T, F>(arr_ptr: *mut T, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: the caller must guarantee that `arr_ptr` and `arr_ptr.add(1)` are valid for writes
-    // and properly aligned.
-    //
-    // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
-    // in a well defined state, without duplicates.
-
-    swap_if_less(arr_ptr, arr_ptr.add(1), is_less);
-}
-
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline]
-pub unsafe fn swap_if_less<T, F>(a_ptr: *mut T, b_ptr: *mut T, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
+pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
     // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
     // and properly aligned, and part of the same allocation, and do not alias.
-    //
-    // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
-    // in a well defined state, without duplicates.
-
-    debug_assert!(a_ptr as usize != b_ptr as usize);
-
-    // Important to only swap if it is more and not if it is equal. is_less should return false for
-    // equal, so we don't swap.
-    let should_swap = is_less(&*b_ptr, &*a_ptr);
 
     // This is a branchless version of swap if.
     // The equivalent code with a branch would be:
@@ -581,12 +551,36 @@ where
     // We do not have to worry about drops: `MaybeUninit` does nothing when dropped.
     let mut tmp = mem::MaybeUninit::<T>::uninit();
 
+    // The goal is to generate cmov instructions here.
     let a_swap_ptr = if should_swap { b_ptr } else { a_ptr };
     let b_swap_ptr = if should_swap { a_ptr } else { b_ptr };
 
     ptr::copy_nonoverlapping(b_swap_ptr, tmp.as_mut_ptr(), 1);
     ptr::copy(a_swap_ptr, a_ptr, 1);
     ptr::copy_nonoverlapping(tmp.as_ptr(), b_ptr, 1);
+}
+
+/// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
+#[inline]
+pub unsafe fn swap_if_less<T, F>(arr_ptr: *mut T, a: usize, b: usize, is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: the caller must guarantee that `a` and `b` each added to `arr_ptr` yield valid
+    // pointers into `arr_ptr`. and properly aligned, and part of the same allocation, and do not
+    // alias. `a` and `b` must be different numbers.
+    debug_assert!(a != b);
+
+    let a_ptr = arr_ptr.add(a);
+    let b_ptr = arr_ptr.add(b);
+
+    // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
+    // in a well defined state, without duplicates.
+
+    // Important to only swap if it is more and not if it is equal. is_less should return false for
+    // equal, so we don't swap.
+    let should_swap = is_less(&*b_ptr, &*a_ptr);
+    branchless_swap(a_ptr, b_ptr, should_swap);
 }
 
 /// Sort the first 2 elements of v.
@@ -597,7 +591,9 @@ where
     // SAFETY: caller must ensure v is at least len 2.
     debug_assert!(v.len() >= 2);
 
-    swap_next_if_less(v.as_mut_ptr(), is_less);
+    let arr_ptr = v.as_mut_ptr();
+
+    swap_if_less(arr_ptr, 0, 1, is_less);
 }
 
 /// Sort the first 3 elements of v.
@@ -606,129 +602,42 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v is at least len 3.
-    debug_assert!(v.len() >= 3);
+    debug_assert!(v.len() == 3);
 
     let arr_ptr = v.as_mut_ptr();
-    let x1 = arr_ptr;
-    let x2 = arr_ptr.add(1);
 
-    swap_next_if_less(x1, is_less);
-    swap_next_if_less(x2, is_less);
-
-    // After two swaps we are here:
-    //
-    // abc -> ab bc | abc
-    // acb -> ac bc | abc
-    // bac -> ab bc | abc
-    // bca -> bc ac | bac !
-    // cab -> ac bc | abc
-    // cba -> bc ac | bac !
-
-    // Which means we need to swap again.
-    swap_next_if_less(x1, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
 }
 
-/// Sort the first 4 elements of v.
+/// Sort the first 4 elements of v without any jump instruction.
 unsafe fn sort4<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v is at least len 4.
-    debug_assert!(v.len() >= 4);
+    debug_assert!(v.len() == 4);
 
     let arr_ptr = v.as_mut_ptr();
-    let x1 = arr_ptr;
-    let x2 = arr_ptr.add(1);
-    let x3 = arr_ptr.add(2);
 
-    swap_next_if_less(x1, is_less);
-    swap_next_if_less(x3, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
 
     // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
     // in a well defined state, without duplicates.
-    if is_less(&*x3, &*x2) {
-        ptr::swap_nonoverlapping(x2, x3, 1);
+    if is_less(&*arr_ptr.add(2), &*arr_ptr.add(1)) {
+        ptr::swap_nonoverlapping(arr_ptr.add(1), arr_ptr.add(2), 1);
 
-        swap_next_if_less(x1, is_less);
-        swap_next_if_less(x3, is_less);
-        swap_next_if_less(x2, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
     }
 }
 
-unsafe fn bitonic_merge8<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: v.len() >= 8
-    debug_assert!(v.len() >= 8);
-
-    let arr_ptr = v.as_mut_ptr();
-
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(7), is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(6), is_less);
-    swap_if_less(arr_ptr.add(2), arr_ptr.add(5), is_less);
-    swap_next_if_less(arr_ptr.add(3), is_less);
-
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(2), is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(3), is_less);
-
-    swap_if_less(arr_ptr.add(4), arr_ptr.add(6), is_less);
-    swap_if_less(arr_ptr.add(5), arr_ptr.add(7), is_less);
-
-    swap_next_if_less(arr_ptr.add(0), is_less);
-    swap_next_if_less(arr_ptr.add(2), is_less);
-    swap_next_if_less(arr_ptr.add(4), is_less);
-    swap_next_if_less(arr_ptr.add(6), is_less);
-}
-
-unsafe fn bitonic_merge16<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: v.len() >= 16
-    debug_assert!(v.len() >= 16);
-
-    let arr_ptr = v.as_mut_ptr();
-
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(15), is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(14), is_less);
-    swap_if_less(arr_ptr.add(2), arr_ptr.add(13), is_less);
-    swap_if_less(arr_ptr.add(3), arr_ptr.add(12), is_less);
-    swap_if_less(arr_ptr.add(4), arr_ptr.add(11), is_less);
-    swap_if_less(arr_ptr.add(5), arr_ptr.add(10), is_less);
-    swap_if_less(arr_ptr.add(6), arr_ptr.add(9), is_less);
-    swap_next_if_less(arr_ptr.add(7), is_less);
-
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(4), is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(5), is_less);
-    swap_if_less(arr_ptr.add(2), arr_ptr.add(6), is_less);
-    swap_if_less(arr_ptr.add(3), arr_ptr.add(7), is_less);
-
-    swap_if_less(arr_ptr.add(8), arr_ptr.add(12), is_less);
-    swap_if_less(arr_ptr.add(9), arr_ptr.add(13), is_less);
-    swap_if_less(arr_ptr.add(10), arr_ptr.add(14), is_less);
-    swap_if_less(arr_ptr.add(11), arr_ptr.add(15), is_less);
-
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(2), is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(3), is_less);
-    swap_if_less(arr_ptr.add(4), arr_ptr.add(6), is_less);
-    swap_if_less(arr_ptr.add(5), arr_ptr.add(7), is_less);
-
-    swap_if_less(arr_ptr.add(8), arr_ptr.add(10), is_less);
-    swap_if_less(arr_ptr.add(9), arr_ptr.add(11), is_less);
-    swap_if_less(arr_ptr.add(12), arr_ptr.add(14), is_less);
-    swap_if_less(arr_ptr.add(13), arr_ptr.add(15), is_less);
-
-    swap_next_if_less(arr_ptr.add(0), is_less);
-    swap_next_if_less(arr_ptr.add(2), is_less);
-    swap_next_if_less(arr_ptr.add(4), is_less);
-    swap_next_if_less(arr_ptr.add(6), is_less);
-    swap_next_if_less(arr_ptr.add(8), is_less);
-    swap_next_if_less(arr_ptr.add(10), is_less);
-    swap_next_if_less(arr_ptr.add(12), is_less);
-    swap_next_if_less(arr_ptr.add(14), is_less);
-}
-
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
 unsafe fn sort8<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -736,19 +645,51 @@ where
     // SAFETY: caller must ensure v.len() >= 8.
     debug_assert!(v.len() == 8);
 
-    sort4(v, is_less);
-    sort4(&mut v[4..], is_less);
-
     let arr_ptr = v.as_mut_ptr();
 
-    // Ensure that we do the minimal possible amount of comparisons if the input is already sorted.
-    if !is_less(&*arr_ptr.add(4), &*arr_ptr.add(3)) {
+    // This is a custom sort network, see sort16 for details.
+
+    // (0,1),(2,3),(4,5),(6,7)
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+
+    // (1,2),(3,4),(5,6)
+    let should_swap_1_2 = is_less(&*arr_ptr.add(2), &*arr_ptr.add(1));
+    let should_swap_3_4 = is_less(&*arr_ptr.add(4), &*arr_ptr.add(3));
+    let should_swap_5_6 = is_less(&*arr_ptr.add(6), &*arr_ptr.add(5));
+
+    // Do a single jump that is easy to predict.
+    if (should_swap_1_2 as usize + should_swap_3_4 as usize + should_swap_5_6 as usize) == 0 {
+        // Do minimal comparisons if already sorted.
         return;
     }
 
-    bitonic_merge8(v, is_less);
+    branchless_swap(arr_ptr.add(1), arr_ptr.add(2), should_swap_1_2);
+    branchless_swap(arr_ptr.add(3), arr_ptr.add(4), should_swap_3_4);
+    branchless_swap(arr_ptr.add(5), arr_ptr.add(6), should_swap_5_6);
+
+    // (0,7),(1,5),(2,6),(0,3),(4,7),(0,1),(6,7),(2,4),(3,5),(2,3),(4,5),(1,2),(5,6),(3,4)
+    swap_if_less(arr_ptr, 0, 7, is_less);
+    swap_if_less(arr_ptr, 1, 5, is_less);
+    swap_if_less(arr_ptr, 2, 6, is_less);
+    swap_if_less(arr_ptr, 0, 3, is_less);
+    swap_if_less(arr_ptr, 4, 7, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 2, 4, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
 }
 
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
 unsafe fn sort16<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -756,24 +697,107 @@ where
     // SAFETY: caller must ensure v.len() >= 16.
     debug_assert!(v.len() == 16);
 
-    // Sort the 4 parts of v individually.
-    sort4(v, is_less);
-    sort4(&mut v[4..], is_less);
-    sort4(&mut v[8..], is_less);
-    sort4(&mut v[12..], is_less);
-
-    // If all 3 pairs of border elements are sorted, we know the whole 16 elements are now sorted.
-    // Doing this check reduces the total comparisons done on average for different input patterns.
     let arr_ptr = v.as_mut_ptr();
-    if !is_less(&*arr_ptr.add(4), &*arr_ptr.add(3))
-        && !is_less(&*arr_ptr.add(8), &*arr_ptr.add(7))
-        && !is_less(&*arr_ptr.add(12), &*arr_ptr.add(11))
+
+    // Custom sort network found with https://github.com/bertdobbelaere/SorterHunter
+    // and with (0,1),(2,3),(4,5),(6,7),(8,9),(10,11),(12,13),(14,15),
+    //          (1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),
+    // as FixedPrefix.
+    // This allows efficient early exit if v is already or nearly sorted.
+
+    // (0,1),(2,3),(4,5),(6,7),(8,9),(10,11),(12,13),(14,15),
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 8, 9, is_less);
+    swap_if_less(arr_ptr, 10, 11, is_less);
+    swap_if_less(arr_ptr, 12, 13, is_less);
+    swap_if_less(arr_ptr, 14, 15, is_less);
+
+    // (1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),
+    let should_swap_1_2 = is_less(&*arr_ptr.add(2), &*arr_ptr.add(1));
+    let should_swap_3_4 = is_less(&*arr_ptr.add(4), &*arr_ptr.add(3));
+    let should_swap_5_6 = is_less(&*arr_ptr.add(6), &*arr_ptr.add(5));
+    let should_swap_7_8 = is_less(&*arr_ptr.add(8), &*arr_ptr.add(7));
+    let should_swap_9_10 = is_less(&*arr_ptr.add(10), &*arr_ptr.add(9));
+    let should_swap_11_12 = is_less(&*arr_ptr.add(12), &*arr_ptr.add(11));
+    let should_swap_13_14 = is_less(&*arr_ptr.add(14), &*arr_ptr.add(13));
+
+    // Do a single jump that is easy to predict.
+    if (should_swap_1_2 as usize
+        + should_swap_3_4 as usize
+        + should_swap_5_6 as usize
+        + should_swap_7_8 as usize
+        + should_swap_9_10 as usize
+        + should_swap_11_12 as usize
+        + should_swap_13_14 as usize)
+        == 0
     {
+        // Do minimal comparisons if already sorted.
         return;
     }
 
-    bitonic_merge8(&mut v[..8], is_less);
-    bitonic_merge8(&mut v[8..], is_less);
+    branchless_swap(arr_ptr.add(1), arr_ptr.add(2), should_swap_1_2);
+    branchless_swap(arr_ptr.add(3), arr_ptr.add(4), should_swap_3_4);
+    branchless_swap(arr_ptr.add(5), arr_ptr.add(6), should_swap_5_6);
+    branchless_swap(arr_ptr.add(7), arr_ptr.add(8), should_swap_7_8);
+    branchless_swap(arr_ptr.add(9), arr_ptr.add(10), should_swap_9_10);
+    branchless_swap(arr_ptr.add(11), arr_ptr.add(12), should_swap_11_12);
+    branchless_swap(arr_ptr.add(13), arr_ptr.add(14), should_swap_13_14);
 
-    bitonic_merge16(v, is_less);
+    // (0,15),(3,11),(4,12),(0,7),(8,15),(4,8),(7,11),(1,5),(10,14),(0,3),(12,15),(2,6),(9,13),
+    // (1,9),(6,14),(2,10),(5,13),(6,8),(7,9),(3,5),(10,12),(2,4),(11,13),(4,9),(6,11),(0,1),
+    // (14,15),(5,9),(6,10),(3,7),(8,12),(2,7),(8,13),(4,7),(8,11),(1,3),(12,14),(5,6),(9,10),
+    // (6,7),(8,9),(4,5),(10,11),(5,6),(9,10),(7,8),(2,3),(12,13),(3,4),(11,12)
+    swap_if_less(arr_ptr, 0, 15, is_less);
+    swap_if_less(arr_ptr, 3, 11, is_less);
+    swap_if_less(arr_ptr, 4, 12, is_less);
+    swap_if_less(arr_ptr, 0, 7, is_less);
+    swap_if_less(arr_ptr, 8, 15, is_less);
+    swap_if_less(arr_ptr, 4, 8, is_less);
+    swap_if_less(arr_ptr, 7, 11, is_less);
+    swap_if_less(arr_ptr, 1, 5, is_less);
+    swap_if_less(arr_ptr, 10, 14, is_less);
+    swap_if_less(arr_ptr, 0, 3, is_less);
+    swap_if_less(arr_ptr, 12, 15, is_less);
+    swap_if_less(arr_ptr, 2, 6, is_less);
+    swap_if_less(arr_ptr, 9, 13, is_less);
+    swap_if_less(arr_ptr, 1, 9, is_less);
+    swap_if_less(arr_ptr, 6, 14, is_less);
+    swap_if_less(arr_ptr, 2, 10, is_less);
+    swap_if_less(arr_ptr, 5, 13, is_less);
+    swap_if_less(arr_ptr, 6, 8, is_less);
+    swap_if_less(arr_ptr, 7, 9, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 10, 12, is_less);
+    swap_if_less(arr_ptr, 2, 4, is_less);
+    swap_if_less(arr_ptr, 11, 13, is_less);
+    swap_if_less(arr_ptr, 4, 9, is_less);
+    swap_if_less(arr_ptr, 6, 11, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 14, 15, is_less);
+    swap_if_less(arr_ptr, 5, 9, is_less);
+    swap_if_less(arr_ptr, 6, 10, is_less);
+    swap_if_less(arr_ptr, 3, 7, is_less);
+    swap_if_less(arr_ptr, 8, 12, is_less);
+    swap_if_less(arr_ptr, 2, 7, is_less);
+    swap_if_less(arr_ptr, 8, 13, is_less);
+    swap_if_less(arr_ptr, 4, 7, is_less);
+    swap_if_less(arr_ptr, 8, 11, is_less);
+    swap_if_less(arr_ptr, 1, 3, is_less);
+    swap_if_less(arr_ptr, 12, 14, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 9, 10, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 8, 9, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 10, 11, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 9, 10, is_less);
+    swap_if_less(arr_ptr, 7, 8, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 12, 13, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 11, 12, is_less);
 }
