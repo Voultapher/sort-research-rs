@@ -36,6 +36,19 @@ def bucketize_comp_data(name: str):
     return result
 
 
+# If val_a is larger than val_b -> % larger than val_b
+# If val_b is larger than val_a -> % larger than val_a as negative number
+# 100 == val_a 2x larger than val_b
+# -100 == val_b 2x larger than val_a
+def relative_speedup(val_a, val_b):
+    if val_a <= val_b:
+        # val_a is larger.
+        return ((val_b / val_a) - 1) * 100
+    else:
+        # val_b is larger
+        return -(((val_a / val_b) - 1) * 100)
+
+
 def analyze_buckets(bucket_a, bucket_b):
     # Assumes both buckets have the same layout.
 
@@ -53,9 +66,7 @@ def analyze_buckets(bucket_a, bucket_b):
         entry_a = zip_tuple[0]
         entry_b = zip_tuple[1]
 
-        return (
-            (entry_b.comp_count - entry_a.comp_count) / abs(entry_a.comp_count)
-        ) * 100
+        return relative_speedup(entry_a.comp_count, entry_b.comp_count)
 
     for key in sorted(bucket_a.keys()):
         filterd_comps = filter(non_zero, zip(bucket_a[key], bucket_b[key]))

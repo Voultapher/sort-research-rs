@@ -246,7 +246,7 @@ def plot_distribution(temp, transform, name_a, groups_a, name_b, groups_b):
         legend_label="random pattern",
     )
 
-    plot.legend.location = "top_left"
+    plot.legend.location = "top_right"
 
     return plot
 
