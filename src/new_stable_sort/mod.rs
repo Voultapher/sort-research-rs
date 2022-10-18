@@ -258,7 +258,6 @@ impl<T> Drop for InsertionHole<T> {
 }
 
 /// Sort v assuming v[..offset] is already sorted.
-#[inline]
 fn insertion_sort_remaining<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -538,32 +537,6 @@ impl<T: Copy> IsCopy<T> for T {
 
 // --- Branchless sorting (less branches not zero) ---
 
-/// Swap value with next value in array pointed to by arr_ptr if should_swap is true.
-#[inline]
-unsafe fn swap_next_if<T>(arr_ptr: *mut T, should_swap: bool) {
-    // This is a branchless version of swap if.
-    // The equivalent code with a branch would be:
-    //
-    // if should_swap {
-    //     ptr::swap_nonoverlapping(arr_ptr, arr_ptr.add(1), 1);
-    // }
-
-    // Give ourselves some scratch space to work with.
-    // We do not have to worry about drops: `MaybeUninit` does nothing when dropped.
-    let mut tmp = mem::MaybeUninit::<T>::uninit();
-
-    // Perform the conditional swap.
-    // SAFETY: the caller must guarantee that `arr_ptr` and `arr_ptr.add(1)` are
-    // valid for writes and properly aligned. `tmp` cannot be overlapping either `arr_ptr` or
-    // `arr_ptr.add(1) because `tmp` was just allocated on the stack as a separate allocated object.
-    // And `arr_ptr` and `arr_ptr.add(1)` can't overlap either.
-    // However `arr_ptr` and `arr_ptr.add(should_swap as usize)` can point to the same memory if
-    // should_swap is false.
-    ptr::copy_nonoverlapping(arr_ptr.add(!should_swap as usize), tmp.as_mut_ptr(), 1);
-    ptr::copy(arr_ptr.add(should_swap as usize), arr_ptr, 1);
-    ptr::copy_nonoverlapping(tmp.as_ptr(), arr_ptr.add(1), 1);
-}
-
 /// Swap value with next value in array pointed to by arr_ptr if the next element is less than a.
 #[inline]
 pub unsafe fn swap_next_if_less<T, F>(arr_ptr: *mut T, is_less: &mut F)
@@ -575,28 +548,23 @@ where
     //
     // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
     // in a well defined state, without duplicates.
-    //
-    // Important to only swap if it is more and not if it is equal. is_less should return false for
-    // equal, so we don't swap.
-    let should_swap = is_less(&*arr_ptr.add(1), &*arr_ptr);
-    swap_next_if(arr_ptr, should_swap);
+
+    swap_if_less(arr_ptr, arr_ptr.add(1), is_less);
 }
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline]
-pub unsafe fn swap_if_less<T, F>(a_ptr: *mut T, b_ptr: *mut T, distance: usize, is_less: &mut F)
+pub unsafe fn swap_if_less<T, F>(a_ptr: *mut T, b_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
     // and properly aligned, and part of the same allocation, and do not alias.
-    // `b_ptr` must have a higher address than `a_ptr`.
-    // `distance` must be the (bytes * mem::size_of<T>) distance between `a_ptr` and `b_ptr`.
     //
     // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
     // in a well defined state, without duplicates.
 
-    debug_assert!(b_ptr as usize > a_ptr as usize);
+    debug_assert!(a_ptr as usize != b_ptr as usize);
 
     // Important to only swap if it is more and not if it is equal. is_less should return false for
     // equal, so we don't swap.
@@ -613,15 +581,11 @@ where
     // We do not have to worry about drops: `MaybeUninit` does nothing when dropped.
     let mut tmp = mem::MaybeUninit::<T>::uninit();
 
-    // How many bytes need to be added to a_ptr to write a into it's swapped place.
-    // If should_swap == 0 -> 0 | should_swap == 1 -> distance.
-    let a_offset = distance * (should_swap as usize);
-    // How many bytes need to be added to a_ptr to write b into it's swapped place.
-    // If should_swap == 0 -> distance | should_swap == 1 -> 0.
-    let b_offset = distance * (!should_swap as usize);
+    let a_swap_ptr = if should_swap { b_ptr } else { a_ptr };
+    let b_swap_ptr = if should_swap { a_ptr } else { b_ptr };
 
-    ptr::copy_nonoverlapping(a_ptr.add(b_offset), tmp.as_mut_ptr(), 1);
-    ptr::copy(a_ptr.add(a_offset), a_ptr, 1);
+    ptr::copy_nonoverlapping(b_swap_ptr, tmp.as_mut_ptr(), 1);
+    ptr::copy(a_swap_ptr, a_ptr, 1);
     ptr::copy_nonoverlapping(tmp.as_ptr(), b_ptr, 1);
 }
 
@@ -700,16 +664,16 @@ where
 
     let arr_ptr = v.as_mut_ptr();
 
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(7), 7, is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(6), 5, is_less);
-    swap_if_less(arr_ptr.add(2), arr_ptr.add(5), 3, is_less);
+    swap_if_less(arr_ptr.add(0), arr_ptr.add(7), is_less);
+    swap_if_less(arr_ptr.add(1), arr_ptr.add(6), is_less);
+    swap_if_less(arr_ptr.add(2), arr_ptr.add(5), is_less);
     swap_next_if_less(arr_ptr.add(3), is_less);
 
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(2), 2, is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(3), 2, is_less);
+    swap_if_less(arr_ptr.add(0), arr_ptr.add(2), is_less);
+    swap_if_less(arr_ptr.add(1), arr_ptr.add(3), is_less);
 
-    swap_if_less(arr_ptr.add(4), arr_ptr.add(6), 2, is_less);
-    swap_if_less(arr_ptr.add(5), arr_ptr.add(7), 2, is_less);
+    swap_if_less(arr_ptr.add(4), arr_ptr.add(6), is_less);
+    swap_if_less(arr_ptr.add(5), arr_ptr.add(7), is_less);
 
     swap_next_if_less(arr_ptr.add(0), is_less);
     swap_next_if_less(arr_ptr.add(2), is_less);
@@ -726,34 +690,34 @@ where
 
     let arr_ptr = v.as_mut_ptr();
 
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(15), 15, is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(14), 13, is_less);
-    swap_if_less(arr_ptr.add(2), arr_ptr.add(13), 11, is_less);
-    swap_if_less(arr_ptr.add(3), arr_ptr.add(12), 9, is_less);
-    swap_if_less(arr_ptr.add(4), arr_ptr.add(11), 7, is_less);
-    swap_if_less(arr_ptr.add(5), arr_ptr.add(10), 5, is_less);
-    swap_if_less(arr_ptr.add(6), arr_ptr.add(9), 3, is_less);
+    swap_if_less(arr_ptr.add(0), arr_ptr.add(15), is_less);
+    swap_if_less(arr_ptr.add(1), arr_ptr.add(14), is_less);
+    swap_if_less(arr_ptr.add(2), arr_ptr.add(13), is_less);
+    swap_if_less(arr_ptr.add(3), arr_ptr.add(12), is_less);
+    swap_if_less(arr_ptr.add(4), arr_ptr.add(11), is_less);
+    swap_if_less(arr_ptr.add(5), arr_ptr.add(10), is_less);
+    swap_if_less(arr_ptr.add(6), arr_ptr.add(9), is_less);
     swap_next_if_less(arr_ptr.add(7), is_less);
 
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(4), 4, is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(5), 4, is_less);
-    swap_if_less(arr_ptr.add(2), arr_ptr.add(6), 4, is_less);
-    swap_if_less(arr_ptr.add(3), arr_ptr.add(7), 4, is_less);
+    swap_if_less(arr_ptr.add(0), arr_ptr.add(4), is_less);
+    swap_if_less(arr_ptr.add(1), arr_ptr.add(5), is_less);
+    swap_if_less(arr_ptr.add(2), arr_ptr.add(6), is_less);
+    swap_if_less(arr_ptr.add(3), arr_ptr.add(7), is_less);
 
-    swap_if_less(arr_ptr.add(8), arr_ptr.add(12), 4, is_less);
-    swap_if_less(arr_ptr.add(9), arr_ptr.add(13), 4, is_less);
-    swap_if_less(arr_ptr.add(10), arr_ptr.add(14), 4, is_less);
-    swap_if_less(arr_ptr.add(11), arr_ptr.add(15), 4, is_less);
+    swap_if_less(arr_ptr.add(8), arr_ptr.add(12), is_less);
+    swap_if_less(arr_ptr.add(9), arr_ptr.add(13), is_less);
+    swap_if_less(arr_ptr.add(10), arr_ptr.add(14), is_less);
+    swap_if_less(arr_ptr.add(11), arr_ptr.add(15), is_less);
 
-    swap_if_less(arr_ptr.add(0), arr_ptr.add(2), 2, is_less);
-    swap_if_less(arr_ptr.add(1), arr_ptr.add(3), 2, is_less);
-    swap_if_less(arr_ptr.add(4), arr_ptr.add(6), 2, is_less);
-    swap_if_less(arr_ptr.add(5), arr_ptr.add(7), 2, is_less);
+    swap_if_less(arr_ptr.add(0), arr_ptr.add(2), is_less);
+    swap_if_less(arr_ptr.add(1), arr_ptr.add(3), is_less);
+    swap_if_less(arr_ptr.add(4), arr_ptr.add(6), is_less);
+    swap_if_less(arr_ptr.add(5), arr_ptr.add(7), is_less);
 
-    swap_if_less(arr_ptr.add(8), arr_ptr.add(10), 2, is_less);
-    swap_if_less(arr_ptr.add(9), arr_ptr.add(11), 2, is_less);
-    swap_if_less(arr_ptr.add(12), arr_ptr.add(14), 2, is_less);
-    swap_if_less(arr_ptr.add(13), arr_ptr.add(15), 2, is_less);
+    swap_if_less(arr_ptr.add(8), arr_ptr.add(10), is_less);
+    swap_if_less(arr_ptr.add(9), arr_ptr.add(11), is_less);
+    swap_if_less(arr_ptr.add(12), arr_ptr.add(14), is_less);
+    swap_if_less(arr_ptr.add(13), arr_ptr.add(15), is_less);
 
     swap_next_if_less(arr_ptr.add(0), is_less);
     swap_next_if_less(arr_ptr.add(2), is_less);
