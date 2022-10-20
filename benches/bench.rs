@@ -137,35 +137,33 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
         return;
     }
 
-    let pattern_providers: Vec<fn(usize) -> Vec<i32>> = vec![
-        patterns::random,
-        |size| patterns::random_uniform(size, 0..(size / 10) as i32),
-        patterns::random_random_size,
-        patterns::all_equal,
-        patterns::ascending,
-        patterns::descending,
-        |size| patterns::ascending_saw(size, size / 5),
-        |size| patterns::ascending_saw(size, size / 20),
-        |size| patterns::descending_saw(size, size / 5),
-        |size| patterns::descending_saw(size, size / 20),
-        patterns::pipe_organ,
+    let pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
+        ("random", patterns::random),
+        ("random_dense", |size| {
+            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) as i32)
+        }),
+        ("random_binary", |size| {
+            patterns::random_uniform(size, 0..1 as i32)
+        }),
+        ("random_random_size", patterns::random_random_size),
+        ("ascending", patterns::ascending),
+        ("descending", patterns::descending),
+        ("ascending_saw_5", |size| {
+            patterns::ascending_saw(size, size / 5)
+        }),
+        ("ascending_saw_20", |size| {
+            patterns::ascending_saw(size, size / 20)
+        }),
+        ("descending_saw_5", |size| {
+            patterns::descending_saw(size, size / 5)
+        }),
+        ("descending_saw_20", |size| {
+            patterns::descending_saw(size, size / 20)
+        }),
+        ("pipe_organ", patterns::pipe_organ),
     ];
 
-    let pattern_names = [
-        "random",
-        "random_uniform",
-        "random_random_size",
-        "all_equal",
-        "ascending",
-        "descending",
-        "ascending_saw_5",
-        "ascending_saw_20",
-        "descending_saw_5",
-        "descending_saw_20",
-        "pipe_organ",
-    ];
-
-    for (pattern_provider, pattern_name) in pattern_providers.iter().zip(pattern_names.iter()) {
+    for (pattern_name, pattern_provider) in pattern_providers.iter() {
         if test_size < 3 && *pattern_name != "random" {
             continue;
         }
