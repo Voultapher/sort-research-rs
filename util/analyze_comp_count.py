@@ -71,15 +71,15 @@ def analyze_buckets(bucket_a, bucket_b):
     for key in sorted(bucket_a.keys()):
         filterd_comps = filter(non_zero, zip(bucket_a[key], bucket_b[key]))
         comp_diffs = list(map(diff_percent, filterd_comps))
-        median_diff = f"median: {round(statistics.median(comp_diffs))}%"
+        mean = f"mean: {round(statistics.mean(comp_diffs))}%"
         min_diff = f"min: {round(min(comp_diffs))}%"
         max_diff = f"max: {round(max(comp_diffs))}%"
 
         key_pad = " " * (35 - len(key))
-        median_pad = " " * (14 - len(median_diff))
+        mean_pad = " " * (14 - len(mean))
         min_pad = " " * (11 - len(min_diff))
         print(
-            f"[{key}]:{key_pad}{median_diff}{median_pad}{min_diff}{min_pad}{max_diff}"
+            f"[{key}]:{key_pad}{mean}{mean_pad}{min_diff}{min_pad}{max_diff}"
         )
 
 
