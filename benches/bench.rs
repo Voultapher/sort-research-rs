@@ -102,6 +102,14 @@ macro_rules! bench_func {
         $bench_module:ident,
     ) => {
         if env::var("MEASURE_COMP").is_ok() {
+            // Configure this to filter results. For now the only real difference is copy types.
+            if !($transform_name == "i32"
+                && $test_size <= 100000
+                && $pattern_name != &"random_random_size")
+            {
+                return;
+            }
+
             // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
             let name = format!(
                 "{}-comp-{}-{}-{}",
@@ -311,7 +319,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     // ];
 
     let test_sizes = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 16, 17, 19, 20, 24, 36, 50, 101, 200, 500, 1_000,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15, 16, 17, 19, 20, 24, 36, 50, 101, 200, 500, 1_000,
         2_048, 10_000, 100_000, 1_000_000,
     ];
 
