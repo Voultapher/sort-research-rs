@@ -71,7 +71,13 @@ static COMP_COUNT: AtomicU64 = AtomicU64::new(0);
 fn measure_comp_count(name: &str, test_size: usize, instrumented_sort_func: impl Fn()) {
     // Measure how many comparisons are performed by a specific implementation and input
     // combination.
-    let run_count: usize = if test_size < 10_000 { 500 } else { 50 };
+    let run_count: usize = if test_size <= 20 {
+        100_000
+    } else if test_size < 10_000 {
+        3000
+    } else {
+        70
+    };
 
     COMP_COUNT.store(0, Ordering::Release);
     for _ in 0..run_count {
