@@ -1120,7 +1120,7 @@ fn fast_rotate_right<T>(v: &mut [T]) {
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 // performance impact.
 #[inline(never)]
-unsafe fn sort16_optimal<T, F>(v: &mut [T], is_less: &mut F)
+unsafe fn sort16_early_exit<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -1285,4 +1285,81 @@ where
     swap_if_less(arr_ptr, 5, 6, is_less);
     swap_if_less(arr_ptr, 7, 8, is_less);
     swap_if_less(arr_ptr, 9, 10, is_less);
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+unsafe fn sort16_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 16.
+    debug_assert!(v.len() == 16);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks_extended.html#N16L60D10
+
+    swap_if_less(arr_ptr, 0, 13, is_less);
+    swap_if_less(arr_ptr, 1, 12, is_less);
+    swap_if_less(arr_ptr, 2, 15, is_less);
+    swap_if_less(arr_ptr, 3, 14, is_less);
+    swap_if_less(arr_ptr, 4, 8, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 7, 11, is_less);
+    swap_if_less(arr_ptr, 9, 10, is_less);
+    swap_if_less(arr_ptr, 0, 5, is_less);
+    swap_if_less(arr_ptr, 1, 7, is_less);
+    swap_if_less(arr_ptr, 2, 9, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 6, 13, is_less);
+    swap_if_less(arr_ptr, 8, 14, is_less);
+    swap_if_less(arr_ptr, 10, 15, is_less);
+    swap_if_less(arr_ptr, 11, 12, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 6, 8, is_less);
+    swap_if_less(arr_ptr, 7, 9, is_less);
+    swap_if_less(arr_ptr, 10, 11, is_less);
+    swap_if_less(arr_ptr, 12, 13, is_less);
+    swap_if_less(arr_ptr, 14, 15, is_less);
+    swap_if_less(arr_ptr, 0, 2, is_less);
+    swap_if_less(arr_ptr, 1, 3, is_less);
+    swap_if_less(arr_ptr, 4, 10, is_less);
+    swap_if_less(arr_ptr, 5, 11, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 8, 9, is_less);
+    swap_if_less(arr_ptr, 12, 14, is_less);
+    swap_if_less(arr_ptr, 13, 15, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 3, 12, is_less);
+    swap_if_less(arr_ptr, 4, 6, is_less);
+    swap_if_less(arr_ptr, 5, 7, is_less);
+    swap_if_less(arr_ptr, 8, 10, is_less);
+    swap_if_less(arr_ptr, 9, 11, is_less);
+    swap_if_less(arr_ptr, 13, 14, is_less);
+    swap_if_less(arr_ptr, 1, 4, is_less);
+    swap_if_less(arr_ptr, 2, 6, is_less);
+    swap_if_less(arr_ptr, 5, 8, is_less);
+    swap_if_less(arr_ptr, 7, 10, is_less);
+    swap_if_less(arr_ptr, 9, 13, is_less);
+    swap_if_less(arr_ptr, 11, 14, is_less);
+    swap_if_less(arr_ptr, 2, 4, is_less);
+    swap_if_less(arr_ptr, 3, 6, is_less);
+    swap_if_less(arr_ptr, 9, 12, is_less);
+    swap_if_less(arr_ptr, 11, 13, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 6, 8, is_less);
+    swap_if_less(arr_ptr, 7, 9, is_less);
+    swap_if_less(arr_ptr, 10, 12, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 7, 8, is_less);
+    swap_if_less(arr_ptr, 9, 10, is_less);
+    swap_if_less(arr_ptr, 11, 12, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 8, 9, is_less);
 }
