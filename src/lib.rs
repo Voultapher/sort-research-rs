@@ -21,3 +21,12 @@ pub mod wpwoodjr_stable_sort;
 // The stdlib is compiled with unknown optimizations such as PGO.
 pub mod stdlib_stable;
 pub mod stdlib_unstable;
+
+// Call libcxx sort via FFI.
+#[cfg(feature = "libcxx")]
+#[macro_use]
+mod ffi_util;
+#[cfg(feature = "libcxx")]
+pub mod libcxx_stable;
+#[cfg(feature = "libcxx")]
+pub mod libcxx_unstable;

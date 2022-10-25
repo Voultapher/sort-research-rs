@@ -16,3 +16,10 @@ criterion = { version = "0.3", features = ["html_reports"] }
 [[bench]]
 name = "bench"
 harness = false
+
+[features]
+default = []
+
+# Enable support for libcxx.
+# You must provide a prebuild static libcxx see: https://libcxx.llvm.org/BuildingLibcxx.html
+libcxx = []

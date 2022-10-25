@@ -232,6 +232,34 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             "wpwoodjr_stable",
             wpwoodjr_stable_sort,
         );
+
+        #[cfg(feature = "libcxx")]
+        use sort_comp::libcxx_stable;
+        #[cfg(feature = "libcxx")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "libcxx_stable",
+            libcxx_stable,
+        );
+
+        #[cfg(feature = "libcxx")]
+        use sort_comp::libcxx_unstable;
+        #[cfg(feature = "libcxx")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "libcxx_unstable",
+            libcxx_unstable,
+        );
     }
 }
 
