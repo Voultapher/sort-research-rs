@@ -50,28 +50,28 @@ where
 
     let mut stdlib_sorted_vec = v.to_vec();
     let stdlib_sorted = stdlib_sorted_vec.as_mut_slice();
-    stdlib_stable::sort_by(stdlib_sorted, |a, b| a.cmp(b));
+    stdlib_stable::sort(stdlib_sorted);
 
-    let fluxsort_sorted = v;
-    test_sort::sort_by(fluxsort_sorted, |a, b| a.cmp(b));
+    let testsort_sorted = v;
+    test_sort::sort(testsort_sorted);
 
-    assert_eq!(stdlib_sorted.len(), fluxsort_sorted.len());
+    assert_eq!(stdlib_sorted.len(), testsort_sorted.len());
 
-    for (a, b) in stdlib_sorted.iter().zip(fluxsort_sorted.iter()) {
+    for (a, b) in stdlib_sorted.iter().zip(testsort_sorted.iter()) {
         if !a.deep_equal(b) {
             if is_small_test {
                 eprintln!("Orginal:  {:?}", original_clone);
                 eprintln!("Expected: {:?}", stdlib_sorted);
-                eprintln!("Got:      {:?}", fluxsort_sorted);
+                eprintln!("Got:      {:?}", testsort_sorted);
             } else {
                 // Large arrays output them as files.
                 let original_name = format!("original_{}.txt", seed);
                 let std_name = format!("stdlib_sorted_{}.txt", seed);
-                let flux_name = format!("fluxsort_sorted_{}.txt", seed);
+                let flux_name = format!("testsort_sorted_{}.txt", seed);
 
                 fs::write(&original_name, format!("{:?}", original_clone)).unwrap();
                 fs::write(&std_name, format!("{:?}", stdlib_sorted)).unwrap();
-                fs::write(&flux_name, format!("{:?}", fluxsort_sorted)).unwrap();
+                fs::write(&flux_name, format!("{:?}", testsort_sorted)).unwrap();
 
                 eprintln!(
                     "Failed comparison, see files {original_name}, {std_name}, and {flux_name}"
