@@ -1,5 +1,6 @@
+use std::cell::RefCell;
 use std::env;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::rc::Rc;
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
@@ -29,7 +30,7 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
         |b| {
             b.iter_batched(
                 || transform(pattern_provider(test_size)),
-                |mut test_data| sort_func(test_data.as_mut_slice()),
+                |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
                 batch_size,
             )
         },
@@ -58,17 +59,19 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
 
                     transform(test_ints)
                 },
-                |mut test_data| sort_func(test_data.as_mut_slice()),
+                |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
                 BatchSize::PerIteration,
             )
         },
     );
 }
 
-// This thing only makes sense on a single thread.
-static COMP_COUNT: AtomicU64 = AtomicU64::new(0);
-
-fn measure_comp_count(name: &str, test_size: usize, instrumented_sort_func: impl Fn()) {
+fn measure_comp_count(
+    name: &str,
+    test_size: usize,
+    instrumented_sort_func: impl Fn(),
+    comp_count: Rc<RefCell<u64>>,
+) {
     // Measure how many comparisons are performed by a specific implementation and input
     // combination.
     let run_count: usize = if test_size <= 20 {
@@ -79,14 +82,14 @@ fn measure_comp_count(name: &str, test_size: usize, instrumented_sort_func: impl
         70
     };
 
-    COMP_COUNT.store(0, Ordering::Release);
+    *comp_count.borrow_mut() = 0;
     for _ in 0..run_count {
         instrumented_sort_func();
     }
 
     // If there is on average less than a single comparison this will be wrong.
     // But that's such a corner case I don't care about it.
-    let total = COMP_COUNT.load(Ordering::Acquire) / (run_count as u64);
+    let total = *comp_count.borrow() / (run_count as u64);
     println!("{name}: mean comparisons: {total}");
 }
 
@@ -103,28 +106,28 @@ macro_rules! bench_func {
     ) => {
         if env::var("MEASURE_COMP").is_ok() {
             // Configure this to filter results. For now the only real difference is copy types.
-            if !($transform_name == "i32"
-                && $test_size <= 100000
-                && $pattern_name != &"random_random_size")
+            if $transform_name == "i32"
+                // && $test_size <= 100000
+                && $pattern_name != &"random_random_size"
             {
-                return;
+                // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
+                let name = format!(
+                    "{}-comp-{}-{}-{}",
+                    $bench_name, $transform_name, $pattern_name, $test_size
+                );
+                // Instrument via sort_by to ensure the type properties such as Copy of the type
+                // that is being sorted doesn't change. And we get representative numbers.
+                let comp_count = Rc::new(RefCell::new(0u64));
+                let comp_count_copy = comp_count.clone();
+                let instrumented_sort_func = || {
+                    let mut test_data = $transform($pattern_provider($test_size));
+                    $bench_module::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
+                        *comp_count_copy.borrow_mut() += 1;
+                        a.cmp(b)
+                    })
+                };
+                measure_comp_count(&name, $test_size, instrumented_sort_func, comp_count);
             }
-
-            // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
-            let name = format!(
-                "{}-comp-{}-{}-{}",
-                $bench_name, $transform_name, $pattern_name, $test_size
-            );
-            // Instrument via sort_by to ensure the type properties such as Copy of the type
-            // that is being sorted doesn't change. And we get representative numbers.
-            let instrumented_sort_func = || {
-                let mut test_data = $transform($pattern_provider($test_size));
-                $bench_module::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
-                    COMP_COUNT.fetch_add(1, Ordering::Relaxed);
-                    a.cmp(b)
-                })
-            };
-            measure_comp_count(&name, $test_size, instrumented_sort_func);
         } else {
             bench_sort(
                 $c,
