@@ -1363,3 +1363,324 @@ where
     swap_if_less(arr_ptr, 6, 7, is_less);
     swap_if_less(arr_ptr, 8, 9, is_less);
 }
+
+// Not actually stable
+
+/// Sort the first 2 elements of v.
+unsafe fn sort2<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v is at least len 2.
+    debug_assert!(v.len() == 2);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    swap_if_less(arr_ptr, 0, 1, is_less);
+}
+
+/// Sort the first 3 elements of v.
+unsafe fn sort3<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v is at least len 3.
+    debug_assert!(v.len() == 3);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+}
+
+/// Sort the first 4 elements of v without any jump instruction.
+unsafe fn sort4<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v is at least len 4.
+    debug_assert!(v.len() == 4);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+
+    // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
+    // in a well defined state, without duplicates.
+    if is_less(&*arr_ptr.add(2), &*arr_ptr.add(1)) {
+        ptr::swap_nonoverlapping(arr_ptr.add(1), arr_ptr.add(2), 1);
+
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+unsafe fn sort8<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 8.
+    debug_assert!(v.len() == 8);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Custom sort network found with https://github.com/bertdobbelaere/SorterHunter
+    // With custom prefix to enable early exit.
+
+    // (0,1),(2,3),(4,5),(6,7)
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+
+    // (1,2),(3,4),(5,6)
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+
+    // let should_swap_1_2 = is_less(&*arr_ptr.add(2), &*arr_ptr.add(1));
+    // let should_swap_3_4 = is_less(&*arr_ptr.add(4), &*arr_ptr.add(3));
+    // let should_swap_5_6 = is_less(&*arr_ptr.add(6), &*arr_ptr.add(5));
+
+    // // Do a single jump that is easy to predict.
+    // if (should_swap_1_2 as usize + should_swap_3_4 as usize + should_swap_5_6 as usize) == 0 {
+    //     // Do minimal comparisons if already sorted.
+    //     return;
+    // }
+
+    // branchless_swap(arr_ptr.add(1), arr_ptr.add(2), should_swap_1_2);
+    // branchless_swap(arr_ptr.add(3), arr_ptr.add(4), should_swap_3_4);
+    // branchless_swap(arr_ptr.add(5), arr_ptr.add(6), should_swap_5_6);
+
+    // (0,7),(1,5),(2,6),(0,3),(4,7),(0,1),(6,7),(2,4),(3,5),(2,3),(4,5),(1,2),(5,6),(3,4)
+    swap_if_less(arr_ptr, 0, 7, is_less);
+    swap_if_less(arr_ptr, 1, 5, is_less);
+    swap_if_less(arr_ptr, 2, 6, is_less);
+    swap_if_less(arr_ptr, 0, 3, is_less);
+    swap_if_less(arr_ptr, 4, 7, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 2, 4, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+unsafe fn sort12_plus<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 12.
+    let len = v.len();
+    debug_assert!(len >= 12);
+
+    // Do some checks to enable minimal comparisons for already sorted inputs.
+    let arr_ptr = v.as_mut_ptr();
+
+    let should_swap_0_1 = is_less(&*arr_ptr.add(1), &*arr_ptr.add(0));
+    let should_swap_2_1 = is_less(&*arr_ptr.add(2), &*arr_ptr.add(1));
+    let should_swap_3_2 = is_less(&*arr_ptr.add(3), &*arr_ptr.add(2));
+    let should_swap_4_3 = is_less(&*arr_ptr.add(4), &*arr_ptr.add(3));
+
+    let swap_count = should_swap_0_1 as usize
+        + should_swap_2_1 as usize
+        + should_swap_3_2 as usize
+        + should_swap_4_3 as usize;
+
+    // The heuristic here is that if the first 5 elements are already sorted, chances are it is
+    // already sorted, and we dispatch into the potentially slower version that checks that.
+
+    if swap_count == 0 {
+        // Potentially already sorted.
+        insertion_sort_remaining(v, 4, is_less);
+    } else if swap_count == 4 {
+        // Potentially reversed.
+        let mut rev_i = 4;
+        let end = len - 1;
+        while rev_i < end {
+            if !is_less(&*arr_ptr.add(rev_i + 1), &*arr_ptr.add(rev_i)) {
+                break;
+            }
+            rev_i += 1;
+        }
+        v[..rev_i].reverse();
+        insertion_sort_remaining(v, rev_i, is_less);
+    } else {
+        if len < 20 {
+            // Optimal sorting networks like sort12_optimal and sort16_optimal would save up 2x
+            // runtime here, but they would only be applicable to sizes 12..=19. But would incur a
+            // sizable binary overhead that doesn't seem worth it.
+
+            sort8(&mut v[..8], is_less);
+
+            if len < 16 {
+                sort4(&mut v[8..12], is_less);
+                insertion_sort_remaining(&mut v[8..], 4, is_less);
+            } else {
+                sort8(&mut v[8..16], is_less);
+                insertion_sort_remaining(&mut v[8..], 8, is_less);
+            }
+
+            // SAFETY: The shorter side will always be at most 8 long. Because 0..8.len() == 8
+            let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
+            let swap_ptr = swap.as_mut_ptr() as *mut T;
+            merge(v, 8, swap_ptr, is_less);
+        } else {
+            sort20_optimal(&mut v[..20], is_less);
+            insertion_sort_remaining(v, 20, is_less);
+        }
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+unsafe fn sort20_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 20.
+    debug_assert!(v.len() == 20);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks_extended.html#N20L91D12
+
+    swap_if_less(arr_ptr, 0, 3, is_less);
+    swap_if_less(arr_ptr, 1, 7, is_less);
+    swap_if_less(arr_ptr, 2, 5, is_less);
+    swap_if_less(arr_ptr, 4, 8, is_less);
+    swap_if_less(arr_ptr, 6, 9, is_less);
+    swap_if_less(arr_ptr, 10, 13, is_less);
+    swap_if_less(arr_ptr, 11, 15, is_less);
+    swap_if_less(arr_ptr, 12, 18, is_less);
+    swap_if_less(arr_ptr, 14, 17, is_less);
+    swap_if_less(arr_ptr, 16, 19, is_less);
+    swap_if_less(arr_ptr, 0, 14, is_less);
+    swap_if_less(arr_ptr, 1, 11, is_less);
+    swap_if_less(arr_ptr, 2, 16, is_less);
+    swap_if_less(arr_ptr, 3, 17, is_less);
+    swap_if_less(arr_ptr, 4, 12, is_less);
+    swap_if_less(arr_ptr, 5, 19, is_less);
+    swap_if_less(arr_ptr, 6, 10, is_less);
+    swap_if_less(arr_ptr, 7, 15, is_less);
+    swap_if_less(arr_ptr, 8, 18, is_less);
+    swap_if_less(arr_ptr, 9, 13, is_less);
+    swap_if_less(arr_ptr, 0, 4, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 3, 8, is_less);
+    swap_if_less(arr_ptr, 5, 7, is_less);
+    swap_if_less(arr_ptr, 11, 16, is_less);
+    swap_if_less(arr_ptr, 12, 14, is_less);
+    swap_if_less(arr_ptr, 15, 19, is_less);
+    swap_if_less(arr_ptr, 17, 18, is_less);
+    swap_if_less(arr_ptr, 1, 6, is_less);
+    swap_if_less(arr_ptr, 2, 12, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 4, 11, is_less);
+    swap_if_less(arr_ptr, 7, 17, is_less);
+    swap_if_less(arr_ptr, 8, 15, is_less);
+    swap_if_less(arr_ptr, 13, 18, is_less);
+    swap_if_less(arr_ptr, 14, 16, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 6, is_less);
+    swap_if_less(arr_ptr, 7, 10, is_less);
+    swap_if_less(arr_ptr, 9, 12, is_less);
+    swap_if_less(arr_ptr, 13, 17, is_less);
+    swap_if_less(arr_ptr, 18, 19, is_less);
+    swap_if_less(arr_ptr, 1, 6, is_less);
+    swap_if_less(arr_ptr, 5, 9, is_less);
+    swap_if_less(arr_ptr, 7, 11, is_less);
+    swap_if_less(arr_ptr, 8, 12, is_less);
+    swap_if_less(arr_ptr, 10, 14, is_less);
+    swap_if_less(arr_ptr, 13, 18, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 4, 7, is_less);
+    swap_if_less(arr_ptr, 8, 10, is_less);
+    swap_if_less(arr_ptr, 9, 11, is_less);
+    swap_if_less(arr_ptr, 12, 15, is_less);
+    swap_if_less(arr_ptr, 14, 16, is_less);
+    swap_if_less(arr_ptr, 1, 3, is_less);
+    swap_if_less(arr_ptr, 2, 4, is_less);
+    swap_if_less(arr_ptr, 5, 7, is_less);
+    swap_if_less(arr_ptr, 6, 10, is_less);
+    swap_if_less(arr_ptr, 9, 13, is_less);
+    swap_if_less(arr_ptr, 12, 14, is_less);
+    swap_if_less(arr_ptr, 15, 17, is_less);
+    swap_if_less(arr_ptr, 16, 18, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 8, 9, is_less);
+    swap_if_less(arr_ptr, 10, 11, is_less);
+    swap_if_less(arr_ptr, 12, 13, is_less);
+    swap_if_less(arr_ptr, 15, 16, is_less);
+    swap_if_less(arr_ptr, 17, 18, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 6, is_less);
+    swap_if_less(arr_ptr, 5, 8, is_less);
+    swap_if_less(arr_ptr, 7, 9, is_less);
+    swap_if_less(arr_ptr, 10, 12, is_less);
+    swap_if_less(arr_ptr, 11, 14, is_less);
+    swap_if_less(arr_ptr, 13, 15, is_less);
+    swap_if_less(arr_ptr, 16, 17, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 6, 8, is_less);
+    swap_if_less(arr_ptr, 7, 10, is_less);
+    swap_if_less(arr_ptr, 9, 12, is_less);
+    swap_if_less(arr_ptr, 11, 13, is_less);
+    swap_if_less(arr_ptr, 14, 15, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 7, 8, is_less);
+    swap_if_less(arr_ptr, 9, 10, is_less);
+    swap_if_less(arr_ptr, 11, 12, is_less);
+    swap_if_less(arr_ptr, 13, 14, is_less);
+    swap_if_less(arr_ptr, 15, 16, is_less);
+}
+
+// Only worth for 20, not for 16.
+fn x() {
+    if qualifies_for_branchless_sort::<T>() && end >= 23 && start_end_diff <= 6 {
+        // For random inputs on average how many elements are naturally already sorted
+        // (start_end_diff) will be relatively small. And it's faster to avoid a merge operation
+        // between the newly sorted elements on the left by the sort network and the already sorted
+        // elements. Instead if there are 3 or fewer already sorted elements they get merged by
+        // participating in the sort network. This wastes the information that they are already
+        // sorted, but extra branching is not worth it.
+        let is_small_pre_sorted = start_end_diff <= 3;
+
+        start = if is_small_pre_sorted {
+            end - 20
+        } else {
+            start_found - 17
+        };
+
+        // SAFETY: start >= 0 && start + 20 <= end
+        unsafe {
+            // Use an optimal sorting network here instead of some hybrid network with early exit.
+            // If the input is already sorted the previous adaptive analysis path of Timsort ought
+            // to have found it. So we prefer minimizing the total amount of comparisons, which are
+            // user provided and may be of arbitrary cost.
+            sort20_optimal(&mut v[start..(start + 20)], is_less);
+        }
+
+        // For most patterns this branch should have good prediction accuracy.
+        if !is_small_pre_sorted {
+            insertion_sort_remaining(&mut v[start..end], 20, is_less);
+        }
+    }
+}
