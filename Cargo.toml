@@ -23,3 +23,7 @@ default = []
 # Enable support for libcxx.
 # You must provide a prebuild static libcxx see: https://libcxx.llvm.org/BuildingLibcxx.html
 libcxx = []
+
+# Enable wpwoodjr sort.
+# No additional requirements, but disabled by default to keep things lean.
+wpwoodjr = []

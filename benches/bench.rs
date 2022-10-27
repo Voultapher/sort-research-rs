@@ -221,7 +221,9 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             stdlib_unstable,
         );
 
+        #[cfg(feature = "wpwoodjr")]
         use sort_comp::wpwoodjr_stable_sort;
+        #[cfg(feature = "wpwoodjr")]
         bench_func!(
             c,
             test_size,

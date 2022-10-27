@@ -15,6 +15,8 @@ pub mod patterns;
 
 pub mod fluxsort;
 pub mod new_stable_sort;
+
+#[cfg(feature = "wpwoodjr")]
 pub mod wpwoodjr_stable_sort;
 
 // Copy the stdlib implementations to have comparable builds.
