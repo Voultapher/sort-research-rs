@@ -41,7 +41,7 @@ fn get_or_init_random_seed() -> u64 {
 
 fn sort_comp<T>(v: &mut [T])
 where
-    T: Ord + Clone + DeepEqual + Debug,
+    T: Ord + Clone + Debug,
 {
     let seed = get_or_init_random_seed();
 
@@ -58,7 +58,7 @@ where
     assert_eq!(stdlib_sorted.len(), testsort_sorted.len());
 
     for (a, b) in stdlib_sorted.iter().zip(testsort_sorted.iter()) {
-        if !a.deep_equal(b) {
+        if a != b {
             if is_small_test {
                 eprintln!("Orginal:  {:?}", original_clone);
                 eprintln!("Expected: {:?}", stdlib_sorted);
@@ -83,32 +83,6 @@ where
     }
 }
 
-// The idea of this struct is to have something that might look the same, based on the sort property
-// but can still be different. This helps test that the stable sort algorithm is actually stable.
-#[derive(Clone, Debug, Eq)]
-struct ValueWithExtra {
-    key: i32,
-    extra: i32,
-}
-
-impl PartialOrd for ValueWithExtra {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.key.partial_cmp(&other.key)
-    }
-}
-
-impl Ord for ValueWithExtra {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-impl PartialEq for ValueWithExtra {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct LargeStackVal {
     vals: [i128; 4],
@@ -129,41 +103,7 @@ impl LargeStackVal {
     }
 }
 
-trait DeepEqual {
-    fn deep_equal(&self, other: &Self) -> bool;
-}
-
-impl DeepEqual for () {
-    fn deep_equal(&self, _other: &Self) -> bool {
-        true
-    }
-}
-
-impl DeepEqual for i32 {
-    fn deep_equal(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl DeepEqual for String {
-    fn deep_equal(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl DeepEqual for LargeStackVal {
-    fn deep_equal(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl DeepEqual for ValueWithExtra {
-    fn deep_equal(&self, other: &Self) -> bool {
-        self.key.eq(&other.key) && self.extra.eq(&other.extra)
-    }
-}
-
-fn test_impl<T: Ord + Clone + DeepEqual + Debug>(pattern_fn: impl Fn(usize) -> Vec<T>) {
+fn test_impl<T: Ord + Clone + Debug>(pattern_fn: impl Fn(usize) -> Vec<T>) {
     for test_size in TEST_SIZES {
         let mut test_data = pattern_fn(test_size);
         sort_comp(test_data.as_mut_slice());
@@ -215,12 +155,6 @@ impl PartialEq for dyn DynTrait {
 
 impl Eq for dyn DynTrait {}
 
-impl DeepEqual for Rc<dyn DynTrait> {
-    fn deep_equal(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
 // --- TESTS ---
 
 #[test]
@@ -243,26 +177,6 @@ fn fixed_seed() {
     let fixed_seed_b = patterns::random_init_seed();
 
     assert_eq!(fixed_seed_a, fixed_seed_b);
-}
-
-#[test]
-fn value_with_extra() {
-    let a = ValueWithExtra { key: 6, extra: 9 };
-    let b = ValueWithExtra { key: 7, extra: 9 };
-    let c = ValueWithExtra { key: 7, extra: 10 };
-
-    assert!(a < b);
-    assert!(a < c);
-    assert!(b > a);
-    assert!(c > a);
-    assert!(a != b);
-    assert!(a != c);
-    assert!(b == c);
-    assert!(b == c);
-
-    assert!(!a.deep_equal(&b));
-    assert!(!a.deep_equal(&c));
-    assert!(!b.deep_equal(&c));
 }
 
 #[test]
@@ -303,17 +217,48 @@ fn pipe_organ() {
 }
 
 #[test]
-fn random_duplicates() {
-    // This test is designed to stress test stable sorting.
-    test_impl(|test_size| {
-        let random = patterns::random(test_size);
-        let uni = patterns::random_uniform(test_size, 0..(test_size / 10) as i32);
+fn stability() {
+    let large_range = if cfg!(miri) { 100..110 } else { 500..510 };
+    let rounds = if cfg!(miri) { 1 } else { 10 };
 
-        uni.into_iter()
-            .zip(random.into_iter())
-            .map(|(key, extra)| ValueWithExtra { key, extra })
-            .collect::<Vec<_>>()
-    });
+    let rand_vals = patterns::random_uniform(5_000, 0..9);
+    let mut rand_idx = 0;
+
+    for len in (2..25).chain(large_range) {
+        for _ in 0..rounds {
+            let mut counts = [0; 10];
+
+            // create a vector like [(6, 1), (5, 1), (6, 2), ...],
+            // where the first item of each tuple is random, but
+            // the second item represents which occurrence of that
+            // number this element is, i.e., the second elements
+            // will occur in sorted order.
+            let orig: Vec<_> = (0..len)
+                .map(|_| {
+                    let n = rand_vals[rand_idx];
+                    rand_idx += 1;
+                    if rand_idx >= rand_vals.len() {
+                        rand_idx = 0;
+                    }
+
+                    counts[n as usize] += 1;
+                    (n, counts[n as usize])
+                })
+                .collect();
+
+            let mut v = orig.clone();
+            // Only sort on the first element, so an unstable sort
+            // may mix up the counts.
+            test_sort::sort_by(&mut v, |&(a, _), &(b, _)| a.cmp(&b));
+
+            // This comparison includes the count (the second item
+            // of the tuple), so elements with equal first items
+            // will need to be ordered with increasing
+            // counts... i.e., exactly asserting that this sort is
+            // stable.
+            assert!(v.windows(2).all(|w| w[0] <= w[1]));
+        }
+    }
 }
 
 #[test]
