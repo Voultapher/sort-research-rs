@@ -24,6 +24,10 @@ default = []
 # You must provide a prebuild static libcxx see: https://libcxx.llvm.org/BuildingLibcxx.html
 libcxx = []
 
+# Enable support for cpp_pdqsort.
+# Uses system C++ standard lib.
+cpp_pdqsort = []
+
 # Enable wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.
 wpwoodjr = []

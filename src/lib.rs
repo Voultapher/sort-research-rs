@@ -25,11 +25,16 @@ pub mod wpwoodjr_stable_sort;
 pub mod stdlib_stable;
 pub mod stdlib_unstable;
 
-// Call libcxx sort via FFI.
-#[cfg(feature = "libcxx")]
+#[cfg(any(feature = "libcxx", feature = "cpp_pdqsort"))]
 #[macro_use]
 mod ffi_util;
+
+// Call libcxx sort via FFI.
 #[cfg(feature = "libcxx")]
 pub mod libcxx_stable;
 #[cfg(feature = "libcxx")]
 pub mod libcxx_unstable;
+
+// Call pdqsort sort via FFI.
+#[cfg(feature = "cpp_pdqsort")]
+pub mod cpp_pdqsort;
