@@ -1684,3 +1684,48 @@ fn x() {
         }
     }
 }
+
+// Easier done in place
+#[inline]
+unsafe fn sort2_idx<T, F>(v: &mut [T], a: usize, b: usize, is_less: &mut F) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 2. TODO idx.
+    debug_assert!(v.len() == 2 && a != b);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    if qualifies_for_branchless_sort::<T>() {
+        swap_if_less(arr_ptr, a, b, is_less)
+    } else {
+        let should_swap = is_less(&*arr_ptr.add(b), &*arr_ptr.add(a));
+        if should_swap {
+            ptr::swap_nonoverlapping(arr_ptr.add(a), arr_ptr.add(b), 1);
+        }
+        should_swap
+    }
+}
+
+#[inline]
+unsafe fn sort3_idx<T, F>(
+    v: &mut [T],
+    a: &mut usize,
+    b: &mut usize,
+    c: &mut usize,
+    is_less: &mut F,
+) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 3. TODO idx.
+    debug_assert!(v.len() == 3 && a != b && a != c);
+
+    let swaps = 0;
+
+    swaps += sort2_idx(v, a, b, is_less) as usize;
+    swaps += sort2_idx(v, b, c, is_less) as usize;
+    swaps += sort2_idx(v, a, b, is_less) as usize;
+
+    swaps
+}
