@@ -15,6 +15,7 @@ pub mod patterns;
 
 pub mod fluxsort;
 pub mod new_stable_sort;
+pub mod new_unstable_sort;
 
 #[cfg(feature = "wpwoodjr")]
 pub mod wpwoodjr_stable_sort;

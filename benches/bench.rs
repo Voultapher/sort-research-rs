@@ -209,6 +209,18 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             stdlib_stable,
         );
 
+        use sort_comp::new_unstable_sort;
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "new_unstable",
+            new_unstable_sort,
+        );
+
         use sort_comp::stdlib_unstable;
         bench_func!(
             c,
