@@ -137,11 +137,10 @@ where
         return;
     }
 
-    // Allocate a buffer to use as scratch memory. We keep the length 0 so we can keep in it
-    // shallow copies of the contents of `v` without risking the dtors running on copies if
-    // `is_less` panics. When merging two sorted runs, this buffer holds a copy of the shorter run,
-    // which will always have length at most `len / 2`.
-    let mut buf = Vec::with_capacity(len / 2);
+    // Don't allocate right at the beginning, wait to see if the slice is already sorted or
+    // reversed.
+    let mut buf = Vec::new();
+    let mut buf_ptr: *mut T = ptr::null_mut();
 
     // In order to identify natural runs in `v`, we traverse it backwards. That might seem like a
     // strange decision, but consider the fact that merges more often go in the opposite direction
@@ -169,6 +168,17 @@ where
             }
         }
 
+        if start == 0 {
+            return;
+        } else if buf_ptr.is_null() {
+            // Allocate a buffer to use as scratch memory. We keep the length 0 so we can keep in it
+            // shallow copies of the contents of `v` without risking the dtors running on copies if
+            // `is_less` panics. When merging two sorted runs, this buffer holds a copy of the
+            // shorter run, which will always have length at most `len / 2`.
+            buf = Vec::with_capacity(len / 2);
+            buf_ptr = buf.as_mut_ptr();
+        }
+
         // SAFETY: end > start.
         start = provide_sorted_batch(v, start, end, is_less);
 
@@ -187,7 +197,7 @@ where
                 merge(
                     &mut v[left.start..right.start + right.len],
                     left.len,
-                    buf.as_mut_ptr(),
+                    buf_ptr,
                     is_less,
                 );
             }
@@ -248,7 +258,7 @@ fn provide_sorted_batch<T, F>(v: &mut [T], mut start: usize, end: usize, is_less
 where
     F: FnMut(&T, &T) -> bool,
 {
-    debug_assert!(end > start);
+    debug_assert!(end > start && start != 0);
 
     // Testing showed that using MAX_INSERTION here yields the best performance for many types, but
     // incurs more total comparisons. A balance between least comparisons and best performance, as
@@ -281,7 +291,7 @@ where
             start_found - (FAST_SORT_SIZE - 3)
         };
 
-        // SAFETY: start >= 0 && start + 20 <= end
+        // SAFETY: start >= 0 && start + FAST_SORT_SIZE <= end
         unsafe {
             // Use a straight-line sorting network here instead of some hybrid network with early
             // exit. If the input is already sorted the previous adaptive analysis path of TimSort
@@ -294,7 +304,7 @@ where
         if !is_small_pre_sorted {
             insertion_sort_shift_left(&mut v[start..end], FAST_SORT_SIZE, is_less);
         }
-    } else if start_end_diff < MIN_INSERTION_RUN && start != 0 {
+    } else if start_end_diff < MIN_INSERTION_RUN {
         // v[start_found..end] are elements that are already sorted in the input. We want to extend
         // the sorted region to the left, so we push up MIN_INSERTION_RUN - 1 to the right. Which is
         // more efficient that trying to push those already sorted elements to the left.
