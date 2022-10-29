@@ -1729,3 +1729,15 @@ where
 
     swaps
 }
+
+// Debug func
+// if len <= 34 {
+//     unsafe {
+//         // FIXME
+//         let xx = mem::transmute::<&mut [T], &mut [i32]>(v);
+//         println!("{xx:?}");
+
+//         let xx = mem::transmute::<&T, &i32>(&v[pivot]);
+//         println!("v[pivot]: {xx}");
+//     }
+// }
