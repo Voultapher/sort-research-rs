@@ -168,7 +168,9 @@ where
             }
         }
 
-        if start == 0 {
+        if start == 0 && end == len {
+            // The input was either fully ascending or descending. It is now sorted and we can
+            // return without allocating.
             return;
         } else if buf_ptr.is_null() {
             // Allocate a buffer to use as scratch memory. We keep the length 0 so we can keep in it
@@ -258,7 +260,7 @@ fn provide_sorted_batch<T, F>(v: &mut [T], mut start: usize, end: usize, is_less
 where
     F: FnMut(&T, &T) -> bool,
 {
-    debug_assert!(end > start && start != 0);
+    debug_assert!(end > start);
 
     // Testing showed that using MAX_INSERTION here yields the best performance for many types, but
     // incurs more total comparisons. A balance between least comparisons and best performance, as
@@ -304,7 +306,7 @@ where
         if !is_small_pre_sorted {
             insertion_sort_shift_left(&mut v[start..end], FAST_SORT_SIZE, is_less);
         }
-    } else if start_end_diff < MIN_INSERTION_RUN {
+    } else if start_end_diff < MIN_INSERTION_RUN && start != 0 {
         // v[start_found..end] are elements that are already sorted in the input. We want to extend
         // the sorted region to the left, so we push up MIN_INSERTION_RUN - 1 to the right. Which is
         // more efficient that trying to push those already sorted elements to the left.
