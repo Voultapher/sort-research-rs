@@ -1,0 +1,21 @@
+Percent comparisons done more by std_unstable than std_stable
+[i32-ascending-20-plus]:              mean: 6%      min: 0%    max: 24%
+[i32-ascending-20-sub]:               mean: 0%      min: 0%    max: 0%
+[i32-ascending_saw_20-20-plus]:       mean: 73%     min: 9%    max: 189%
+[i32-ascending_saw_20-20-sub]:        mean: 0%      min: 0%    max: 0%
+[i32-ascending_saw_5-20-plus]:        mean: 26%     min: 12%   max: 44%
+[i32-ascending_saw_5-20-sub]:         mean: 0%      min: 0%    max: 3%
+[i32-descending-20-plus]:             mean: 47%     min: 0%    max: 240%
+[i32-descending-20-sub]:              mean: 0%      min: 0%    max: 0%
+[i32-descending_saw_20-20-plus]:      mean: 113%    min: 34%   max: 240%
+[i32-descending_saw_20-20-sub]:       mean: 0%      min: 0%    max: 0%
+[i32-descending_saw_5-20-plus]:       mean: 14%     min: 7%    max: 36%
+[i32-descending_saw_5-20-sub]:        mean: -1%     min: -5%   max: 0%
+[i32-pipe_organ-20-plus]:             mean: 375%    min: 113%  max: 726%
+[i32-pipe_organ-20-sub]:              mean: 16%     min: 9%    max: 50%
+[i32-random-20-plus]:                 mean: 14%     min: 11%   max: 20%
+[i32-random-20-sub]:                  mean: 0%      min: 0%    max: 0%
+[i32-random_binary-20-plus]:          mean: -169%   min: -486% max: -23%
+[i32-random_binary-20-sub]:           mean: 0%      min: -2%   max: 3%
+[i32-random_dense-20-plus]:           mean: 3%      min: -54%  max: 20%
+[i32-random_dense-20-sub]:            mean: 0%      min: 0%    max: 0%
