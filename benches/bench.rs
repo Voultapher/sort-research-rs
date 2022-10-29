@@ -247,6 +247,20 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             wpwoodjr_stable_sort,
         );
 
+        #[cfg(feature = "bevy_radsort")]
+        use sort_comp::radsort;
+        #[cfg(feature = "bevy_radsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "radsort",
+            radsort,
+        );
+
         #[cfg(feature = "libcxx")]
         use sort_comp::libcxx_stable;
         #[cfg(feature = "libcxx")]
