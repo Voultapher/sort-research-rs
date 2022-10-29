@@ -261,6 +261,20 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             radsort,
         );
 
+        #[cfg(feature = "emilk_dmsort")]
+        use sort_comp::dmsort;
+        #[cfg(feature = "emilk_dmsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "dmsort",
+            dmsort,
+        );
+
         #[cfg(feature = "libcxx")]
         use sort_comp::libcxx_stable;
         #[cfg(feature = "libcxx")]

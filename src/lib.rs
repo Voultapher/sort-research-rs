@@ -23,6 +23,9 @@ pub mod wpwoodjr_stable_sort;
 #[cfg(feature = "bevy_radsort")]
 pub mod radsort;
 
+#[cfg(feature = "emilk_dmsort")]
+pub mod dmsort;
+
 // Copy the stdlib implementations to have comparable builds.
 // The stdlib is compiled with unknown optimizations such as PGO.
 pub mod stdlib_stable;
