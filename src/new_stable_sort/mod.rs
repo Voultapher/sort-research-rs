@@ -39,90 +39,6 @@ where
     merge_sort(v, &mut is_less);
 }
 
-// Sort a small number of elements as fast as possible, without allocations.
-#[cfg(not(no_global_oom_handling))]
-fn stable_sort_small<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    // This implementation is really not fit for anything beyond that, and the call is probably a
-    // bug.
-    debug_assert!(len <= 40);
-
-    if len < 2 {
-        return;
-    }
-
-    // It's not clear that using custom code for specific sizes is worth it here.
-    // So we go with the simpler code.
-    let offset = if len <= 6 || !qualifies_for_branchless_sort::<T>() {
-        1
-    } else {
-        // Once a certain threshold is reached, it becomes worth it to analyze the input and do
-        // branchless swapping for the first 5 elements.
-
-        // SAFETY: We just checked that len >= 5
-        unsafe {
-            let arr_ptr = v.as_mut_ptr();
-
-            let should_swap_0_1 = is_less(&*arr_ptr.add(1), &*arr_ptr.add(0));
-            let should_swap_1_2 = is_less(&*arr_ptr.add(2), &*arr_ptr.add(1));
-            let should_swap_2_3 = is_less(&*arr_ptr.add(3), &*arr_ptr.add(2));
-            let should_swap_3_4 = is_less(&*arr_ptr.add(4), &*arr_ptr.add(3));
-
-            let swap_count = should_swap_0_1 as usize
-                + should_swap_1_2 as usize
-                + should_swap_2_3 as usize
-                + should_swap_3_4 as usize;
-
-            if swap_count == 0 {
-                // Potentially already sorted. No need to swap, we know the first 5 elements are
-                // already in the right order.
-                5
-            } else if swap_count == 4 {
-                // Potentially reversed.
-                let mut rev_i = 4;
-                while rev_i < (len - 1) {
-                    if !is_less(&*arr_ptr.add(rev_i + 1), &*arr_ptr.add(rev_i)) {
-                        break;
-                    }
-                    rev_i += 1;
-                }
-                rev_i += 1;
-                v[..rev_i].reverse();
-                insertion_sort_shift_left(v, rev_i, is_less);
-                return;
-            } else {
-                // Potentially random pattern.
-                branchless_swap(arr_ptr.add(0), arr_ptr.add(1), should_swap_0_1);
-                branchless_swap(arr_ptr.add(2), arr_ptr.add(3), should_swap_2_3);
-
-                if len >= 12 {
-                    // This aims to find a good balance between generating more code, which is bad
-                    // for cold loops and improving hot code while not increasing mean comparison
-                    // count too much.
-                    sort8_stable(&mut v[4..12], is_less);
-                    insertion_sort_shift_left(&mut v[4..], 8, is_less);
-                    insertion_sort_shift_right(v, 4, is_less);
-                    return;
-                } else {
-                    // Complete the sort network for the first 4 elements.
-                    swap_next_if_less(arr_ptr.add(1), is_less);
-                    swap_next_if_less(arr_ptr.add(2), is_less);
-                    swap_next_if_less(arr_ptr.add(0), is_less);
-                    swap_next_if_less(arr_ptr.add(1), is_less);
-
-                    4
-                }
-            }
-        }
-    };
-
-    insertion_sort_shift_left(v, offset, is_less);
-}
-
 #[cfg(not(no_global_oom_handling))]
 fn merge_sort<T, F>(v: &mut [T], is_less: &mut F)
 where
@@ -135,12 +51,7 @@ where
 
     let len = v.len();
 
-    // Slices of up to this length get sorted using insertion sort.
-    const MAX_NO_ALLOC_SIZE: usize = 20;
-
-    // Short arrays get sorted in-place via insertion sort to avoid allocations.
-    if len <= MAX_NO_ALLOC_SIZE {
-        stable_sort_small(v, is_less);
+    if len < 2 {
         return;
     }
 
@@ -180,6 +91,11 @@ where
             // return without allocating.
             return;
         } else if buf_ptr.is_null() {
+            // Short arrays get sorted in-place via insertion sort to avoid allocations.
+            if sort_small_stable(v, start, is_less) {
+                return;
+            }
+
             // Allocate a buffer to use as scratch memory. We keep the length 0 so we can keep in it
             // shallow copies of the contents of `v` without risking the dtors running on copies if
             // `is_less` panics. When merging two sorted runs, this buffer holds a copy of the
@@ -261,6 +177,66 @@ where
     }
 }
 
+/// Check whether `v` applies for small sort optimization.
+/// `v[start..]` is assumed already sorted.
+fn sort_small_stable<T, F>(v: &mut [T], start: usize, is_less: &mut F) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    if qualifies_for_branchless_sort::<T>() {
+        // Testing showed that even though this incurs more comparisons, up to size 32 (4 * 8),
+        // avoiding the allocation and sticking with simple code is worth it. Going further eg. 40
+        // is still worth it for u64 or even types with more expensive comparisons, but risks
+        // incurring just too many comparisons than doing the regular TimSort.
+        const MAX_NO_ALLOC_SIZE: usize = 32;
+        if len <= MAX_NO_ALLOC_SIZE {
+            if len < 8 {
+                insertion_sort_shift_right(v, start, is_less);
+                return true;
+            }
+
+            let mut merge_count = 0;
+            for chunk in v.chunks_exact_mut(8) {
+                // SAFETY: chunks_exact_mut promised to give us slices of len 8.
+                unsafe {
+                    sort8_stable(chunk, is_less);
+                }
+                merge_count += 1;
+            }
+
+            let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
+            let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+            let mut i = 8;
+            while merge_count > 1 {
+                // SAFETY: We know the smaller side will be of size 8 because mid is 8. And both
+                // sides are non empty because of merge_count, and the right side will always be of
+                // size 8 and the left size of 8 or greater. Thus the smaller side will always be
+                // exactly 8 long, the size of swap.
+                unsafe {
+                    merge(&mut v[0..(i + 8)], i, swap_ptr, is_less);
+                }
+                i += 8;
+                merge_count -= 1;
+            }
+
+            insertion_sort_shift_left(v, i, is_less);
+
+            return true;
+        }
+    } else {
+        const MAX_NO_ALLOC_SIZE: usize = 20;
+        if len <= MAX_NO_ALLOC_SIZE {
+            insertion_sort_shift_right(v, start, is_less);
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Takes a range as denoted by start and end, that is already sorted and extends it if necessary
 /// with sorts optimized for smaller ranges such as insertion sort.
 #[cfg(not(no_global_oom_handling))]
@@ -270,8 +246,7 @@ where
 {
     debug_assert!(end > start);
 
-    // Testing showed that using MAX_INSERTION here yields the best performance for many types, but
-    // incurs more total comparisons. A balance between least comparisons and best performance, as
+    // This value is a balance between least comparisons and best performance, as
     // influenced by for example cache locality.
     const MIN_INSERTION_RUN: usize = 10;
 
@@ -402,7 +377,7 @@ where
     }
 }
 
-/// Sort v assuming v[..offset] is already sorted.
+/// Sort `v` assuming `v[..offset]` is already sorted.
 ///
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact. Even improving performance in some cases.
@@ -430,7 +405,7 @@ where
     }
 }
 
-/// Sort v assuming v[offset..] is already sorted.
+/// Sort `v` assuming `v[offset..]` is already sorted.
 ///
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact. Even improving performance in some cases.
@@ -525,6 +500,10 @@ where
 ///
 /// The two slices must be non-empty and `mid` must be in bounds. Buffer `buf` must be long enough
 /// to hold a copy of the shorter slice. Also, `T` must not be a zero-sized type.
+///
+/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+/// performance impact.
+#[inline(never)]
 #[cfg(not(no_global_oom_handling))]
 unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
