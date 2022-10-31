@@ -21,8 +21,13 @@ where
     stable_sort(v, |a, b| compare(a, b) == Ordering::Less);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Sorting
+////////////////////////////////////////////////////////////////////////////////
+
 #[inline]
-pub fn stable_sort<T, F>(v: &mut [T], mut is_less: F)
+#[cfg(not(no_global_oom_handling))]
+fn stable_sort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -35,6 +40,7 @@ where
 }
 
 // Sort a small number of elements as fast as possible, without allocations.
+#[cfg(not(no_global_oom_handling))]
 fn stable_sort_small<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -117,6 +123,7 @@ where
     insertion_sort_shift_left(v, offset, is_less);
 }
 
+#[cfg(not(no_global_oom_handling))]
 fn merge_sort<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -139,7 +146,7 @@ where
 
     // Don't allocate right at the beginning, wait to see if the slice is already sorted or
     // reversed.
-    let mut buf = Vec::new();
+    let mut buf;
     let mut buf_ptr: *mut T = ptr::null_mut();
 
     // In order to identify natural runs in `v`, we traverse it backwards. That might seem like a
@@ -256,6 +263,7 @@ where
 
 /// Takes a range as denoted by start and end, that is already sorted and extends it if necessary
 /// with sorts optimized for smaller ranges such as insertion sort.
+#[cfg(not(no_global_oom_handling))]
 fn provide_sorted_batch<T, F>(v: &mut [T], mut start: usize, end: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
@@ -317,7 +325,7 @@ where
             0
         };
 
-        insertion_sort_shift_right(&mut v[start..end], (start_found - start), is_less);
+        insertion_sort_shift_right(&mut v[start..end], start_found - start, is_less);
     }
 
     start
@@ -332,7 +340,7 @@ struct InsertionHole<T> {
 impl<T> Drop for InsertionHole<T> {
     fn drop(&mut self) {
         unsafe {
-            std::ptr::copy_nonoverlapping(self.src, self.dest, 1);
+            ptr::copy_nonoverlapping(self.src, self.dest, 1);
         }
     }
 }
@@ -348,6 +356,7 @@ where
     let arr_ptr = v.as_mut_ptr();
     let i = v.len() - 1;
 
+    // SAFETY: caller must ensure v is at least len 2.
     unsafe {
         // See insert_head which talks about why this approach is beneficial.
         let i_ptr = arr_ptr.add(i);
@@ -407,7 +416,7 @@ where
     // This is a logic but not a safety bug.
     debug_assert!(offset != 0 && offset <= len);
 
-    if intrinsics::unlikely(((len < 2) as u8 + (offset == 0) as u8) != 0) {
+    if ((len < 2) as u8 + (offset == 0) as u8) != 0 {
         return;
     }
 
@@ -435,7 +444,7 @@ where
     // This is a logic but not a safety bug.
     debug_assert!(offset != 0 && offset <= len);
 
-    if intrinsics::unlikely(((len < 2) as u8 + (offset == 0) as u8) != 0) {
+    if ((len < 2) as u8 + (offset == 0) as u8) != 0 {
         return;
     }
 
@@ -460,6 +469,7 @@ where
     debug_assert!(v.len() >= 2);
 
     if is_less(&v[1], &v[0]) {
+        // SAFETY: caller must ensure v is at least len 2.
         unsafe {
             // There are three ways to implement insertion here:
             //
@@ -515,10 +525,7 @@ where
 ///
 /// The two slices must be non-empty and `mid` must be in bounds. Buffer `buf` must be long enough
 /// to hold a copy of the shorter slice. Also, `T` must not be a zero-sized type.
-///
-/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-/// performance impact. Even improving performance in some cases.
-#[inline(never)]
+#[cfg(not(no_global_oom_handling))]
 unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -635,17 +642,22 @@ where
     }
 }
 
-trait IsCopy<T> {
+// #[rustc_unsafe_specialization_marker]
+trait IsCopyMarker {}
+
+impl<T: Copy> IsCopyMarker for T {}
+
+trait IsCopy {
     fn is_copy() -> bool;
 }
 
-impl<T> IsCopy<T> for T {
+impl<T> IsCopy for T {
     default fn is_copy() -> bool {
         false
     }
 }
 
-impl<T: Copy> IsCopy<T> for T {
+impl<T: IsCopyMarker> IsCopy for T {
     fn is_copy() -> bool {
         true
     }
@@ -670,10 +682,7 @@ fn qualifies_for_branchless_sort<T>() -> bool {
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline]
-pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
-    // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
-    // and properly aligned, and part of the same allocation, and do not alias.
-
+unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
     // This is a branchless version of swap if.
     // The equivalent code with a branch would be:
     //
@@ -689,45 +698,53 @@ pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool
     let a_swap_ptr = if should_swap { b_ptr } else { a_ptr };
     let b_swap_ptr = if should_swap { a_ptr } else { b_ptr };
 
-    ptr::copy_nonoverlapping(b_swap_ptr, tmp.as_mut_ptr(), 1);
-    ptr::copy(a_swap_ptr, a_ptr, 1);
-    ptr::copy_nonoverlapping(tmp.as_ptr(), b_ptr, 1);
+    // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
+    // and properly aligned, and part of the same allocation, and do not alias.
+    unsafe {
+        ptr::copy_nonoverlapping(b_swap_ptr, tmp.as_mut_ptr(), 1);
+        ptr::copy(a_swap_ptr, a_ptr, 1);
+        ptr::copy_nonoverlapping(tmp.as_ptr(), b_ptr, 1);
+    }
 }
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline]
-pub unsafe fn swap_if_less<T, F>(arr_ptr: *mut T, a: usize, b: usize, is_less: &mut F)
+unsafe fn swap_if_less<T, F>(arr_ptr: *mut T, a: usize, b: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: the caller must guarantee that `a` and `b` each added to `arr_ptr` yield valid
-    // pointers into `arr_ptr`, and are properly aligned, and part of the same allocation, and do
-    // not alias. `a` and `b` must be different numbers.
-    debug_assert!(a != b);
+    // pointers into `arr_ptr`. and properly aligned, and part of the same allocation, and do not
+    // alias. `a` and `b` must be different numbers.
+    unsafe {
+        debug_assert!(a != b);
 
-    let a_ptr = arr_ptr.add(a);
-    let b_ptr = arr_ptr.add(b);
+        let a_ptr = arr_ptr.add(a);
+        let b_ptr = arr_ptr.add(b);
 
-    // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
-    // in a well defined state, without duplicates.
+        // PANIC SAFETY: if is_less panics, no scratch memory was created and the slice should still be
+        // in a well defined state, without duplicates.
 
-    // Important to only swap if it is more and not if it is equal. is_less should return false for
-    // equal, so we don't swap.
-    let should_swap = is_less(&*b_ptr, &*a_ptr);
-    branchless_swap(a_ptr, b_ptr, should_swap);
+        // Important to only swap if it is more and not if it is equal. is_less should return false for
+        // equal, so we don't swap.
+        let should_swap = is_less(&*b_ptr, &*a_ptr);
+
+        branchless_swap(a_ptr, b_ptr, should_swap);
+    }
 }
 
 /// Comparing and swapping anything but adjacent elements will yield a non stable sort.
 /// So this must be fundamental building block for stable sorting networks.
 #[inline]
-pub unsafe fn swap_next_if_less<T, F>(arr_ptr: *mut T, is_less: &mut F)
+unsafe fn swap_next_if_less<T, F>(arr_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: the caller must guarantee that `arr_ptr` and `arr_ptr.add(1)` yield valid
     // pointers that are properly aligned, and part of the same allocation.
-
-    swap_if_less(arr_ptr, 0, 1, is_less);
+    unsafe {
+        swap_if_less(arr_ptr, 0, 1, is_less);
+    }
 }
 
 /// Sort 8 elements
@@ -740,70 +757,74 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v is at least len 8.
-    debug_assert!(v.len() == 8);
+    unsafe {
+        debug_assert!(v.len() == 8);
 
-    let arr_ptr = v.as_mut_ptr();
+        let arr_ptr = v.as_mut_ptr();
 
-    // Transposition sorting-network, by only comparing and swapping adjacent wires we have a stable
-    // sorting-network. Sorting-networks are great at leveraging Instruction-Level-Parallelism
-    // (ILP), they expose multiple comparisons in straight-line code with builtin data-dependency
-    // parallelism and ordering per layer. This has to do 28 comparisons in contrast to the 19
-    // comparisons done by an optimal size 8 unstable sorting-network.
-    swap_next_if_less(arr_ptr.add(0), is_less);
-    swap_next_if_less(arr_ptr.add(2), is_less);
-    swap_next_if_less(arr_ptr.add(4), is_less);
-    swap_next_if_less(arr_ptr.add(6), is_less);
+        // Transposition sorting-network, by only comparing and swapping adjacent wires we have a stable
+        // sorting-network. Sorting-networks are great at leveraging Instruction-Level-Parallelism
+        // (ILP), they expose multiple comparisons in straight-line code with builtin data-dependency
+        // parallelism and ordering per layer. This has to do 28 comparisons in contrast to the 19
+        // comparisons done by an optimal size 8 unstable sorting-network.
+        swap_next_if_less(arr_ptr.add(0), is_less);
+        swap_next_if_less(arr_ptr.add(2), is_less);
+        swap_next_if_less(arr_ptr.add(4), is_less);
+        swap_next_if_less(arr_ptr.add(6), is_less);
 
-    swap_next_if_less(arr_ptr.add(1), is_less);
-    swap_next_if_less(arr_ptr.add(3), is_less);
-    swap_next_if_less(arr_ptr.add(5), is_less);
+        swap_next_if_less(arr_ptr.add(1), is_less);
+        swap_next_if_less(arr_ptr.add(3), is_less);
+        swap_next_if_less(arr_ptr.add(5), is_less);
 
-    swap_next_if_less(arr_ptr.add(0), is_less);
-    swap_next_if_less(arr_ptr.add(2), is_less);
-    swap_next_if_less(arr_ptr.add(4), is_less);
-    swap_next_if_less(arr_ptr.add(6), is_less);
+        swap_next_if_less(arr_ptr.add(0), is_less);
+        swap_next_if_less(arr_ptr.add(2), is_less);
+        swap_next_if_less(arr_ptr.add(4), is_less);
+        swap_next_if_less(arr_ptr.add(6), is_less);
 
-    swap_next_if_less(arr_ptr.add(1), is_less);
-    swap_next_if_less(arr_ptr.add(3), is_less);
-    swap_next_if_less(arr_ptr.add(5), is_less);
+        swap_next_if_less(arr_ptr.add(1), is_less);
+        swap_next_if_less(arr_ptr.add(3), is_less);
+        swap_next_if_less(arr_ptr.add(5), is_less);
 
-    swap_next_if_less(arr_ptr.add(0), is_less);
-    swap_next_if_less(arr_ptr.add(2), is_less);
-    swap_next_if_less(arr_ptr.add(4), is_less);
-    swap_next_if_less(arr_ptr.add(6), is_less);
+        swap_next_if_less(arr_ptr.add(0), is_less);
+        swap_next_if_less(arr_ptr.add(2), is_less);
+        swap_next_if_less(arr_ptr.add(4), is_less);
+        swap_next_if_less(arr_ptr.add(6), is_less);
 
-    swap_next_if_less(arr_ptr.add(1), is_less);
-    swap_next_if_less(arr_ptr.add(3), is_less);
-    swap_next_if_less(arr_ptr.add(5), is_less);
+        swap_next_if_less(arr_ptr.add(1), is_less);
+        swap_next_if_less(arr_ptr.add(3), is_less);
+        swap_next_if_less(arr_ptr.add(5), is_less);
 
-    swap_next_if_less(arr_ptr.add(0), is_less);
-    swap_next_if_less(arr_ptr.add(2), is_less);
-    swap_next_if_less(arr_ptr.add(4), is_less);
-    swap_next_if_less(arr_ptr.add(6), is_less);
+        swap_next_if_less(arr_ptr.add(0), is_less);
+        swap_next_if_less(arr_ptr.add(2), is_less);
+        swap_next_if_less(arr_ptr.add(4), is_less);
+        swap_next_if_less(arr_ptr.add(6), is_less);
 
-    swap_next_if_less(arr_ptr.add(1), is_less);
-    swap_next_if_less(arr_ptr.add(3), is_less);
-    swap_next_if_less(arr_ptr.add(5), is_less);
+        swap_next_if_less(arr_ptr.add(1), is_less);
+        swap_next_if_less(arr_ptr.add(3), is_less);
+        swap_next_if_less(arr_ptr.add(5), is_less);
+    }
 }
 
 unsafe fn sort24_stable<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: caller must ensure v is exactly len 16.
-    debug_assert!(v.len() == 24);
+    // SAFETY: caller must ensure v is exactly len 24.
+    unsafe {
+        debug_assert!(v.len() == 24);
 
-    sort8_stable(&mut v[0..8], is_less);
-    sort8_stable(&mut v[8..16], is_less);
-    sort8_stable(&mut v[16..24], is_less);
+        sort8_stable(&mut v[0..8], is_less);
+        sort8_stable(&mut v[8..16], is_less);
+        sort8_stable(&mut v[16..24], is_less);
 
-    // We only need place for 8 entries because we know both sides are of length 8.
-    let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
-    let swap_ptr = swap.as_mut_ptr() as *mut T;
+        // We only need place for 8 entries because we know both sides are of length 8.
+        let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
+        let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    // We only need place for 8 entries because we know both sides are of length 8.
-    merge(&mut v[..16], 8, swap_ptr, is_less);
+        // We only need place for 8 entries because we know both sides are of length 8.
+        merge(&mut v[..16], 8, swap_ptr, is_less);
 
-    // We only need place for 8 entries because the shorter side is length 8.
-    merge(&mut v[..24], 16, swap_ptr, is_less);
+        // We only need place for 8 entries because the shorter side is length 8.
+        merge(&mut v[..24], 16, swap_ptr, is_less);
+    }
 }

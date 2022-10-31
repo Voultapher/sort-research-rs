@@ -1,4 +1,3 @@
-// TODO figure out Copy specialization with min_specialization.
 #![allow(incomplete_features)]
 #![feature(
     maybe_uninit_uninit_array,
