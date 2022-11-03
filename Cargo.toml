@@ -15,12 +15,18 @@ dmsort = { version = "1.0", optional = true }
 [dev-dependencies]
 criterion = { version = "0.3", features = ["html_reports"] }
 
+[build-dependencies]
+cc = "1.0"
+
 [[bench]]
 name = "bench"
 harness = false
 
 [features]
-default = []
+default = ["cpp_pdqsort", "cpp_std", "libcxx"]
+
+# Enable support for C++ std::sort and std::sort_stable.
+cpp_std = []
 
 # Enable support for libcxx.
 # You must provide a prebuild static libcxx see: https://libcxx.llvm.org/BuildingLibcxx.html

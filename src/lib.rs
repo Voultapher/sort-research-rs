@@ -43,3 +43,11 @@ pub mod libcxx_unstable;
 // Call pdqsort sort via FFI.
 #[cfg(feature = "cpp_pdqsort")]
 pub mod cpp_pdqsort;
+
+// Call stdlib std::sort_stable sort via FFI.
+#[cfg(feature = "cpp_std")]
+pub mod cpp_std_stable;
+
+// Call stdlib std::sort sort via FFI.
+#[cfg(feature = "cpp_std")]
+pub mod cpp_std_unstable;

@@ -1,23 +1,26 @@
+use std::cmp::Ordering;
+
+use crate::ffi_util::{rust_fn_cmp, CompResult};
+
 extern "C" {
     fn pdqsort_unstable_i32(data: *mut i32, len: usize);
+    #[must_use]
     fn pdqsort_unstable_i32_by(
         data: *mut i32,
         len: usize,
-        cmp_fn: unsafe extern "C" fn(&i32, &i32, *mut u8) -> bool,
+        cmp_fn: unsafe extern "C" fn(&i32, &i32, *mut u8) -> CompResult,
         cmp_fn_ctx: *mut u8,
-    );
+    ) -> u32;
+
     fn pdqsort_unstable_u64(data: *mut u64, len: usize);
+    #[must_use]
     fn pdqsort_unstable_u64_by(
         data: *mut u64,
         len: usize,
-        cmp_fn: unsafe extern "C" fn(&u64, &u64, *mut u8) -> bool,
+        cmp_fn: unsafe extern "C" fn(&u64, &u64, *mut u8) -> CompResult,
         cmp_fn_ctx: *mut u8,
-    );
+    ) -> u32;
 }
-
-use std::cmp::Ordering;
-
-use crate::ffi_util::rust_fn_cmp;
 
 trait PdqSort: Sized {
     fn sort(data: &mut [Self]);
@@ -42,7 +45,7 @@ impl PdqSort for i32 {
     }
 
     fn sort_by<F: FnMut(&i32, &i32) -> Ordering>(data: &mut [i32], compare: F) {
-        make_libcxx_sort_by!(pdqsort_unstable_i32_by, data, compare, i32);
+        make_cpp_sort_by!(pdqsort_unstable_i32_by, data, compare, i32);
     }
 }
 
@@ -54,7 +57,7 @@ impl PdqSort for u64 {
     }
 
     fn sort_by<F: FnMut(&u64, &u64) -> Ordering>(data: &mut [u64], compare: F) {
-        make_libcxx_sort_by!(pdqsort_unstable_u64_by, data, compare, u64);
+        make_cpp_sort_by!(pdqsort_unstable_u64_by, data, compare, u64);
     }
 }
 

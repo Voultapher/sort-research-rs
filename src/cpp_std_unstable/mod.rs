@@ -19,12 +19,12 @@ extern "C" {
     ) -> u32;
 }
 
-trait LibCxxSort: Sized {
+trait CppSort: Sized {
     fn sort(data: &mut [Self]);
     fn sort_by<F: FnMut(&Self, &Self) -> Ordering>(data: &mut [Self], compare: F);
 }
 
-impl<T> LibCxxSort for T {
+impl<T> CppSort for T {
     default fn sort(_data: &mut [T]) {
         panic!("Type not supported");
     }
@@ -34,7 +34,7 @@ impl<T> LibCxxSort for T {
     }
 }
 
-impl LibCxxSort for i32 {
+impl CppSort for i32 {
     fn sort(data: &mut [i32]) {
         unsafe {
             sort_unstable_i32(data.as_mut_ptr(), data.len());
@@ -46,7 +46,7 @@ impl LibCxxSort for i32 {
     }
 }
 
-impl LibCxxSort for u64 {
+impl CppSort for u64 {
     fn sort(data: &mut [u64]) {
         unsafe {
             sort_unstable_u64(data.as_mut_ptr(), data.len());
@@ -59,9 +59,9 @@ impl LibCxxSort for u64 {
 }
 
 pub fn sort<T: Ord>(data: &mut [T]) {
-    LibCxxSort::sort(data);
+    CppSort::sort(data);
 }
 
 pub fn sort_by<T, F: FnMut(&T, &T) -> Ordering>(data: &mut [T], compare: F) {
-    LibCxxSort::sort_by(data, compare);
+    CppSort::sort_by(data, compare);
 }

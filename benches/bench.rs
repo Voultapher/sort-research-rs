@@ -316,6 +316,34 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             "cpp_pdq_unstable",
             cpp_pdqsort,
         );
+
+        #[cfg(feature = "cpp_std")]
+        use sort_comp::cpp_std_stable;
+        #[cfg(feature = "cpp_std")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "cpp_std_stable",
+            cpp_std_stable,
+        );
+
+        #[cfg(feature = "cpp_std")]
+        use sort_comp::cpp_std_unstable;
+        #[cfg(feature = "cpp_std")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            "cpp_std_unstable",
+            cpp_std_unstable,
+        );
     }
 }
 
