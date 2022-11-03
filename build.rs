@@ -54,8 +54,8 @@ fn build_and_link_c_fluxsort() {
 #[cfg(not(feature = "c_fluxsort"))]
 fn build_and_link_c_fluxsort() {}
 
-#[cfg(feature = "cpp_std")]
-fn build_and_link_cpp_std() {
+#[cfg(feature = "cpp_std_sys")]
+fn build_and_link_cpp_std_sys() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let cpp_std_src_path = manifest_dir
         .join("src")
@@ -69,9 +69,7 @@ fn build_and_link_cpp_std() {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let mut build = cc::Build::new();
-
-    build
+    cc::Build::new()
         .file(cpp_std_src_path)
         .cpp(true)
         .warnings(true)
@@ -79,36 +77,66 @@ fn build_and_link_cpp_std() {
         .flag_if_supported("/EHsc")
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
-        .opt_level(2);
+        .define("STD_LIB_SYS", None)
+        .opt_level(2)
+        .compile("cpp_std_sort_sys");
 
-    if cfg!(feature = "libcxx") {
-        let libcxx_build_dir = PathBuf::from(
-            env::var("LIBCXX_CUSTOM_BUILD_DIR").expect("LIBCXX_CUSTOM_BUILD_DIR env var not set"),
-        );
+    println!("cargo:rustc-link-search={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static={}", "cpp_std_sort_sys");
+}
 
-        let libcxx_include_dir = libcxx_build_dir.join("include").join("c++").join("v1");
-        let libcxx_lib_path = libcxx_build_dir.join("lib");
+#[cfg(not(feature = "cpp_std_sys"))]
+fn build_and_link_cpp_std_sys() {}
 
-        build
-            .compiler("clang++")
-            .flag("-nostdinc++")
-            .flag("-nostdlib++")
-            .flag("-isystem")
-            .flag(&libcxx_include_dir.display().to_string());
+#[cfg(feature = "cpp_std_libcxx")]
+fn build_and_link_cpp_std_libcxx() {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let cpp_std_src_path = manifest_dir
+        .join("src")
+        .join("cpp")
+        .join("cpp_std_sort.cpp");
 
-        println!("cargo:rustc-link-search={}", libcxx_lib_path.display());
-        println!("cargo:rustc-link-lib=static={}", "c++");
-        println!("cargo:rustc-link-lib=static={}", "c++abi");
-    }
+    // Tell Cargo that if the given file changes, to rerun this build script.
+    println!("cargo:rerun-if-changed={}", cpp_std_src_path.display());
 
-    build.compile("cpp_std_sort");
+    println!("{}", cpp_std_src_path.display().to_string());
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    let libcxx_build_dir = PathBuf::from(
+        env::var("LIBCXX_CUSTOM_BUILD_DIR").expect("LIBCXX_CUSTOM_BUILD_DIR env var not set"),
+    );
+
+    let libcxx_include_dir = libcxx_build_dir.join("include").join("c++").join("v1");
+    let libcxx_lib_path = libcxx_build_dir.join("lib");
+
+    cc::Build::new()
+        .file(cpp_std_src_path)
+        .cpp(true)
+        .warnings(true)
+        .warnings_into_errors(true)
+        .flag_if_supported("/EHsc")
+        .flag_if_supported("/std:c++20")
+        .flag_if_supported("-std=c++20")
+        .define("STD_LIB_LIBCXX", None)
+        .opt_level(2)
+        .compiler("clang++")
+        .flag("-nostdinc++")
+        .flag("-nostdlib++")
+        .flag("-isystem")
+        .flag(&libcxx_include_dir.display().to_string())
+        .compile("cpp_std_sort");
+
+    println!("cargo:rustc-link-search={}", libcxx_lib_path.display());
+    println!("cargo:rustc-link-lib=static={}", "c++");
+    println!("cargo:rustc-link-lib=static={}", "c++abi");
 
     println!("cargo:rustc-link-search={}", out_dir.display());
     println!("cargo:rustc-link-lib=static={}", "cpp_std_sort");
 }
 
-#[cfg(not(feature = "cpp_std"))]
-fn build_and_link_cpp_std() {}
+#[cfg(not(feature = "cpp_std_libcxx"))]
+fn build_and_link_cpp_std_libcxx() {}
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -120,5 +148,6 @@ fn main() {
     build_and_link_cpp_pdqsort();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
-    build_and_link_cpp_std();
+    build_and_link_cpp_std_sys();
+    build_and_link_cpp_std_libcxx();
 }

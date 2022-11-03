@@ -9,6 +9,7 @@ use sort_comp::{patterns, stable, unstable};
 mod trash_prediction;
 use trash_prediction::trash_prediction_state;
 
+#[inline(never)]
 fn bench_sort<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
     test_size: usize,
@@ -212,7 +213,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             stable::rust_std,
         );
 
-        #[cfg(feature = "cpp_std")]
+        #[cfg(feature = "cpp_std_sys")]
         bench_func!(
             c,
             test_size,
@@ -220,8 +221,20 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_std_stable,
-            stable::cpp_std,
+            cpp_std_sys_stable,
+            stable::cpp_std_sys,
+        );
+
+        #[cfg(feature = "cpp_std_libcxx")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            cpp_std_libcxx_stable,
+            stable::cpp_std_libcxx,
         );
 
         #[cfg(feature = "wpwoodjr")]
@@ -308,7 +321,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             unstable::c_fluxsort,
         );
 
-        #[cfg(feature = "cpp_std")]
+        #[cfg(feature = "cpp_std_sys")]
         bench_func!(
             c,
             test_size,
@@ -316,8 +329,20 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_std_unstable,
-            unstable::cpp_std,
+            cpp_std_sys_unstable,
+            unstable::cpp_std_sys,
+        );
+
+        #[cfg(feature = "cpp_std_libcxx")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            cpp_std_libcxx_unstable,
+            unstable::cpp_std_libcxx,
         );
 
         // --- Other sorts ---

@@ -15,6 +15,10 @@ pub mod patterns;
 #[macro_use]
 mod ffi_util;
 
+#[cfg(any(feature = "cpp_std_sys", feature = "cpp_std_libcxx"))]
+#[macro_use]
+mod cpp_std_ffi;
+
 // Copy the stdlib implementations to have comparable builds.
 // The stdlib is compiled with unknown optimizations such as PGO.
 pub mod other;

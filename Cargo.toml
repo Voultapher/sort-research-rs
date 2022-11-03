@@ -26,14 +26,13 @@ harness = false
 default = []
 
 # Enable support for C++ std::sort and std::sort_stable.
-cpp_std = []
+cpp_std_sys = []
 
 # Enable support for libcxx.
 # You must provide a prebuild static libcxx see: https://libcxx.llvm.org/BuildingLibcxx.html
 # Set the enviroment variable LIBCXX_CUSTOM_BUILD_DIR=<...>
-# This overrides the cpp_std library used.
-# Requires "cpp_std" feature.
-libcxx = []
+# This creates a new cpp_std_libcxx.
+cpp_std_libcxx = []
 
 # Enable support for cpp_pdqsort.
 # Uses system C++ standard lib.

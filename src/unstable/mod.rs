@@ -18,5 +18,9 @@ pub mod c_crumsort;
 pub mod c_fluxsort;
 
 // Call stdlib std::sort sort via FFI.
-#[cfg(feature = "cpp_std")]
-pub mod cpp_std;
+#[cfg(feature = "cpp_std_sys")]
+pub mod cpp_std_sys;
+
+// Call stdlib std::sort sort via FFI.
+#[cfg(feature = "cpp_std_libcxx")]
+pub mod cpp_std_libcxx;

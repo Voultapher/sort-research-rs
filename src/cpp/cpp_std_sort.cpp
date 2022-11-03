@@ -49,6 +49,12 @@ uint32_t sort_unstable_by_impl(T* data,
   return 0;
 }
 
+#if defined(STD_LIB_SYS)
+#define MAKE_FUNC_NAME(name) name##_sys
+#elif defined(STD_LIB_LIBCXX)
+#define MAKE_FUNC_NAME(name) name##_libcxx
+#endif
+
 extern "C" {
 struct CompResult {
   bool is_less;
@@ -57,57 +63,54 @@ struct CompResult {
 
 // --- i32 ---
 
-void sort_stable_i32(int32_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_stable_i32)(int32_t* data, size_t len) {
   std::stable_sort(data, data + len);
 }
 
-uint32_t sort_stable_i32_by(int32_t* data,
-                            size_t len,
-                            CompResult (*cmp_fn)(const int32_t&,
-                                                 const int32_t&,
-                                                 uint8_t*),
-                            uint8_t* ctx) {
+uint32_t MAKE_FUNC_NAME(sort_stable_i32_by)(int32_t* data,
+                                            size_t len,
+                                            CompResult (*cmp_fn)(const int32_t&,
+                                                                 const int32_t&,
+                                                                 uint8_t*),
+                                            uint8_t* ctx) {
   return sort_stable_by_impl(data, len, cmp_fn, ctx);
 }
 
-void sort_unstable_i32(int32_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_unstable_i32)(int32_t* data, size_t len) {
   std::sort(data, data + len);
 }
 
-uint32_t sort_unstable_i32_by(int32_t* data,
-                              size_t len,
-                              CompResult (*cmp_fn)(const int32_t&,
-                                                   const int32_t&,
-                                                   uint8_t*),
-                              uint8_t* ctx) {
+uint32_t MAKE_FUNC_NAME(sort_unstable_i32_by)(
+    int32_t* data,
+    size_t len,
+    CompResult (*cmp_fn)(const int32_t&, const int32_t&, uint8_t*),
+    uint8_t* ctx) {
   return sort_unstable_by_impl(data, len, cmp_fn, ctx);
 }
 
 // --- u64 ---
 
-void sort_stable_u64(uint64_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_stable_u64)(uint64_t* data, size_t len) {
   std::stable_sort(data, data + len);
 }
 
-uint32_t sort_stable_u64_by(uint64_t* data,
-                            size_t len,
-                            CompResult (*cmp_fn)(const uint64_t&,
-                                                 const uint64_t&,
-                                                 uint8_t*),
-                            uint8_t* ctx) {
+uint32_t MAKE_FUNC_NAME(sort_stable_u64_by)(
+    uint64_t* data,
+    size_t len,
+    CompResult (*cmp_fn)(const uint64_t&, const uint64_t&, uint8_t*),
+    uint8_t* ctx) {
   return sort_stable_by_impl(data, len, cmp_fn, ctx);
 }
 
-void sort_unstable_u64(uint64_t* data, size_t len) {
+void MAKE_FUNC_NAME(sort_unstable_u64)(uint64_t* data, size_t len) {
   std::sort(data, data + len);
 }
 
-uint32_t sort_unstable_u64_by(uint64_t* data,
-                              size_t len,
-                              CompResult (*cmp_fn)(const uint64_t&,
-                                                   const uint64_t&,
-                                                   uint8_t*),
-                              uint8_t* ctx) {
+uint32_t MAKE_FUNC_NAME(sort_unstable_u64_by)(
+    uint64_t* data,
+    size_t len,
+    CompResult (*cmp_fn)(const uint64_t&, const uint64_t&, uint8_t*),
+    uint8_t* ctx) {
   return sort_unstable_by_impl(data, len, cmp_fn, ctx);
 }
 }  // extern "C"
