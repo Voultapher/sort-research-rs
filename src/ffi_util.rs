@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_macros)] // Dependent on optional features.
+
 use std::cmp::Ordering;
 
 #[repr(C)]

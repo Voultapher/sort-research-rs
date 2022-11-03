@@ -23,13 +23,16 @@ name = "bench"
 harness = false
 
 [features]
-default = ["cpp_pdqsort", "cpp_std", "libcxx"]
+default = []
 
 # Enable support for C++ std::sort and std::sort_stable.
 cpp_std = []
 
 # Enable support for libcxx.
 # You must provide a prebuild static libcxx see: https://libcxx.llvm.org/BuildingLibcxx.html
+# Set the enviroment variable LIBCXX_CUSTOM_BUILD_DIR=<...>
+# This overrides the cpp_std library used.
+# Requires "cpp_std" feature.
 libcxx = []
 
 # Enable support for cpp_pdqsort.

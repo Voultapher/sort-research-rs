@@ -8,9 +8,8 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 use sort_comp::patterns;
-use sort_comp::stdlib_stable;
 
-use sort_comp::new_stable_sort as test_sort;
+use sort_comp::stable::rust_new as test_sort;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 24] = [
@@ -50,7 +49,7 @@ where
 
     let mut stdlib_sorted_vec = v.to_vec();
     let stdlib_sorted = stdlib_sorted_vec.as_mut_slice();
-    stdlib_stable::sort(stdlib_sorted);
+    stdlib_sorted.sort();
 
     let testsort_sorted = v;
     test_sort::sort(testsort_sorted);

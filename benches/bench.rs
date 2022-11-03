@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
-use sort_comp::patterns;
+use sort_comp::{patterns, stable, unstable};
 
 mod trash_prediction;
 use trash_prediction::trash_prediction_state;
@@ -101,9 +101,12 @@ macro_rules! bench_func {
         $transform:expr,
         $pattern_name:expr,
         $pattern_provider:expr,
-        $bench_name:expr,
-        $bench_module:ident,
+        $bench_name:ident,
+        $bench_module:path,
     ) => {
+        use $bench_module as $bench_name;
+        let bench_name = stringify!($bench_name);
+
         if env::var("MEASURE_COMP").is_ok() {
             // Configure this to filter results. For now the only real difference is copy types.
             if $transform_name == "i32"
@@ -113,7 +116,7 @@ macro_rules! bench_func {
                 // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
                 let name = format!(
                     "{}-comp-{}-{}-{}",
-                    $bench_name, $transform_name, $pattern_name, $test_size
+                    bench_name, $transform_name, $pattern_name, $test_size
                 );
                 // Instrument via sort_by to ensure the type properties such as Copy of the type
                 // that is being sorted doesn't change. And we get representative numbers.
@@ -121,7 +124,7 @@ macro_rules! bench_func {
                 let comp_count_copy = comp_count.clone();
                 let instrumented_sort_func = || {
                     let mut test_data = $transform($pattern_provider($test_size));
-                    $bench_module::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
+                    $bench_name::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
                         *comp_count_copy.borrow_mut() += 1;
                         a.cmp(b)
                     })
@@ -136,8 +139,8 @@ macro_rules! bench_func {
                 $transform,
                 $pattern_name,
                 $pattern_provider,
-                $bench_name,
-                $bench_module::sort,
+                bench_name,
+                $bench_name::sort,
             );
         }
     };
@@ -185,7 +188,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             continue;
         }
 
-        use sort_comp::new_stable_sort;
+        // --- Stable sorts ---
+
         bench_func!(
             c,
             test_size,
@@ -193,11 +197,10 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             &transform,
             pattern_name,
             pattern_provider,
-            "new_stable",
-            new_stable_sort,
+            rust_new_stable,
+            stable::rust_new,
         );
 
-        use sort_comp::stdlib_stable;
         bench_func!(
             c,
             test_size,
@@ -205,121 +208,11 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             &transform,
             pattern_name,
             pattern_provider,
-            "std_stable",
-            stdlib_stable,
-        );
-
-        use sort_comp::new_unstable_sort;
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "new_unstable",
-            new_unstable_sort,
-        );
-
-        use sort_comp::stdlib_unstable;
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "std_unstable",
-            stdlib_unstable,
-        );
-
-        #[cfg(feature = "wpwoodjr")]
-        use sort_comp::wpwoodjr_stable_sort;
-        #[cfg(feature = "wpwoodjr")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "wpwoodjr_stable",
-            wpwoodjr_stable_sort,
-        );
-
-        #[cfg(feature = "bevy_radsort")]
-        use sort_comp::radsort;
-        #[cfg(feature = "bevy_radsort")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "radsort",
-            radsort,
-        );
-
-        #[cfg(feature = "emilk_dmsort")]
-        use sort_comp::dmsort;
-        #[cfg(feature = "emilk_dmsort")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "dmsort",
-            dmsort,
-        );
-
-        #[cfg(feature = "libcxx")]
-        use sort_comp::libcxx_stable;
-        #[cfg(feature = "libcxx")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "libcxx_stable",
-            libcxx_stable,
-        );
-
-        #[cfg(feature = "libcxx")]
-        use sort_comp::libcxx_unstable;
-        #[cfg(feature = "libcxx")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "libcxx_unstable",
-            libcxx_unstable,
-        );
-
-        #[cfg(feature = "cpp_pdqsort")]
-        use sort_comp::cpp_pdqsort;
-        #[cfg(feature = "cpp_pdqsort")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            "cpp_pdq_unstable",
-            cpp_pdqsort,
+            rust_std_stable,
+            stable::rust_std,
         );
 
         #[cfg(feature = "cpp_std")]
-        use sort_comp::cpp_std_stable;
-        #[cfg(feature = "cpp_std")]
         bench_func!(
             c,
             test_size,
@@ -327,12 +220,70 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             &transform,
             pattern_name,
             pattern_provider,
-            "cpp_std_stable",
             cpp_std_stable,
+            stable::cpp_std,
         );
 
-        #[cfg(feature = "cpp_std")]
-        use sort_comp::cpp_std_unstable;
+        #[cfg(feature = "wpwoodjr")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            rust_wpwoodjr_stable,
+            stable::rust_wpwoodjr,
+        );
+
+        // --- Unstable sorts ---
+
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            rust_new_unstable,
+            unstable::rust_new,
+        );
+
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            rust_std_unstable,
+            unstable::rust_std,
+        );
+
+        #[cfg(feature = "emilk_dmsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            rust_dmsort_unstable,
+            unstable::rust_dmsort,
+        );
+
+        #[cfg(feature = "cpp_pdqsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            cpp_pdq_unstable,
+            unstable::cpp_pdqsort,
+        );
+
         #[cfg(feature = "cpp_std")]
         bench_func!(
             c,
@@ -341,8 +292,22 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             &transform,
             pattern_name,
             pattern_provider,
-            "cpp_std_unstable",
             cpp_std_unstable,
+            unstable::cpp_std,
+        );
+
+        // --- Other sorts ---
+
+        #[cfg(feature = "bevy_radsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            rust_radsort_radix,
+            sort_comp::other::rust_radsort,
         );
     }
 }
@@ -428,11 +393,6 @@ fn ensure_true_random() {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    // let test_sizes = [
-    //     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 16, 17, 19, 20, 24, 28, 30, 35, 36, 50, 101, 200,
-    //     500, 1_000, 2_048, 10_000, 100_000, 1_000_000,
-    // ];
-
     let test_sizes = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15, 16, 17, 19, 20, 24, 36, 50, 101, 200, 500, 1_000,
         2_048, 10_000, 100_000, 1_000_000,
