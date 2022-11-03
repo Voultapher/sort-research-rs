@@ -1,37 +1,58 @@
 use std::env;
 use std::path::PathBuf;
 
-#[cfg(feature = "cpp_pdqsort")]
-fn build_and_link_cpp_pdqsort() {
+#[allow(dead_code)]
+fn link_simple_cpp_sort(file_name: &str) {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let cpp_pdqsort_sort_cpp_path = manifest_dir.join("src").join("cpp").join("cpp_pdqsort.cpp");
+
+    let file_path = manifest_dir
+        .join("src")
+        .join("cpp")
+        .join(format!("{file_name}.cpp"));
 
     // Tell Cargo that if the given file changes, to rerun this build script.
-    println!(
-        "cargo:rerun-if-changed={}",
-        cpp_pdqsort_sort_cpp_path.display()
-    );
-
-    println!("{}", cpp_pdqsort_sort_cpp_path.display().to_string());
+    println!("cargo:rerun-if-changed={}", file_path.display());
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     cc::Build::new()
-        .file(cpp_pdqsort_sort_cpp_path)
+        .file(file_path)
         .cpp(true)
-        .warnings(true)
+        .warnings(false) // The thirdparties just have too many.
         .flag_if_supported("/EHsc")
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
+        .flag_if_supported("-fdiagnostics-color=always")
         .opt_level(2)
-        .compile("cpp_pdqsort");
+        .compile(file_name);
 
     println!("cargo:rustc-link-search={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static={}", "cpp_pdqsort");
+    println!("cargo:rustc-link-lib=static={}", file_name);
+}
+
+#[cfg(feature = "cpp_pdqsort")]
+fn build_and_link_cpp_pdqsort() {
+    link_simple_cpp_sort("cpp_pdqsort");
 }
 
 #[cfg(not(feature = "cpp_pdqsort"))]
 fn build_and_link_cpp_pdqsort() {}
+
+#[cfg(feature = "c_crumsort")]
+fn build_and_link_c_crumsort() {
+    link_simple_cpp_sort("c_crumsort");
+}
+
+#[cfg(not(feature = "c_crumsort"))]
+fn build_and_link_c_crumsort() {}
+
+#[cfg(feature = "c_fluxsort")]
+fn build_and_link_c_fluxsort() {
+    link_simple_cpp_sort("c_fluxsort");
+}
+
+#[cfg(not(feature = "c_fluxsort"))]
+fn build_and_link_c_fluxsort() {}
 
 #[cfg(feature = "cpp_std")]
 fn build_and_link_cpp_std() {
@@ -97,5 +118,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", build_rs_path.display());
 
     build_and_link_cpp_pdqsort();
+    build_and_link_c_crumsort();
+    build_and_link_c_fluxsort();
     build_and_link_cpp_std();
 }

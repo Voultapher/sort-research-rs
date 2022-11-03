@@ -284,6 +284,30 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             unstable::cpp_pdqsort,
         );
 
+        #[cfg(feature = "c_crumsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            c_crumsort_unstable,
+            unstable::c_crumsort,
+        );
+
+        #[cfg(feature = "c_fluxsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            c_fluxsort_unstable,
+            unstable::c_fluxsort,
+        );
+
         #[cfg(feature = "cpp_std")]
         bench_func!(
             c,

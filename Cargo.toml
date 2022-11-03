@@ -39,6 +39,14 @@ libcxx = []
 # Uses system C++ standard lib.
 cpp_pdqsort = []
 
+# Enable support for c_crumsort.
+# Uses system C++ standard lib.
+c_crumsort = []
+
+# Enable support for c_fluxsort.
+# Uses system C++ standard lib.
+c_fluxsort = []
+
 # Enable wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.
 wpwoodjr = []
