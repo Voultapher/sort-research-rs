@@ -217,6 +217,25 @@ fn pipe_organ() {
 
 #[test]
 fn stability() {
+    // Ensure that the test is stable.
+
+    // For cpp_sorts that only support u64 we can pack the two i32 inside a u64.
+    fn i32_tup_as_u64(val: (i32, i32)) -> u64 {
+        let a_bytes = val.0.to_le_bytes();
+        let b_bytes = val.1.to_le_bytes();
+
+        u64::from_le_bytes([a_bytes, b_bytes].concat().try_into().unwrap())
+    }
+
+    fn i32_tup_from_u64(val: u64) -> (i32, i32) {
+        let bytes = val.to_le_bytes();
+
+        let a = i32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let b = i32::from_le_bytes(bytes[4..8].try_into().unwrap());
+
+        (a, b)
+    }
+
     let large_range = if cfg!(miri) { 100..110 } else { 500..510 };
     let rounds = if cfg!(miri) { 1 } else { 10 };
 
@@ -241,21 +260,28 @@ fn stability() {
                     }
 
                     counts[n as usize] += 1;
-                    (n, counts[n as usize])
+                    i32_tup_as_u64((n, counts[n as usize]))
                 })
                 .collect();
 
             let mut v = orig.clone();
             // Only sort on the first element, so an unstable sort
             // may mix up the counts.
-            test_sort::sort_by(&mut v, |&(a, _), &(b, _)| a.cmp(&b));
+            test_sort::sort_by(&mut v, |a_packed, b_packed| {
+                let a = i32_tup_from_u64(*a_packed).0;
+                let b = i32_tup_from_u64(*b_packed).0;
+
+                a.cmp(&b)
+            });
 
             // This comparison includes the count (the second item
             // of the tuple), so elements with equal first items
             // will need to be ordered with increasing
             // counts... i.e., exactly asserting that this sort is
             // stable.
-            assert!(v.windows(2).all(|w| w[0] <= w[1]));
+            assert!(v
+                .windows(2)
+                .all(|w| i32_tup_from_u64(w[0]) <= i32_tup_from_u64(w[1])));
         }
     }
 }
