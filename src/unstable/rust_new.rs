@@ -1299,35 +1299,16 @@ where
 
 // --- Branchless sorting (less branches not zero) ---
 
-trait IsCopy<T> {
-    fn is_copy() -> bool;
-}
-
-impl<T> IsCopy<T> for T {
-    default fn is_copy() -> bool {
-        false
-    }
-}
-
-impl<T: Copy> IsCopy<T> for T {
-    fn is_copy() -> bool {
-        true
-    }
-}
-
 #[inline]
 fn qualifies_for_branchless_sort<T>() -> bool {
     // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
     // down:
     //
-    // - Copy: We guess that copy types have relatively cheap comparison functions. The branchless
-    //         sort does on average 8% more comparisons for random inputs and up to 50% in some
-    //         circumstances. The time won avoiding branches can be offset by this increase in
-    //         comparisons if the type is expensive to compare.
-    //
     // - Type size: Large types are more expensive to move and the time won avoiding branches can be
     //              offset by the increased cost of moving the values.
-    T::is_copy() && (mem::size_of::<T>() <= mem::size_of::<[usize; 4]>())
+    //
+    // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
+    mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
 }
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
@@ -1392,7 +1373,7 @@ where
     let arr_ptr = v.as_mut_ptr();
 
     // Optimal sorting network see:
-    // https://bertdobbelaere.github.io/sorting_networks_extended.html.
+    // https://bertdobbelaere.github.io/sorting_networks.html.
 
     swap_if_less(arr_ptr, 0, 2, is_less);
     swap_if_less(arr_ptr, 1, 3, is_less);
@@ -1414,7 +1395,7 @@ where
     let arr_ptr = v.as_mut_ptr();
 
     // Optimal sorting network see:
-    // https://bertdobbelaere.github.io/sorting_networks_extended.html.
+    // https://bertdobbelaere.github.io/sorting_networks.html.
 
     swap_if_less(arr_ptr, 0, 2, is_less);
     swap_if_less(arr_ptr, 1, 3, is_less);
@@ -1450,7 +1431,7 @@ where
     let arr_ptr = v.as_mut_ptr();
 
     // Optimal sorting network see:
-    // https://bertdobbelaere.github.io/sorting_networks_extended.html#N16L60D10
+    // https://bertdobbelaere.github.io/sorting_networks.html#N16L60D10
 
     swap_if_less(arr_ptr, 0, 13, is_less);
     swap_if_less(arr_ptr, 1, 12, is_less);
