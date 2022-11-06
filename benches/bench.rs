@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
+#[allow(unused_imports)]
 use sort_comp::{patterns, stable, unstable};
 
 mod trash_prediction;
