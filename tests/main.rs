@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::cmp::Ordering;
+use std::env;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -63,18 +64,24 @@ where
                 eprintln!("Expected: {:?}", stdlib_sorted);
                 eprintln!("Got:      {:?}", testsort_sorted);
             } else {
-                // Large arrays output them as files.
-                let original_name = format!("original_{}.txt", seed);
-                let std_name = format!("stdlib_sorted_{}.txt", seed);
-                let flux_name = format!("testsort_sorted_{}.txt", seed);
+                if env::var("WRITE_LARGE_FAILURE").is_ok() {
+                    // Large arrays output them as files.
+                    let original_name = format!("original_{}.txt", seed);
+                    let std_name = format!("stdlib_sorted_{}.txt", seed);
+                    let flux_name = format!("testsort_sorted_{}.txt", seed);
 
-                fs::write(&original_name, format!("{:?}", original_clone)).unwrap();
-                fs::write(&std_name, format!("{:?}", stdlib_sorted)).unwrap();
-                fs::write(&flux_name, format!("{:?}", testsort_sorted)).unwrap();
+                    fs::write(&original_name, format!("{:?}", original_clone)).unwrap();
+                    fs::write(&std_name, format!("{:?}", stdlib_sorted)).unwrap();
+                    fs::write(&flux_name, format!("{:?}", testsort_sorted)).unwrap();
 
-                eprintln!(
-                    "Failed comparison, see files {original_name}, {std_name}, and {flux_name}"
+                    eprintln!(
+                        "Failed comparison, see files {original_name}, {std_name}, and {flux_name}"
+                    );
+                } else {
+                    eprintln!(
+                    "Failed comparison, re-run with WRITE_LARGE_FAILURE env var set, to get output."
                 );
+                }
             }
 
             panic!("Test assertion failed!")
