@@ -1,4 +1,6 @@
 #![allow(unused)]
+// Would need further work in the slice point skewing area to avoid retagging issues.
+// Pursuing full block sorting now.
 
 //! Slice sorting
 //!
@@ -853,36 +855,11 @@ where
     loop {
         let len = v.len();
 
-        // println!("len: {len}");
+        println!("len: {len}");
 
-        if qualifies_for_branchless_sort::<T>() && len <= 40 {
-            // SAFETY: We just check the len.
-            unsafe {
-                match len {
-                    0..=1 => (),
-                    2..=3 => {
-                        insertion_sort_shift_left(v, 1, is_less);
-                    }
-                    4..=7 => {
-                        sort4_optimal(&mut v[0..4], is_less);
-                        insertion_sort_shift_left(v, 4, is_less);
-                    }
-                    8..=15 => {
-                        sort8_plus(v, is_less);
-                    }
-                    16..=31 => {
-                        sort16_plus(v, is_less);
-                    }
-                    _ => {
-                        sort32_plus(v, is_less);
-                    }
-                }
-            }
-            return;
-        } else if len <= MAX_INSERTION {
-            if len >= 2 {
-                insertion_sort_shift_left(v, 1, is_less);
-            }
+        // Very short slices get sorted using insertion sort.
+        if len <= MAX_INSERTION {
+            sort_small_hot(v, is_less);
             return;
         }
 
@@ -931,22 +908,170 @@ where
         was_balanced = cmp::min(mid, len - mid) >= len / 8;
         was_partitioned = was_p;
 
-        // Split the slice into `left`, `pivot`, and `right`.
-        let (left, right) = v.split_at_mut(mid);
-        let (pivot, right) = right.split_at_mut(1);
-        let pivot = &pivot[0];
+        // println!("len: {len}, mid: {mid}, pivot: {pivot}");
 
         // Recurse into the shorter side only in order to minimize the total number of recursive
         // calls and consume less stack space. Then just continue with the longer side (this is
         // akin to tail recursion).
-        if left.len() < right.len() {
-            recurse(left, is_less, pred, limit);
-            v = right;
-            pred = Some(pivot);
+
+        let arr_ptr = v.as_mut_ptr();
+
+        debug_assert!(mid < len);
+
+        let left_len = mid;
+        let right_len = (len - mid) - 1; // TODO could this every underflow?
+
+        if left_len < right_len {
+            // SAFETY: TODO
+            unsafe {
+                let slice_len_left = choose_slice_point::<T>(left_len, len);
+                let left = slice::from_raw_parts_mut(arr_ptr, slice_len_left);
+                recurse(left, is_less, pred, limit);
+
+                // If the resulting right side would be of size 0 or 1, we know it is already sorted.
+                if slice_len_left < (len - 2) {
+                    drop(left); // Drop to avoid accidental aliasing.
+
+                    let slice_len_right = choose_slice_point::<T>(right_len, len);
+
+                    // Branch here is required to avoid aliasing pred.
+                    pred = if slice_len_right != right_len {
+                        Some(&v[mid])
+                    } else {
+                        None
+                    };
+
+                    v = slice::from_raw_parts_mut(
+                        arr_ptr.add(len - slice_len_right),
+                        slice_len_right,
+                    );
+                } else {
+                    // The right side is of size 0 or 1 and doesn't need to be sorted.
+                    return;
+                }
+            }
         } else {
-            recurse(right, is_less, Some(pivot), limit);
-            v = left;
+            // SAFETY: TODO
+            unsafe {
+                let slice_len_right = choose_slice_point::<T>(right_len, len);
+                let right =
+                    slice::from_raw_parts_mut(arr_ptr.add(len - slice_len_right), slice_len_right);
+
+                // Branch here is required to avoid aliasing pred.
+                let call_pred = if slice_len_right != right_len {
+                    Some(&v[mid])
+                } else {
+                    None
+                };
+
+                recurse(right, is_less, call_pred, limit);
+
+                // If the resulting right side would be of size 0 or 1, we know it is already sorted.
+                if slice_len_right < (len - 2) {
+                    drop(right); // Drop to avoid accidental aliasing.
+
+                    let slice_len_left = choose_slice_point::<T>(left_len, len);
+                    v = slice::from_raw_parts_mut(arr_ptr, slice_len_left);
+                } else {
+                    // The left side is of size 0 or 1 and doesn't need to be sorted.
+                    return;
+                }
+
+                // TODO why is pred not being updated here in the original?
+            }
         }
+    }
+}
+
+/// Given a slice `v` of `len`, where `mid` < `len`, find a value x that is mid <= x <= len.
+/// So that x is optimal for fixed sizes sorting-networks.
+///
+/// `sub_len` is the original intended length of the to be sorted slice.
+/// `len` is the length of the original slice.
+fn choose_slice_point<T>(sub_len: usize, len: usize) -> usize {
+    // Try to fit into one of the optimal sorting-network buckets. Achieve this by
+    // overlapping the sorted sub-slices. Going from 15 -> 16 elements in a sub-slice
+    // improves both the required comparisons and drastically the runtime.
+
+    // The possible sorting-networks are limited by acceptable binary size, thus assigning them will
+    // be sub-optimal.
+
+    // Eg. instead of doing this:
+    // [0|1|2|3|4|5|6|7|8|9]
+    // [left     ] [right  ]
+    // Do this:
+    // [left       [r]ight ]
+
+    // Desired bucket assignment:
+    // [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    //  >  ^  <  <  <  >  ^   <   <   >   ^   <   <   >   >   ^   <
+    //
+    // Each right arrow shows a desired growth of x to the next ^.
+
+    if !qualifies_for_branchless_sort::<T>() || sub_len > MAX_INSERTION {
+        // Here we don't do anything special and just continue with the original intended
+        // sub-slices.
+        return sub_len;
+    }
+
+    let desired_slice_growth = match sub_len {
+        7 | 11 | 15 | 19 => 1,
+        18 => 2,
+        _ => 0,
+    };
+
+    let desired_slice_point = sub_len + desired_slice_growth;
+
+    if desired_slice_point <= len {
+        desired_slice_point
+    } else {
+        sub_len
+    }
+}
+
+fn sort_small_hot<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Make sure this stays in sync with choose_slice_point.
+
+    // TODO for len >= x do streak analysis to better handle already sorted inputs.
+
+    let len = v.len();
+
+    if qualifies_for_branchless_sort::<T>() {
+        // SAFETY: We check the appropriate len.
+        unsafe {
+            let offset = match len {
+                0..=1 => {
+                    return;
+                }
+                2..=3 => 1,
+                4..=7 => {
+                    sort4_optimal(&mut v[0..4], is_less);
+                    4
+                }
+                8..=11 => {
+                    sort8_optimal(&mut v[0..8], is_less);
+                    8
+                }
+                12..=15 => {
+                    sort12_optimal(&mut v[0..12], is_less);
+                    12
+                }
+                16..=19 => {
+                    sort16_optimal(&mut v[0..16], is_less);
+                    16
+                }
+                _ => {
+                    sort20_optimal(&mut v[0..20], is_less);
+                    20
+                }
+            };
+            insertion_sort_shift_left(v, offset, is_less);
+        }
+    } else {
+        insertion_sort(v, is_less);
     }
 }
 
@@ -1558,58 +1683,112 @@ where
     swap_if_less(arr_ptr, 8, 9, is_less);
 }
 
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
 #[inline(never)]
-unsafe fn sort8_plus<T, F>(v: &mut [T], is_less: &mut F)
+unsafe fn sort20_optimal<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: caller must ensure v.len() >= 8.
-    let len = v.len();
-    debug_assert!(len >= 8);
+    // SAFETY: caller must ensure v.len() >= 20.
+    debug_assert!(v.len() == 20);
 
-    sort8_optimal(&mut v[0..8], is_less);
+    let arr_ptr = v.as_mut_ptr();
 
-    if len >= 9 {
-        insertion_sort_shift_left(&mut v[8..], 1, is_less);
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks_extended.html#N20L91D12
 
-        // We only need place for 8 entries because we know the shorter side is at most 8 long.
-        let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
-        let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-        merge(v, 8, swap_ptr, is_less);
-    }
-}
-
-#[inline(never)]
-unsafe fn sort16_plus<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 16.
-    let len = v.len();
-    debug_assert!(len >= 16);
-
-    sort16_optimal(&mut v[0..16], is_less);
-
-    if len >= 17 {
-        let start = if len >= 24 {
-            sort8_optimal(&mut v[16..24], is_less);
-            8
-        } else if len >= 20 {
-            sort4_optimal(&mut v[16..20], is_less);
-            4
-        } else {
-            1
-        };
-
-        insertion_sort_shift_left(&mut v[16..], start, is_less);
-
-        // We only need place for 16 entries because we know the shorter side is at most 16 long.
-        let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
-        let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-        merge(v, 16, swap_ptr, is_less);
-    }
+    swap_if_less(arr_ptr, 0, 3, is_less);
+    swap_if_less(arr_ptr, 1, 7, is_less);
+    swap_if_less(arr_ptr, 2, 5, is_less);
+    swap_if_less(arr_ptr, 4, 8, is_less);
+    swap_if_less(arr_ptr, 6, 9, is_less);
+    swap_if_less(arr_ptr, 10, 13, is_less);
+    swap_if_less(arr_ptr, 11, 15, is_less);
+    swap_if_less(arr_ptr, 12, 18, is_less);
+    swap_if_less(arr_ptr, 14, 17, is_less);
+    swap_if_less(arr_ptr, 16, 19, is_less);
+    swap_if_less(arr_ptr, 0, 14, is_less);
+    swap_if_less(arr_ptr, 1, 11, is_less);
+    swap_if_less(arr_ptr, 2, 16, is_less);
+    swap_if_less(arr_ptr, 3, 17, is_less);
+    swap_if_less(arr_ptr, 4, 12, is_less);
+    swap_if_less(arr_ptr, 5, 19, is_less);
+    swap_if_less(arr_ptr, 6, 10, is_less);
+    swap_if_less(arr_ptr, 7, 15, is_less);
+    swap_if_less(arr_ptr, 8, 18, is_less);
+    swap_if_less(arr_ptr, 9, 13, is_less);
+    swap_if_less(arr_ptr, 0, 4, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 3, 8, is_less);
+    swap_if_less(arr_ptr, 5, 7, is_less);
+    swap_if_less(arr_ptr, 11, 16, is_less);
+    swap_if_less(arr_ptr, 12, 14, is_less);
+    swap_if_less(arr_ptr, 15, 19, is_less);
+    swap_if_less(arr_ptr, 17, 18, is_less);
+    swap_if_less(arr_ptr, 1, 6, is_less);
+    swap_if_less(arr_ptr, 2, 12, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 4, 11, is_less);
+    swap_if_less(arr_ptr, 7, 17, is_less);
+    swap_if_less(arr_ptr, 8, 15, is_less);
+    swap_if_less(arr_ptr, 13, 18, is_less);
+    swap_if_less(arr_ptr, 14, 16, is_less);
+    swap_if_less(arr_ptr, 0, 1, is_less);
+    swap_if_less(arr_ptr, 2, 6, is_less);
+    swap_if_less(arr_ptr, 7, 10, is_less);
+    swap_if_less(arr_ptr, 9, 12, is_less);
+    swap_if_less(arr_ptr, 13, 17, is_less);
+    swap_if_less(arr_ptr, 18, 19, is_less);
+    swap_if_less(arr_ptr, 1, 6, is_less);
+    swap_if_less(arr_ptr, 5, 9, is_less);
+    swap_if_less(arr_ptr, 7, 11, is_less);
+    swap_if_less(arr_ptr, 8, 12, is_less);
+    swap_if_less(arr_ptr, 10, 14, is_less);
+    swap_if_less(arr_ptr, 13, 18, is_less);
+    swap_if_less(arr_ptr, 3, 5, is_less);
+    swap_if_less(arr_ptr, 4, 7, is_less);
+    swap_if_less(arr_ptr, 8, 10, is_less);
+    swap_if_less(arr_ptr, 9, 11, is_less);
+    swap_if_less(arr_ptr, 12, 15, is_less);
+    swap_if_less(arr_ptr, 14, 16, is_less);
+    swap_if_less(arr_ptr, 1, 3, is_less);
+    swap_if_less(arr_ptr, 2, 4, is_less);
+    swap_if_less(arr_ptr, 5, 7, is_less);
+    swap_if_less(arr_ptr, 6, 10, is_less);
+    swap_if_less(arr_ptr, 9, 13, is_less);
+    swap_if_less(arr_ptr, 12, 14, is_less);
+    swap_if_less(arr_ptr, 15, 17, is_less);
+    swap_if_less(arr_ptr, 16, 18, is_less);
+    swap_if_less(arr_ptr, 1, 2, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 6, 7, is_less);
+    swap_if_less(arr_ptr, 8, 9, is_less);
+    swap_if_less(arr_ptr, 10, 11, is_less);
+    swap_if_less(arr_ptr, 12, 13, is_less);
+    swap_if_less(arr_ptr, 15, 16, is_less);
+    swap_if_less(arr_ptr, 17, 18, is_less);
+    swap_if_less(arr_ptr, 2, 3, is_less);
+    swap_if_less(arr_ptr, 4, 6, is_less);
+    swap_if_less(arr_ptr, 5, 8, is_less);
+    swap_if_less(arr_ptr, 7, 9, is_less);
+    swap_if_less(arr_ptr, 10, 12, is_less);
+    swap_if_less(arr_ptr, 11, 14, is_less);
+    swap_if_less(arr_ptr, 13, 15, is_less);
+    swap_if_less(arr_ptr, 16, 17, is_less);
+    swap_if_less(arr_ptr, 4, 5, is_less);
+    swap_if_less(arr_ptr, 6, 8, is_less);
+    swap_if_less(arr_ptr, 7, 10, is_less);
+    swap_if_less(arr_ptr, 9, 12, is_less);
+    swap_if_less(arr_ptr, 11, 13, is_less);
+    swap_if_less(arr_ptr, 14, 15, is_less);
+    swap_if_less(arr_ptr, 3, 4, is_less);
+    swap_if_less(arr_ptr, 5, 6, is_less);
+    swap_if_less(arr_ptr, 7, 8, is_less);
+    swap_if_less(arr_ptr, 9, 10, is_less);
+    swap_if_less(arr_ptr, 11, 12, is_less);
+    swap_if_less(arr_ptr, 13, 14, is_less);
+    swap_if_less(arr_ptr, 15, 16, is_less);
 }
 
 #[inline(never)]
@@ -1623,11 +1802,10 @@ where
     sort16_optimal(&mut v[0..16], is_less);
     sort16_optimal(&mut v[16..32], is_less);
 
-    insertion_sort_shift_left(&mut v[16..], 16, is_less);
-
-    // We only need place for 16 entries because we know the shorter side is 16 long.
+    // We only need place for 8 entries because we know both sides are of length 8.
     let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    merge(v, 16, swap_ptr, is_less);
+    // We only need place for 8 entries because the shorter side is length 8.
+    merge(&mut v[0..32], 16, swap_ptr, is_less);
 }
