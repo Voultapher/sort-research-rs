@@ -29,7 +29,10 @@ def parse_result(path):
 def extract_groups(bench_result):
     groups = {}
 
-    for benchmark, value in bench_result["benchmarks"].items():
+    name = bench_result["name"]
+
+    for benchmark_full, value in bench_result["benchmarks"].items():
+        benchmark = benchmark_full.partition(name)[2][1:]
         entry_parts = benchmark.split("-")
         test_size = int(entry_parts[3].partition(":")[0])
 

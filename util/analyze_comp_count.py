@@ -95,4 +95,4 @@ if __name__ == "__main__":
     with open(sys.argv[1], "r") as comp_data_file:
         comp_data = comp_data_file.read()
 
-    analyze("std_stable", "new_stable")
+    analyze("rust_std_unstable", "rust_new_unstable")

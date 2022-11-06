@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>1k</title>
+    <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-2.4.3.min.js"></script>
+    <script type="text/javascript">
+        Bokeh.set_log_level("info");
+    </script>
+  </head>
+  <body>
+    <div class="bk-root" id="97498339-ab02-4586-91af-0eb8f78428e5" data-root-id="6747"></div>
+  
+    <script type="application/json" id="6748">
+      {"f6ae7241-10a9-4142-984b-5e52d7225fec":{"defs":[],"roots":{"references":[{"attributes":{},"id":"6745","type":"ProxyToolbar"},{"attributes":{"children":[{"id":"6746"},{"id":"6744"}]},"id":"6747","type":"Column"},{"attributes":{"toolbar":{"id":"6745"},"toolbar_location":"above"},"id":"6746","type":"ToolbarBox"},{"attributes":{},"id":"6744","type":"GridBox"}],"root_ids":["6747"]},"title":"Bokeh Application","version":"2.4.3"}}
+    </script>
+    <script type="text/javascript">
+      (function() {
+        const fn = function() {
+          Bokeh.safely(function() {
+            (function(root) {
+              function embed_document(root) {
+              const docs_json = document.getElementById('6748').textContent;
+              const render_items = [{"docid":"f6ae7241-10a9-4142-984b-5e52d7225fec","root_ids":["6747"],"roots":{"6747":"97498339-ab02-4586-91af-0eb8f78428e5"}}];
+              root.Bokeh.embed.embed_items(docs_json, render_items);
+              }
+              if (root.Bokeh !== undefined) {
+                embed_document(root);
+              } else {
+                let attempts = 0;
+                const timer = setInterval(function(root) {
+                  if (root.Bokeh !== undefined) {
+                    clearInterval(timer);
+                    embed_document(root);
+                  } else {
+                    attempts++;
+                    if (attempts > 100) {
+                      clearInterval(timer);
+                      console.log("Bokeh: ERROR: Unable to run BokehJS code because BokehJS library is missing");
+                    }
+                  }
+                }, 10, root)
+              }
+            })(window);
+          });
+        };
+        if (document.readyState != "loading") fn();
+        else document.addEventListener("DOMContentLoaded", fn);
+      })();
+    </script>
+  </body>
+</html>
