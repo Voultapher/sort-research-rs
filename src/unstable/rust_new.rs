@@ -159,6 +159,13 @@ where
         // Swap the found pair of elements. This puts them in correct order.
         v.swap(i - 1, i);
 
+        if i >= 2 {
+            // SAFETY: We check the that the slice len is >= 2.
+            unsafe {
+                insert_tail(&mut v[..i], is_less);
+            }
+        }
+
         // Shift the smaller element to the left.
         if i >= 2 {
             // SAFETY: We check the that the slice len is >= 2.
@@ -737,7 +744,7 @@ where
 }
 
 // Slices of up to this length get sorted using insertion sort.
-const MAX_INSERTION: usize = 22;
+const MAX_INSERTION: usize = 20;
 
 /// Sorts `v` recursively.
 ///
@@ -759,34 +766,7 @@ where
 
         // println!("len: {len}");
 
-        if qualifies_for_branchless_sort::<T>() && len <= 40 {
-            // SAFETY: We just check the len.
-            unsafe {
-                match len {
-                    0..=1 => (),
-                    2..=3 => {
-                        insertion_sort_shift_left(v, 1, is_less);
-                    }
-                    4..=7 => {
-                        sort4_optimal(&mut v[0..4], is_less);
-                        insertion_sort_shift_left(v, 4, is_less);
-                    }
-                    8..=15 => {
-                        sort8_plus(v, is_less);
-                    }
-                    16..=31 => {
-                        sort16_plus(v, is_less);
-                    }
-                    _ => {
-                        sort32_plus(v, is_less);
-                    }
-                }
-            }
-            return;
-        } else if len <= MAX_INSERTION {
-            if len >= 2 {
-                insertion_sort_shift_left(v, 1, is_less);
-            }
+        if sort_small(v, is_less) {
             return;
         }
 
@@ -854,6 +834,133 @@ where
     }
 }
 
+/// Sorts `v` using strategies optimized for small sizes.
+pub fn sort_small<T, F>(v: &mut [T], mut is_less: &mut F) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    const MAX_BRANCHLESS_SMALL_SORT: usize = 40;
+
+    if len < 2 {
+        return true;
+    }
+
+    if qualifies_for_branchless_sort::<T>() && len <= MAX_BRANCHLESS_SMALL_SORT {
+        if len < 8 {
+            // For small sizes it's better to just sort. The worst case 7, will only go from 6 to 8
+            // comparisons for already sorted inputs.
+            let start = if len >= 4 {
+                // SAFETY: We just checked the len.
+                unsafe {
+                    sort4_optimal(&mut v[0..4], is_less);
+                }
+                4
+            } else {
+                1
+            };
+
+            insertion_sort_shift_left(v, start, is_less);
+
+            return true;
+        }
+
+        // Pattern analyze to minimize comparison count for already sorted or reversed inputs.
+        // For larger inputs pdqsort pattern analysis will be used.
+
+        let mut start = len - 1;
+        if start > 0 {
+            start -= 1;
+            unsafe {
+                if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
+                    while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
+                        start -= 1;
+                    }
+                    v[start..len].reverse();
+                } else {
+                    while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1))
+                    {
+                        start -= 1;
+                    }
+                }
+            }
+        }
+
+        debug_assert!(start < len);
+
+        let already_sorted = len - start;
+
+        if already_sorted <= 6 {
+            // SAFETY: We check the len.
+            unsafe {
+                match len {
+                    8..=15 => {
+                        sort8_plus(v, is_less);
+                    }
+                    16..=31 => {
+                        sort16_plus(v, is_less);
+                    }
+                    32..=40 => {
+                        sort32_plus(v, is_less);
+                    }
+                    _ => {
+                        unreachable!()
+                    }
+                }
+            }
+        } else {
+            // Potentially highly or fully sorted. We know that already_sorted >= 7. and len >= 8.
+            // That leaves the range of start <= 33.
+            debug_assert!(start <= 33);
+
+            if start == 0 {
+                return true;
+            } else if start <= 3 {
+                insertion_sort_shift_right(v, start, is_less);
+                return true;
+            }
+
+            match start {
+                4..=7 => {
+                    // SAFETY: We just checked start >= 4.
+                    unsafe {
+                        sort4_plus(&mut v[0..start], is_less);
+                    }
+                }
+                8..=15 => {
+                    // SAFETY: We just checked start >= 8.
+                    unsafe {
+                        sort8_plus(&mut v[0..start], is_less);
+                    }
+                }
+                16..=33 => {
+                    // SAFETY: We just checked start >= 16.
+                    unsafe {
+                        sort16_plus(&mut v[0..start], is_less);
+                    }
+                }
+                _ => unreachable!(),
+            }
+
+            // The longest possible shortest side is len == 40, start == 20 -> 20.
+            let mut swap = mem::MaybeUninit::<[T; 20]>::uninit();
+            let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+            // SAFETY: swap is long enough and both sides are len >= 1.
+            unsafe {
+                merge(v, start, swap_ptr, is_less);
+            }
+        }
+        return true;
+    } else if len <= MAX_INSERTION {
+        insertion_sort_shift_left(v, 1, is_less);
+        return true;
+    }
+
+    false
+}
+
 /// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
 pub fn quicksort<T, F>(v: &mut [T], mut is_less: F)
 where
@@ -898,21 +1005,22 @@ where
 {
     debug_assert!(v.len() >= 2);
 
+    let arr_ptr = v.as_mut_ptr();
     let i = v.len() - 1;
 
+    // SAFETY: caller must ensure v is at least len 2.
     unsafe {
         // See insert_head which talks about why this approach is beneficial.
+        let i_ptr = arr_ptr.add(i);
 
         // It's important that we use i_ptr here. If this check is positive and we continue,
         // We want to make sure that no other copy of the value was seen by is_less.
         // Otherwise we would have to copy it back.
-        if is_less(v.get_unchecked(i), v.get_unchecked(i - 1)) {
-            let arr_ptr = v.as_mut_ptr();
-
+        if is_less(&*i_ptr, &*i_ptr.sub(1)) {
             // It's important, that we use tmp for comparison from now on. As it is the value that
             // will be copied back. And notionally we could have created a divergence if we copy
             // back the wrong value.
-            let tmp = mem::ManuallyDrop::new(ptr::read(arr_ptr.add(i)));
+            let tmp = mem::ManuallyDrop::new(ptr::read(i_ptr));
             // Intermediate state of the insertion process is always tracked by `hole`, which
             // serves two purposes:
             // 1. Protects integrity of `v` from panics in `is_less`.
@@ -925,17 +1033,17 @@ where
             // initially held exactly once.
             let mut hole = InsertionHole {
                 src: &*tmp,
-                dest: arr_ptr.add(i - 1),
+                dest: i_ptr.sub(1),
             };
-            ptr::copy_nonoverlapping(hole.dest, arr_ptr.add(i), 1);
+            ptr::copy_nonoverlapping(hole.dest, i_ptr, 1);
 
             // SAFETY: We know i is at least 1.
             for j in (0..(i - 1)).rev() {
-                if !is_less(&*tmp, v.get_unchecked(j)) {
+                let j_ptr = arr_ptr.add(j);
+                if !is_less(&*tmp, &*j_ptr) {
                     break;
                 }
 
-                let j_ptr = arr_ptr.add(j);
                 ptr::copy_nonoverlapping(j_ptr, hole.dest, 1);
                 hole.dest = j_ptr;
             }
@@ -988,7 +1096,7 @@ where
             // initially held exactly once.
             let mut hole = InsertionHole {
                 src: &*tmp,
-                dest: &mut v[1],
+                dest: arr_ptr.add(1),
             };
             ptr::copy_nonoverlapping(arr_ptr.add(1), arr_ptr.add(0), 1);
 
@@ -1004,7 +1112,7 @@ where
     }
 }
 
-/// Sort v assuming v[..offset] is already sorted.
+/// Sort `v` assuming `v[..offset]` is already sorted.
 ///
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact. Even improving performance in some cases.
@@ -1032,7 +1140,7 @@ where
     }
 }
 
-/// Sort v assuming v[offset..] is already sorted.
+/// Sort `v` assuming `v[offset..]` is already sorted.
 ///
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact. Even improving performance in some cases.
@@ -1332,62 +1440,6 @@ where
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 // performance impact.
 #[inline(never)]
-unsafe fn sort12_optimal<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 12.
-    debug_assert!(v.len() == 12);
-
-    let arr_ptr = v.as_mut_ptr();
-
-    // Optimal sorting network see:
-    // https://bertdobbelaere.github.io/sorting_networks_extended.html.
-
-    swap_if_less(arr_ptr, 0, 8, is_less);
-    swap_if_less(arr_ptr, 1, 7, is_less);
-    swap_if_less(arr_ptr, 2, 6, is_less);
-    swap_if_less(arr_ptr, 3, 11, is_less);
-    swap_if_less(arr_ptr, 4, 10, is_less);
-    swap_if_less(arr_ptr, 5, 9, is_less);
-    swap_if_less(arr_ptr, 0, 1, is_less);
-    swap_if_less(arr_ptr, 2, 5, is_less);
-    swap_if_less(arr_ptr, 3, 4, is_less);
-    swap_if_less(arr_ptr, 6, 9, is_less);
-    swap_if_less(arr_ptr, 7, 8, is_less);
-    swap_if_less(arr_ptr, 10, 11, is_less);
-    swap_if_less(arr_ptr, 0, 2, is_less);
-    swap_if_less(arr_ptr, 1, 6, is_less);
-    swap_if_less(arr_ptr, 5, 10, is_less);
-    swap_if_less(arr_ptr, 9, 11, is_less);
-    swap_if_less(arr_ptr, 0, 3, is_less);
-    swap_if_less(arr_ptr, 1, 2, is_less);
-    swap_if_less(arr_ptr, 4, 6, is_less);
-    swap_if_less(arr_ptr, 5, 7, is_less);
-    swap_if_less(arr_ptr, 8, 11, is_less);
-    swap_if_less(arr_ptr, 9, 10, is_less);
-    swap_if_less(arr_ptr, 1, 4, is_less);
-    swap_if_less(arr_ptr, 3, 5, is_less);
-    swap_if_less(arr_ptr, 6, 8, is_less);
-    swap_if_less(arr_ptr, 7, 10, is_less);
-    swap_if_less(arr_ptr, 1, 3, is_less);
-    swap_if_less(arr_ptr, 2, 5, is_less);
-    swap_if_less(arr_ptr, 6, 9, is_less);
-    swap_if_less(arr_ptr, 8, 10, is_less);
-    swap_if_less(arr_ptr, 2, 3, is_less);
-    swap_if_less(arr_ptr, 4, 5, is_less);
-    swap_if_less(arr_ptr, 6, 7, is_less);
-    swap_if_less(arr_ptr, 8, 9, is_less);
-    swap_if_less(arr_ptr, 4, 6, is_less);
-    swap_if_less(arr_ptr, 5, 7, is_less);
-    swap_if_less(arr_ptr, 3, 4, is_less);
-    swap_if_less(arr_ptr, 5, 6, is_less);
-    swap_if_less(arr_ptr, 7, 8, is_less);
-}
-
-// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-// performance impact.
-#[inline(never)]
 unsafe fn sort16_optimal<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1462,7 +1514,18 @@ where
     swap_if_less(arr_ptr, 8, 9, is_less);
 }
 
-#[inline(never)]
+unsafe fn sort4_plus<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 4.
+    let len = v.len();
+    debug_assert!(len >= 4);
+
+    sort4_optimal(&mut v[0..4], is_less);
+    insertion_sort_shift_left(v, 4, is_less);
+}
+
 unsafe fn sort8_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1484,7 +1547,6 @@ where
     }
 }
 
-#[inline(never)]
 unsafe fn sort16_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1516,7 +1578,6 @@ where
     }
 }
 
-#[inline(never)]
 unsafe fn sort32_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
