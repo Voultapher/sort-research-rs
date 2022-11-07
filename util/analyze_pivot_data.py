@@ -6,10 +6,30 @@ import sys
 from collections import defaultdict
 
 from bokeh.plotting import figure, show
-
+from bokeh.models import BoxZoomTool
 
 TEST_SIZE = 10_000
-MAX_SMALL_SORT = 40
+
+
+def draw_dist_plot(p, len_dist_mean_sorted, max_small_sort, name, color):
+    x = [len for len, frequency in len_dist_mean_sorted]
+    y = [frequency for len, frequency in len_dist_mean_sorted]
+
+    p.square(x, y, fill_color=None, line_color=color)
+    p.line(x, y, line_color=color, legend_label=name)
+
+    y2 = [
+        frequency if len <= max_small_sort else 0
+        for len, frequency in len_dist_mean_sorted
+    ]
+    p.varea(
+        x,
+        y1=0,
+        y2=y2,
+        alpha=0.3,
+        fill_color=color,
+        legend_label=f"Handled by dedicated small sort len <= {max_small_sort}",
+    )
 
 
 def analyze_pivot_data(text):
@@ -46,41 +66,38 @@ def analyze_pivot_data(text):
 
     len_dist_mean_sorted = sorted(len_dist_mean.items())
 
-    x = [len for len, frequency in len_dist_mean_sorted]
-    y = [frequency for len, frequency in len_dist_mean_sorted]
+    return len_dist_mean_sorted
 
+
+def graph_pivot_data(text_a, text_b):
     p = figure(
-        title=f"How often will recurse be called with this length when sorting {TEST_SIZE} elements",
-        x_axis_label="v.len() in recurse (log)",
+        title=f"How often will recurse be called with a length when sorting {TEST_SIZE} random elements",
+        x_axis_label="v.len() in function recurse (log)",
         x_axis_type="log",
         y_axis_label="Average times called",
         tools="pan,wheel_zoom,box_zoom,reset,hover",
     )
 
-    color = "green"
-    p.square(x, y, fill_color=None, line_color=color)
-    p.line(x, y, line_color=color)
+    len_dist_mean_sorted_a = analyze_pivot_data(text_a)
+    len_dist_mean_sorted_b = analyze_pivot_data(text_b)
 
-    y2 = [
-        frequency if len <= MAX_SMALL_SORT else 0
-        for len, frequency in len_dist_mean_sorted
-    ]
-    p.varea(
-        x,
-        y1=0,
-        y2=y2,
-        alpha=0.3,
-        fill_color=color,
-        legend_label=f"Handled by dedicated small sort len <= {MAX_SMALL_SORT}",
+    draw_dist_plot(
+        p, len_dist_mean_sorted_a, 20, "rust_std_unstable", color="green"
     )
+    draw_dist_plot(
+        p, len_dist_mean_sorted_b, 40, "rust_new_unstable", color="orange"
+    )
+
+    p.toolbar.active_drag = BoxZoomTool()
 
     show(p)
 
 
 if __name__ == "__main__":
-    file_path = sys.argv[1]
+    with open(sys.argv[1], "r") as file:
+        text_a = file.read()
 
-    with open(file_path, "r") as file:
-        text = file.read()
+    with open(sys.argv[2], "r") as file:
+        text_b = file.read()
 
-    analyze_pivot_data(text)
+    graph_pivot_data(text_a, text_b)
