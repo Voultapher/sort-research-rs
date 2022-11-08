@@ -11,3 +11,8 @@ pub mod cpp_std_sys;
 // Call stdlib std::sort_stable sort via FFI.
 #[cfg(feature = "cpp_std_libcxx")]
 pub mod cpp_std_libcxx;
+
+// Call fluxsort sort via FFI.
+// Note, this sort is only stable if the the supplied comparison returns less, equal and more.
+#[cfg(feature = "c_fluxsort")]
+pub mod c_fluxsort;

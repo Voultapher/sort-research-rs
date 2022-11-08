@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 #[repr(C)]
 pub(crate) struct CompResult {
-    is_less: bool,
+    cmp_result: i8, // -1 == less, 0 == equal, 1 == more
     is_panic: bool,
 }
 
@@ -15,17 +15,19 @@ pub(crate) unsafe extern "C" fn rust_fn_cmp<T, F: FnMut(&T, &T) -> Ordering>(
 ) -> CompResult {
     let compare_fn = std::mem::transmute::<*mut u8, *mut F>(ctx);
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        (*compare_fn)(a, b) == Ordering::Less
-    })) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (*compare_fn)(a, b))) {
         Ok(val) => CompResult {
-            is_less: val,
+            cmp_result: match val {
+                Ordering::Less => -1,
+                Ordering::Equal => 0,
+                Ordering::Greater => 1,
+            },
             is_panic: false,
         },
         Err(err) => {
             eprintln!("Panic during compare call: {err:?}");
             CompResult {
-                is_less: false,
+                cmp_result: 0,
                 is_panic: true,
             }
         }

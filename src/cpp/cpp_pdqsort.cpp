@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include <stdint.h>
+
 struct CompResult;
 
 template <typename T>
@@ -14,7 +16,7 @@ auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
       throw std::runtime_error{"panic in Rust comparison function"};
     }
 
-    return comp_result.is_less;
+    return comp_result.cmp_result == -1;
   };
 }
 
@@ -34,7 +36,7 @@ uint32_t sort_by_impl(T* data,
 
 extern "C" {
 struct CompResult {
-  bool is_less;
+  int8_t cmp_result;
   bool is_panic;
 };
 

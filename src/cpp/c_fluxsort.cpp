@@ -1,6 +1,11 @@
+// Enable this line for fair benchmark comparison to C++ and Rust sorts.
+// #define cmp(a, b) (*(a) > *(b))
+
 #include "thirdparty/crumsort/fluxsort.h"
 
 #include <stdexcept>
+
+#include <stdint.h>
 
 struct CompResult;
 
@@ -24,10 +29,7 @@ CMPFUNC* make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
       throw std::runtime_error{"panic in Rust comparison function"};
     }
 
-    if (comp_result.is_less) {
-      return -1;
-    }
-    return 1;
+    return comp_result.cmp_result;
   };
 }
 
@@ -54,13 +56,15 @@ int int_cmp_func(const void* a_ptr, const void* b_ptr) {
   // Yeah I know everyone does a - b, but that invokes UB.
   if (a < b) {
     return -1;
+  } else if (a > b) {
+    return 1;
   }
-  return 1;
+  return 0;
 }
 
 extern "C" {
 struct CompResult {
-  bool is_less;
+  int8_t cmp_result;
   bool is_panic;
 };
 

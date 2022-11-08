@@ -463,6 +463,7 @@ fn panic_retain_original_set() {
     }
 }
 
+#[ignore]
 #[test]
 fn violate_ord_retain_original_set() {
     // A user may implement Ord incorrectly for a type or violate it by calling sort_by with a
@@ -549,4 +550,19 @@ fn violate_ord_retain_original_set() {
             assert_eq!(sum_before, sum_after);
         }
     }
+}
+
+#[test]
+fn sort_vs_sort_by() {
+    // Ensure that sort and sort_by produce the same result.
+    let mut input_normal = [i32::MAX, 3, i32::MIN, 5, i32::MIN, -3, 60, 200, 50, 7, 10];
+    let expected = [i32::MIN, i32::MIN, -3, 3, 5, 7, 10, 50, 60, 200, i32::MAX];
+
+    let mut input_sort_by = input_normal.to_vec();
+
+    test_sort::sort(&mut input_normal);
+    test_sort::sort_by(&mut input_sort_by, |a, b| a.cmp(b));
+
+    assert_eq!(input_normal, expected);
+    assert_eq!(input_sort_by, expected);
 }
