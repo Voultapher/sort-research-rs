@@ -238,6 +238,30 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             stable::cpp_std_libcxx,
         );
 
+        #[cfg(feature = "cpp_powersort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            cpp_powersort_stable,
+            stable::cpp_powersort,
+        );
+
+        #[cfg(feature = "cpp_powersort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            cpp_powersort_4way_stable,
+            stable::cpp_powersort_4way,
+        );
+
         #[cfg(feature = "c_fluxsort")]
         bench_func!(
             c,

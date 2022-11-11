@@ -39,6 +39,14 @@ fn build_and_link_cpp_pdqsort() {
 #[cfg(not(feature = "cpp_pdqsort"))]
 fn build_and_link_cpp_pdqsort() {}
 
+#[cfg(feature = "cpp_powersort")]
+fn build_and_link_cpp_powersort() {
+    link_simple_cpp_sort("cpp_powersort");
+}
+
+#[cfg(not(feature = "cpp_powersort"))]
+fn build_and_link_cpp_powersort() {}
+
 #[cfg(feature = "c_crumsort")]
 fn build_and_link_c_crumsort() {
     link_simple_cpp_sort("c_crumsort");
@@ -148,6 +156,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", build_rs_path.display());
 
     build_and_link_cpp_pdqsort();
+    build_and_link_cpp_powersort();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
     build_and_link_cpp_std_sys();

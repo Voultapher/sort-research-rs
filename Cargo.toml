@@ -38,6 +38,10 @@ cpp_std_libcxx = []
 # Uses system C++ standard lib.
 cpp_pdqsort = []
 
+# Enable powersort from the Multiway Powersort (2022) paper.
+# Uses system C++ standard lib.
+cpp_powersort = []
+
 # Enable support for c_crumsort.
 # Uses system C++ standard lib.
 c_crumsort = []

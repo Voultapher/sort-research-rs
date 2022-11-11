@@ -12,6 +12,14 @@ pub mod cpp_std_sys;
 #[cfg(feature = "cpp_std_libcxx")]
 pub mod cpp_std_libcxx;
 
+// Call powersort sort via FFI.
+#[cfg(feature = "cpp_powersort")]
+pub mod cpp_powersort;
+
+// Call powersort_4way sort via FFI.
+#[cfg(feature = "cpp_powersort")]
+pub mod cpp_powersort_4way;
+
 // Call fluxsort sort via FFI.
 // Note, this sort is only stable if the the supplied comparison returns less, equal and more.
 #[cfg(feature = "c_fluxsort")]
