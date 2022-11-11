@@ -23,7 +23,8 @@ fn link_simple_cpp_sort(file_name: &str) {
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
         .flag_if_supported("-fdiagnostics-color=always")
-        .opt_level(2)
+        .force_frame_pointer(false)
+        .opt_level(3)
         .compile(file_name);
 
     println!("cargo:rustc-link-search={}", out_dir.display());
@@ -78,7 +79,8 @@ fn build_and_link_cpp_std_sys() {
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
         .define("STD_LIB_SYS", None)
-        .opt_level(2)
+        .opt_level(3)
+        .force_frame_pointer(false)
         .compile("cpp_std_sort_sys");
 
     println!("cargo:rustc-link-search={}", out_dir.display());
