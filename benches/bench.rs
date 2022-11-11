@@ -238,7 +238,19 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             stable::cpp_std_libcxx,
         );
 
-        #[cfg(feature = "wpwoodjr")]
+        #[cfg(feature = "c_fluxsort")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            c_fluxsort_stable,
+            stable::c_fluxsort,
+        );
+
+        #[cfg(feature = "rust_wpwoodjr")]
         bench_func!(
             c,
             test_size,
@@ -274,7 +286,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             unstable::rust_std,
         );
 
-        #[cfg(feature = "emilk_dmsort")]
+        #[cfg(feature = "rust_dmsort")]
         bench_func!(
             c,
             test_size,
@@ -310,18 +322,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             unstable::c_crumsort,
         );
 
-        #[cfg(feature = "c_fluxsort")]
-        bench_func!(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            c_fluxsort_unstable,
-            unstable::c_fluxsort,
-        );
-
         #[cfg(feature = "cpp_std_sys")]
         bench_func!(
             c,
@@ -348,7 +348,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
 
         // --- Other sorts ---
 
-        #[cfg(feature = "bevy_radsort")]
+        #[cfg(feature = "rust_radsort")]
         bench_func!(
             c,
             test_size,

@@ -1,2 +1,2 @@
-#[cfg(feature = "bevy_radsort")]
+#[cfg(feature = "rust_radsort")]
 pub mod rust_radsort;

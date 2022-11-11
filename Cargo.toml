@@ -46,14 +46,14 @@ c_crumsort = []
 # Uses system C++ standard lib.
 c_fluxsort = []
 
-# Enable wpwoodjr sort.
+# Enable rust_wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.
-wpwoodjr = []
+rust_wpwoodjr = []
 
 # Enable radsort. Radix sort used by bevy.
 # No additional requirements, but disabled by default to keep things lean.
-bevy_radsort = ["radsort"]
+rust_radsort = ["radsort"]
 
 # Enable drop-merge sort developed by Emil Ernerfeldt (emilk)
 # No additional requirements, but disabled by default to keep things lean.
-emilk_dmsort = ["dmsort"]
+rust_dmsort = ["dmsort"]

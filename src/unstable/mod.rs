@@ -1,7 +1,7 @@
 pub mod rust_new;
 pub mod rust_std;
 
-#[cfg(feature = "emilk_dmsort")]
+#[cfg(feature = "rust_dmsort")]
 pub mod rust_dmsort;
 
 // Call pdqsort sort via FFI.
