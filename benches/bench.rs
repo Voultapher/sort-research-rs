@@ -80,8 +80,10 @@ fn measure_comp_count(
         100_000
     } else if test_size < 10_000 {
         3000
+    } else if test_size < 1_000_000 {
+        1000
     } else {
-        70
+        100
     };
 
     *comp_count.borrow_mut() = 0;
