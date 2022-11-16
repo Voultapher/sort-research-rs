@@ -26,8 +26,9 @@ using powersort_4way = algorithms::powersort_4way<
     /*Iterator=*/T,
     /*minRunLen=*/24,
     // For faster perf use WILLEM_TUNED but this can't sort slices with custom
-    // types anymore. GENERAL_BY_STAGES works without sentinel requirement.
-    /*mergingMethod*/ algorithms::merging4way_methods::WILLEM_TUNED,
+    // types anymore, and it can't correctly sort slices that contain the
+    // sentinel. GENERAL_BY_STAGES works without sentinel requirement.
+    /*mergingMethod*/ algorithms::merging4way_methods::GENERAL_BY_STAGES,
     /*onlyIncreasingRuns=*/false,
     /*nodePowerImplementation=*/algorithms::MOST_SIGNIFICANT_SET_BIT4,
     /*useParallelArraysForStack=*/false,
