@@ -167,20 +167,13 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
         ("random_binary", |size| {
             patterns::random_uniform(size, 0..1 as i32)
         }),
-        ("random_random_size", patterns::random_random_size),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
-        ("ascending_saw_5", |size| {
-            patterns::ascending_saw(size, size / 5)
+        ("ascending_saw", |size| {
+            patterns::ascending_saw(size, ((size as f64).log2().round()) as usize)
         }),
-        ("ascending_saw_20", |size| {
-            patterns::ascending_saw(size, size / 20)
-        }),
-        ("descending_saw_5", |size| {
-            patterns::descending_saw(size, size / 5)
-        }),
-        ("descending_saw_20", |size| {
-            patterns::descending_saw(size, size / 20)
+        ("descending_saw", |size| {
+            patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
         }),
         ("pipe_organ", patterns::pipe_organ),
     ];

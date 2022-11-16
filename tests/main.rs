@@ -207,14 +207,16 @@ fn descending() {
 
 #[test]
 fn ascending_saw() {
-    test_impl(|test_size| patterns::ascending_saw(test_size, test_size / 5));
-    test_impl(|test_size| patterns::ascending_saw(test_size, test_size / 20));
+    test_impl(|test_size| {
+        patterns::ascending_saw(test_size, ((test_size as f64).log2().round()) as usize)
+    });
 }
 
 #[test]
 fn descending_saw() {
-    test_impl(|test_size| patterns::descending_saw(test_size, test_size / 5));
-    test_impl(|test_size| patterns::descending_saw(test_size, test_size / 20));
+    test_impl(|test_size| {
+        patterns::descending_saw(test_size, ((test_size as f64).log2().round()) as usize)
+    });
 }
 
 #[test]
