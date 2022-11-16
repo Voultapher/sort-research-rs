@@ -11,8 +11,8 @@ from bokeh import models
 from bokeh.plotting import figure, ColumnDataSource, show
 from bokeh.resources import CDN
 from bokeh.embed import file_html
-from bokeh.transform import dodge
 from bokeh.palettes import Colorblind
+from bokeh.models import FactorRange, LabelSet
 
 TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
 
@@ -50,15 +50,28 @@ def extract_groups(bench_result):
         pattern = entry_parts[2]
         test_size = int(entry_parts[3])
 
-        if not is_stable_sort(sort_name):
+        if is_stable_sort(sort_name):
             continue  # TODO graph all.
 
         # TODO Data is botched:
-        if "cpp_std_libcxx" in sort_name:
-            continue
+        # if "cpp_std_libcxx" in sort_name:
+        #     continue
 
         if pattern == "random_random_size":
             continue  # TODO I'm not too sure about this one.
+
+        # TODO new patterns
+        if pattern == "ascending_saw_5" or pattern == "descending_saw_5":
+            continue
+
+        if pattern == "ascending_saw_20":
+            pattern = "ascending_saw"
+
+        if pattern == "descending_saw_20":
+            pattern = "descending_saw"
+
+        # if "radix" in sort_name:
+        #     continue
 
         bench_time_ns = value["criterion_estimates_v1"]["median"][
             "point_estimate"
@@ -73,17 +86,16 @@ def extract_groups(bench_result):
 TOOLS = None
 
 
-def init_tools_overview():
+def init_tools():
     global TOOLS
     TOOLS = [
         models.WheelZoomTool(),
         models.BoxZoomTool(),
         models.PanTool(),
         models.HoverTool(
-            tooltips=[  # TODO
-                ("Name", "@name"),
-                ("Test Size", "@x"),
-                ("Relative speedup", "@y%"),
+            tooltips=[
+                ("Sort", "@y"),
+                ("Runtime", "@bench_times"),
             ],
         ),
         models.ResetTool(),
@@ -111,81 +123,106 @@ def find_time_scale(max_time_ns):
     raise Exception("time scale not supported")
 
 
+def format_time(time_val):
+    if time_val < 10.0:
+        return f"{time_val:.2f}"
+
+    return f"{time_val:.1f}"
+
+
 def plot_single_size(ty, prediction_state, test_size, values):
-    patterns = list(values.keys())
     sort_names = sorted(list(list(values.values())[0].keys()))
+    palette = Colorblind[len(sort_names)]
+
+    def map_sort_to_color(sort_name):
+        return palette[sort_names.index(sort_name)]
 
     max_time_ns = max([max(val.values()) for val in values.values()])
     time_div, time_unit = find_time_scale(max_time_ns)
     max_time = max_time_ns / time_div
 
-    data = {"patterns": patterns}
+    y = []
+    bench_times = []
+    colors = []
     for pattern, val in sorted(values.items()):
-        for sort_name, bench_times_ns in sorted(val.items()):
-            data.setdefault(sort_name, []).append(bench_times_ns / time_div)
+        for sort_name, bench_times_ns in sorted(
+            val.items(), key=lambda x: x[1], reverse=True
+        ):
+            y.append((pattern, sort_name))
+            bench_times.append(bench_times_ns / time_div)
+            colors.append(map_sort_to_color(sort_name))
 
-    source = ColumnDataSource(data)
+    bench_times_text = [format_time(x) for x in bench_times]
+
+    source = ColumnDataSource(
+        data={
+            "y": y,
+            "bench_times": bench_times,
+            "bench_times_text": bench_times_text,
+            "colors": colors,
+        }
+    )
 
     plot_name = f"{prediction_state}-{ty}-{test_size}"
     plot = figure(
-        x_range=patterns,
-        x_axis_label="Pattern",
-        y_axis_label=f"Time ({time_unit})",
-        y_range=(0, max_time * 1.15),
+        x_axis_label=f"Time ({time_unit}) | Lower is better",
+        x_range=(0, max_time * 1.1),
+        y_range=FactorRange(*y),
+        y_axis_label="Pattern",
         title=plot_name,
         tools="",
-        plot_width=1400,
+        plot_width=800,
+        plot_height=1000,
     )
 
     add_tools_to_plot(plot)
 
-    sn_len = len(sort_names)
-    step_size = 0.8 / sn_len
+    plot.hbar(
+        y="y",
+        right="bench_times",
+        height=0.8,
+        source=source,
+        fill_color="colors",
+        line_color="black",
+    )
 
-    def offsets():
-        offset = -(int(sn_len / 2) * step_size)
+    labels = LabelSet(
+        x="bench_times",
+        y="y",
+        text="bench_times_text",
+        x_offset=5,
+        y_offset=-5,
+        source=source,
+        render_mode="canvas",
+        text_font_size="10pt",
+    )
+    plot.add_layout(labels)
 
-        while True:
-            yield offset
-            offset += step_size
-
-    colors = Colorblind[len(sort_names)]
-
-    for sort_name, offset, color in zip(sort_names, offsets(), colors):
-        plot.vbar(
-            x=dodge("patterns", offset, range=plot.x_range),
-            top=sort_name,
-            source=source,
-            width=step_size * 0.8,
-            color=color,
-            legend_label=sort_name,
-        )
-
-    plot.xgrid.grid_line_color = None
-    plot.legend.location = "top_left"
-    plot.legend.orientation = "horizontal"
+    plot.x_range.start = 0
+    plot.ygrid.grid_line_color = None
+    plot.y_range.range_padding = 0.02
 
     return plot_name, plot
 
 
 def plot_sizes(groups):
-    init_tools_overview()
-
     # Assumes all entries were tested for the same patterns.
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
             for test_size, val3 in val2.items():
+                init_tools()
+
                 plot_name, plot = plot_single_size(
                     ty, prediction_state, test_size, val3
                 )
 
-                show(plot)
+                # show(plot)
 
-                # html = file_html(plot, CDN, plot_name)
-                # with open(f"{plot_name}.html", "w+") as outfile:
-                #     outfile.write(html)
+                html = file_html(plot, CDN, plot_name)
+                with open(f"{plot_name}.html", "w+") as outfile:
+                    outfile.write(html)
 
-                raise Exception()
+                # raise Exception()
 
 
 if __name__ == "__main__":
