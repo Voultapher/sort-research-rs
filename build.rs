@@ -24,6 +24,7 @@ fn link_simple_cpp_sort(file_name: &str) {
         .flag_if_supported("-std=c++20")
         .flag_if_supported("-fdiagnostics-color=always")
         .force_frame_pointer(false)
+        .define("NDEBUG", None)
         .opt_level(3)
         .compile(file_name);
 
@@ -87,6 +88,7 @@ fn build_and_link_cpp_std_sys() {
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
         .define("STD_LIB_SYS", None)
+        .define("NDEBUG", None)
         .opt_level(3)
         .force_frame_pointer(false)
         .compile("cpp_std_sort_sys");
@@ -129,6 +131,7 @@ fn build_and_link_cpp_std_libcxx() {
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
         .define("STD_LIB_LIBCXX", None)
+        .define("NDEBUG", None)
         .opt_level(3)
         .force_frame_pointer(false)
         .compiler("clang++")
