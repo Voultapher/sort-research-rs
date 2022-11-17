@@ -80,7 +80,7 @@ fn measure_comp_count(
         100_000
     } else if test_size < 10_000 {
         3000
-    } else if test_size < 1_000_000 {
+    } else if test_size < 100_000 {
         1000
     } else {
         100
@@ -114,8 +114,7 @@ macro_rules! bench_func {
         if env::var("MEASURE_COMP").is_ok() {
             // Configure this to filter results. For now the only real difference is copy types.
             if $transform_name == "i32"
-                // && $test_size <= 100000
-                && $pattern_name != &"random_random_size"
+            // && $test_size <= 100000
             {
                 // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
                 let name = format!(
@@ -150,6 +149,23 @@ macro_rules! bench_func {
     };
 }
 
+fn shuffle_vec<T: Ord>(mut v: Vec<T>) -> Vec<T> {
+    use rand::seq::SliceRandom;
+    use rand::thread_rng;
+
+    let mut rng = thread_rng();
+    v.shuffle(&mut rng);
+
+    v
+}
+
+fn split_len(size: usize, part_a_percent: f64) -> (usize, usize) {
+    let len_a = ((size as f64 / 100.0) * part_a_percent).round() as usize;
+    let len_b = size - len_a;
+
+    (len_a, len_b)
+}
+
 fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
     c: &mut Criterion,
     test_size: usize,
@@ -161,7 +177,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
         return;
     }
 
-    let pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
+    let mut pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
         ("random", patterns::random),
         ("random_dense", |size| {
             patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) as i32)
@@ -179,6 +195,89 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
         }),
         ("pipe_organ", patterns::pipe_organ),
     ];
+
+    // Custom patterns designed to find worst case performance.
+    let mut extra_pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
+        ("90_one_10_zero", |size| {
+            let (len_90, len_10) = split_len(size, 90.0);
+            std::iter::repeat(1)
+                .take(len_90)
+                .chain(std::iter::repeat(0).take(len_10))
+                .collect()
+        }),
+        ("90_zero_10_one", |size| {
+            let (len_90, len_10) = split_len(size, 90.0);
+            std::iter::repeat(0)
+                .take(len_90)
+                .chain(std::iter::repeat(1).take(len_10))
+                .collect()
+        }),
+        ("90_zero_10_random", |size| {
+            let (len_90, len_10) = split_len(size, 90.0);
+            std::iter::repeat(0)
+                .take(len_90)
+                .chain(patterns::random(len_10))
+                .collect()
+        }),
+        ("90p_zero_10p_one", |size| {
+            let (len_90p, len_10p) = split_len(size, 90.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_90p)
+                .chain(std::iter::repeat(1).take(len_10p))
+                .collect();
+
+            shuffle_vec(v)
+        }),
+        ("90p_zero_10p_random_dense_neg", |size| {
+            let (len_90p, len_10p) = split_len(size, 90.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_90p)
+                .chain(patterns::random_uniform(len_10p, -10..10))
+                .collect();
+
+            shuffle_vec(v)
+        }),
+        ("90p_zero_10p_random_dense_pos", |size| {
+            let (len_90p, len_10p) = split_len(size, 90.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_90p)
+                .chain(patterns::random_uniform(len_10p, 0..10))
+                .collect();
+
+            shuffle_vec(v)
+        }),
+        ("90p_zero_10p_random", |size| {
+            let (len_90p, len_10p) = split_len(size, 90.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_90p)
+                .chain(patterns::random(len_10p))
+                .collect();
+
+            shuffle_vec(v)
+        }),
+        ("95p_zero_5p_random", |size| {
+            let (len_95p, len_5p) = split_len(size, 95.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_95p)
+                .chain(patterns::random(len_5p))
+                .collect();
+
+            shuffle_vec(v)
+        }),
+        ("99p_zero_1p_random", |size| {
+            let (len_99p, len_1p) = split_len(size, 99.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_99p)
+                .chain(patterns::random(len_1p))
+                .collect();
+
+            shuffle_vec(v)
+        }),
+    ];
+
+    if env::var("EXTRA_PATTERNS").is_ok() {
+        pattern_providers.append(&mut extra_pattern_providers);
+    }
 
     for (pattern_name, pattern_provider) in pattern_providers.iter() {
         if test_size < 3 && *pattern_name != "random" {
