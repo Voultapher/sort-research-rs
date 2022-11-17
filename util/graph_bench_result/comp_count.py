@@ -9,7 +9,7 @@ import math
 from collections import defaultdict
 
 from bokeh import models
-from bokeh.plotting import figure, ColumnDataSource, show
+from bokeh.plotting import figure, ColumnDataSource, show, gridplot
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 from bokeh.palettes import Colorblind
@@ -22,7 +22,7 @@ def is_stable_sort(sort_name):
     return "_stable" in sort_name
 
 
-def extract_groups(comp_data):
+def extract_groups(comp_data, stable):
     # Result layout:
     # { type (eg. u64):
     #   { test_size (eg. 500):
@@ -41,7 +41,7 @@ def extract_groups(comp_data):
 
         sort_name, _, entry = line.partition("-")
 
-        if is_stable_sort(sort_name):
+        if is_stable_sort(sort_name) ^ stable:
             continue
 
         entry_parts = entry.split("-")
@@ -64,7 +64,7 @@ def extract_groups(comp_data):
 TOOLS = None
 
 
-def init_tools():
+def init_bar_tools():
     global TOOLS
     TOOLS = [
         models.WheelZoomTool(),
@@ -80,6 +80,24 @@ def init_tools():
     ]
 
 
+def init_evolution_tools():
+    global TOOLS
+    TOOLS = [
+        models.WheelZoomTool(),
+        models.BoxZoomTool(),
+        models.PanTool(),
+        models.HoverTool(
+            tooltips=[
+                ("Pattern", "@patterns"),
+                ("Test Size", "@test_sizes"),
+                ("Comparisons / (N - 1)", "@comp_counts"),
+                ("Comparisons", "@comp_counts_full"),
+            ],
+        ),
+        models.ResetTool(),
+    ]
+
+
 def add_tools_to_plot(plot):
     plot.add_tools(*TOOLS)
 
@@ -88,12 +106,18 @@ def add_tools_to_plot(plot):
     plot.toolbar.active_drag = TOOLS[1]
 
 
+def make_map_val_to_color(values):
+    palette = Colorblind[len(values)]
+
+    def map_sort_to_color(value):
+        return palette[values.index(value)]
+
+    return map_sort_to_color
+
+
 def plot_single_size(ty, test_size, values):
     sort_names = sorted(list(list(values.values())[0].keys()))
-    palette = Colorblind[len(sort_names)]
-
-    def map_sort_to_color(sort_name):
-        return palette[sort_names.index(sort_name)]
+    map_sort_to_color = make_map_val_to_color(sort_names)
 
     max_comp_count = max([max(val.values()) for val in values.values()])
     comp_div = test_size - 1
@@ -167,14 +191,14 @@ def plot_single_size(ty, test_size, values):
     return plot_name, plot
 
 
-def plot_comparisons(groups):
+def plot_comparisons(groups, stable_name):
     # Assumes all entries were tested for the same patterns.
     for ty, val1 in groups.items():
         for test_size, val2 in val1.items():
             if test_size != 19:
                 continue
 
-            init_tools()
+            init_bar_tools()
 
             plot_name, plot = plot_single_size(ty, test_size, val2)
 
@@ -187,10 +211,113 @@ def plot_comparisons(groups):
             raise Exception()
 
 
+def plot_comparison_evolution_single(sort_names, groups, sort_name):
+
+    plot = figure(
+        title=f"{sort_name}-comp-evolution",
+        x_axis_label="Input Size (log)",
+        x_axis_type="log",
+        y_axis_label="Comparisons performed / (N - 1) | Lower is better",
+        y_range=(0, 30),  # Chosen to make comparing sorts easier.
+        tools="",
+    )
+    add_tools_to_plot(plot)
+
+    # Only works for a single type for now.
+    values = list(groups.values())[0]
+
+    patterns = list(
+        sorted(list(values.values())[len(values.values()) - 1].keys())
+    )
+    map_pattern_to_color = make_map_val_to_color(patterns)
+
+    pattern_comp_counts = {}
+    for test_size, val1 in sorted(values.items()):
+        for pattern, val2 in val1.items():
+            for sort_name_x, comp_count in val2.items():
+                if sort_name_x != sort_name:
+                    continue
+
+                pattern_comp_counts.setdefault(pattern, {}).setdefault(
+                    "test_sizes", []
+                ).append(test_size)
+
+                pattern_comp_counts[pattern].setdefault(
+                    "comp_counts", []
+                ).append(comp_count / (test_size - 1))
+
+                pattern_comp_counts[pattern].setdefault(
+                    "comp_counts_full", []
+                ).append(comp_count)
+
+                pattern_comp_counts[pattern].setdefault("patterns", []).append(
+                    pattern
+                )
+
+    for pattern, data in sorted(pattern_comp_counts.items()):
+        source = ColumnDataSource(data=data)
+        color = map_pattern_to_color(pattern)
+
+        plot.line(
+            x="test_sizes",
+            y="comp_counts",
+            source=source,
+            line_width=1.5,
+            color=color,
+            legend_label=pattern,
+        )
+
+        plot.square(
+            x="test_sizes",
+            y="comp_counts",
+            source=source,
+            size=5,
+            fill_color=None,
+            line_color=color,
+        )
+
+    plot.legend.location = "top_left"
+
+    return plot
+
+
+def plot_comparison_evolution(groups, stable_name):
+    # Assumes all entries were tested for the same patterns.
+    sort_names = sorted(
+        list(
+            list(list(list(groups.values())[0].values())[0].values())[0].keys()
+        )
+    )
+
+    init_evolution_tools()
+
+    plots = [
+        plot_comparison_evolution_single(sort_names, groups, sort_name)
+        for sort_name in sort_names
+    ]
+
+    grid_plot = gridplot(plots, ncols=2)
+    show(grid_plot)
+
+
+def plot_comp(comp_data):
+    stable_name = "stable"
+    stable = True
+
+    groups = extract_groups(comp_data, stable)
+    # plot_comparisons(groups, stable_name)
+    plot_comparison_evolution(groups, stable_name)
+
+    stable_name = "unstable"
+    stable = False
+
+    groups = extract_groups(comp_data, stable)
+    # plot_comparisons(groups, stable_name)
+    plot_comparison_evolution(groups, stable_name)
+
+
 if __name__ == "__main__":
     with open(sys.argv[1], "r") as comp_data_file:
         comp_data = comp_data_file.read()
 
-    groups = extract_groups(comp_data)
-
-    plot_comparisons(groups)
+    plot_comp(comp_data)
