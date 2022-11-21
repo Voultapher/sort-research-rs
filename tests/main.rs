@@ -465,7 +465,6 @@ fn panic_retain_original_set() {
     }
 }
 
-#[ignore]
 #[test]
 fn violate_ord_retain_original_set() {
     // A user may implement Ord incorrectly for a type or violate it by calling sort_by with a
