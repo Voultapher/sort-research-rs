@@ -1,8 +1,9 @@
 #![allow(unused)]
 
+use std::alloc;
 use std::cmp::Ordering;
 use std::intrinsics;
-use std::mem;
+use std::mem::{self, SizedTypeProperties};
 use std::ptr;
 
 #[inline]
@@ -31,91 +32,163 @@ fn stable_sort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    if mem::size_of::<T>() == 0 {
+    if T::IS_ZST {
         // Sorting has no meaningful behavior on zero-sized types. Do nothing.
         return;
     }
 
-    merge_sort(v, &mut is_less);
+    let elem_alloc_fn = |len: usize| -> *mut T {
+        // SAFETY: Creating the layout is safe as long as merge_sort never calls this with len >
+        // v.len(). Alloc in general will only be used as 'shadow-region' to store temporary swap
+        // elements.
+        unsafe { alloc::alloc(alloc::Layout::array::<T>(len).unwrap_unchecked()) as *mut T }
+    };
+
+    let elem_dealloc_fn = |buf_ptr: *mut T, len: usize| {
+        // SAFETY: Creating the layout is safe as long as merge_sort never calls this with len >
+        // v.len(). The caller must ensure that buf_ptr was created by elem_alloc_fn with the same
+        // len.
+        unsafe {
+            alloc::dealloc(
+                buf_ptr as *mut u8,
+                alloc::Layout::array::<T>(len).unwrap_unchecked(),
+            );
+        }
+    };
+
+    let run_alloc_fn = |len: usize| -> *mut TimSortRun {
+        // SAFETY: Creating the layout is safe as long as merge_sort never calls this with an
+        // obscene length or 0.
+        unsafe {
+            alloc::alloc(alloc::Layout::array::<TimSortRun>(len).unwrap_unchecked())
+                as *mut TimSortRun
+        }
+    };
+
+    let run_dealloc_fn = |buf_ptr: *mut TimSortRun, len: usize| {
+        // SAFETY: The caller must ensure that buf_ptr was created by elem_alloc_fn with the same
+        // len.
+        unsafe {
+            alloc::dealloc(
+                buf_ptr as *mut u8,
+                alloc::Layout::array::<TimSortRun>(len).unwrap_unchecked(),
+            );
+        }
+    };
+
+    merge_sort(
+        v,
+        &mut is_less,
+        elem_alloc_fn,
+        elem_dealloc_fn,
+        run_alloc_fn,
+        run_dealloc_fn,
+    );
 }
 
-#[cfg(not(no_global_oom_handling))]
-fn merge_sort<T, F>(v: &mut [T], is_less: &mut F)
+/// Finds a streak of presorted elements starting at the end of the slice.
+/// Returns the first value that is not part of said streak.
+/// Streaks can be increasing or decreasing.
+/// Decreasing streaks will be reversed.
+/// After this call `v[start..len]` will be sorted.
+fn find_streak_rev<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // Sorting has no meaningful behavior on zero-sized types.
-    if mem::size_of::<T>() == 0 {
-        return;
+    let len = v.len();
+
+    let mut start = len - 1;
+    if start > 0 {
+        start -= 1;
+        unsafe {
+            if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
+                while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
+                    start -= 1;
+                }
+                v[start..len].reverse();
+            } else {
+                while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
+                    start -= 1;
+                }
+            }
+        }
     }
+
+    debug_assert!(start < len);
+
+    start
+}
+
+pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
+    v: &mut [T],
+    is_less: &mut CmpF,
+    elem_alloc_fn: ElemAllocF,
+    elem_dealloc_fn: ElemDeallocF,
+    run_alloc_fn: RunAllocF,
+    run_dealloc_fn: RunDeallocF,
+) where
+    CmpF: FnMut(&T, &T) -> bool,
+    ElemAllocF: Fn(usize) -> *mut T,
+    ElemDeallocF: Fn(*mut T, usize),
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
+{
+    // Slices of up to this length get sorted using insertion sort.
+    const MAX_INSERTION: usize = 20;
+    // Very short runs are extended using insertion sort to span at least this many elements.
+    const MIN_RUN: usize = 10;
+
+    // The caller should have already checked that.
+    debug_assert!(!T::IS_ZST);
 
     let len = v.len();
 
     if len < 2 {
+        // These inputs are always sorted.
         return;
     }
 
-    // Don't allocate right at the beginning, wait to see if the slice is already sorted or
-    // reversed.
-    let mut buf;
-    let mut buf_ptr: *mut T = ptr::null_mut();
+    let mut start = find_streak_rev(v, is_less);
+    if start == 0 {
+        // The input was either fully ascending or descending. It is now sorted and we can
+        // return without allocating.
+        return;
+    }
+
+    let buf = BufGuard::new(len / 2, elem_alloc_fn, elem_dealloc_fn);
+    let buf_ptr = buf.buf_ptr;
+
+    let mut runs = RunVec::new(run_alloc_fn, run_dealloc_fn);
+
+    let mut first_run = true;
+
+    let mut end = len;
 
     // In order to identify natural runs in `v`, we traverse it backwards. That might seem like a
     // strange decision, but consider the fact that merges more often go in the opposite direction
     // (forwards). According to benchmarks, merging forwards is slightly faster than merging
     // backwards. To conclude, identifying runs by traversing backwards improves performance.
-    let mut runs = vec![];
-    let mut end = len;
     while end > 0 {
-        // Find the next natural run, and reverse it if it's strictly descending.
-        let mut start = end - 1;
-        if start > 0 {
-            start -= 1;
-            unsafe {
-                if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
-                    while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
-                        start -= 1;
-                    }
-                    v[start..end].reverse();
-                } else {
-                    while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1))
-                    {
-                        start -= 1;
-                    }
-                }
-            }
+        if first_run {
+            first_run = false;
+        } else {
+            // Find the next natural run, and reverse it if it's strictly descending.
+            start = find_streak_rev(&mut v[..end], is_less);
         }
 
-        if start == 0 && end == len {
-            // The input was either fully ascending or descending. It is now sorted and we can
-            // return without allocating.
-            return;
-        } else if buf_ptr.is_null() {
-            // Short arrays get sorted in-place via insertion sort to avoid allocations.
-            if sort_small_stable(v, start, is_less) {
-                return;
-            }
-
-            // Allocate a buffer to use as scratch memory. We keep the length 0 so we can keep in it
-            // shallow copies of the contents of `v` without risking the dtors running on copies if
-            // `is_less` panics. When merging two sorted runs, this buffer holds a copy of the
-            // shorter run, which will always have length at most `len / 2`.
-            buf = Vec::with_capacity(len / 2);
-            buf_ptr = buf.as_mut_ptr();
-        }
-
-        // SAFETY: end > start.
+        // Insert some more elements into the run if it's too short. Insertion sort is faster than
+        // merge sort on short sequences, so this significantly improves performance.
         start = provide_sorted_batch(v, start, end, is_less);
 
         // Push this run onto the stack.
-        runs.push(Run {
+        runs.push(TimSortRun {
             start,
             len: end - start,
         });
         end = start;
 
         // Merge some pairs of adjacent runs to satisfy the invariants.
-        while let Some(r) = collapse(&runs) {
+        while let Some(r) = collapse(runs.as_slice()) {
             let left = runs[r + 1];
             let right = runs[r];
             unsafe {
@@ -126,7 +199,7 @@ where
                     is_less,
                 );
             }
-            runs[r] = Run {
+            runs[r] = TimSortRun {
                 start: left.start,
                 len: left.len + right.len,
             };
@@ -152,7 +225,7 @@ where
     // run starts at index 0, it will always demand a merge operation until the stack is fully
     // collapsed, in order to complete the sort.
     #[inline]
-    fn collapse(runs: &[Run]) -> Option<usize> {
+    fn collapse(runs: &[TimSortRun]) -> Option<usize> {
         let n = runs.len();
         if n >= 2
             && (runs[n - 1].start == 0
@@ -170,11 +243,179 @@ where
         }
     }
 
-    #[derive(Clone, Copy)]
-    struct Run {
-        len: usize,
-        start: usize,
+    // Extremely basic versions of Vec.
+    // Their use is super limited and by having the code here, it allows reuse between the sort
+    // implementations.
+    struct BufGuard<T, ElemAllocF, ElemDeallocF>
+    where
+        ElemAllocF: Fn(usize) -> *mut T,
+        ElemDeallocF: Fn(*mut T, usize),
+    {
+        buf_ptr: *mut T,
+        capacity: usize,
+        elem_alloc_fn: ElemAllocF,
+        elem_dealloc_fn: ElemDeallocF,
     }
+
+    impl<T, ElemAllocF, ElemDeallocF> BufGuard<T, ElemAllocF, ElemDeallocF>
+    where
+        ElemAllocF: Fn(usize) -> *mut T,
+        ElemDeallocF: Fn(*mut T, usize),
+    {
+        fn new(len: usize, elem_alloc_fn: ElemAllocF, elem_dealloc_fn: ElemDeallocF) -> Self {
+            Self {
+                buf_ptr: elem_alloc_fn(len),
+                capacity: len,
+                elem_alloc_fn,
+                elem_dealloc_fn,
+            }
+        }
+    }
+
+    impl<T, ElemAllocF, ElemDeallocF> Drop for BufGuard<T, ElemAllocF, ElemDeallocF>
+    where
+        ElemAllocF: Fn(usize) -> *mut T,
+        ElemDeallocF: Fn(*mut T, usize),
+    {
+        fn drop(&mut self) {
+            (self.elem_dealloc_fn)(self.buf_ptr, self.capacity);
+        }
+    }
+
+    struct RunVec<RunAllocF, RunDeallocF>
+    where
+        RunAllocF: Fn(usize) -> *mut TimSortRun,
+        RunDeallocF: Fn(*mut TimSortRun, usize),
+    {
+        buf_ptr: *mut TimSortRun,
+        capacity: usize,
+        len: usize,
+        run_alloc_fn: RunAllocF,
+        run_dealloc_fn: RunDeallocF,
+    }
+
+    impl<RunAllocF, RunDeallocF> RunVec<RunAllocF, RunDeallocF>
+    where
+        RunAllocF: Fn(usize) -> *mut TimSortRun,
+        RunDeallocF: Fn(*mut TimSortRun, usize),
+    {
+        fn new(run_alloc_fn: RunAllocF, run_dealloc_fn: RunDeallocF) -> Self {
+            // Most slices can be sorted with at most 16 runs in-flight.
+            const START_RUN_CAPACITY: usize = 16;
+
+            Self {
+                buf_ptr: run_alloc_fn(START_RUN_CAPACITY),
+                capacity: START_RUN_CAPACITY,
+                len: 0,
+                run_alloc_fn,
+                run_dealloc_fn,
+            }
+        }
+
+        fn push(&mut self, val: TimSortRun) {
+            if self.len == self.capacity {
+                let old_capacity = self.capacity;
+                let old_buf_ptr = self.buf_ptr;
+
+                self.capacity = self.capacity * 2;
+                self.buf_ptr = (self.run_alloc_fn)(self.capacity);
+
+                // SAFETY: buf_ptr new and old were correctly allocated and old_buf_ptr has
+                // old_capacity valid elements.
+                unsafe {
+                    ptr::copy_nonoverlapping(old_buf_ptr, self.buf_ptr, old_capacity);
+                }
+
+                (self.run_dealloc_fn)(old_buf_ptr, old_capacity);
+            }
+
+            // SAFETY: The invariant was just checked.
+            unsafe {
+                self.buf_ptr.add(self.len).write(val);
+            }
+            self.len += 1;
+        }
+
+        fn remove(&mut self, index: usize) {
+            if index >= self.len {
+                panic!("Index out of bounds");
+            }
+
+            // SAFETY: buf_ptr needs to be valid and len invariant upheld.
+            unsafe {
+                // the place we are taking from.
+                let ptr = self.buf_ptr.add(index);
+
+                // Shift everything down to fill in that spot.
+                ptr::copy(ptr.add(1), ptr, self.len - index - 1);
+            }
+            self.len -= 1;
+        }
+
+        fn as_slice(&self) -> &[TimSortRun] {
+            // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
+            unsafe { &*ptr::slice_from_raw_parts(self.buf_ptr, self.len) }
+        }
+
+        fn len(&self) -> usize {
+            self.len
+        }
+    }
+
+    impl<RunAllocF, RunDeallocF> core::ops::Index<usize> for RunVec<RunAllocF, RunDeallocF>
+    where
+        RunAllocF: Fn(usize) -> *mut TimSortRun,
+        RunDeallocF: Fn(*mut TimSortRun, usize),
+    {
+        type Output = TimSortRun;
+
+        fn index(&self, index: usize) -> &Self::Output {
+            if index < self.len {
+                // SAFETY: buf_ptr and len invariant must be upheld.
+                unsafe {
+                    return &*(self.buf_ptr.add(index));
+                }
+            }
+
+            panic!("Index out of bounds");
+        }
+    }
+
+    impl<RunAllocF, RunDeallocF> core::ops::IndexMut<usize> for RunVec<RunAllocF, RunDeallocF>
+    where
+        RunAllocF: Fn(usize) -> *mut TimSortRun,
+        RunDeallocF: Fn(*mut TimSortRun, usize),
+    {
+        fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+            if index < self.len {
+                // SAFETY: buf_ptr and len invariant must be upheld.
+                unsafe {
+                    return &mut *(self.buf_ptr.add(index));
+                }
+            }
+
+            panic!("Index out of bounds");
+        }
+    }
+
+    impl<RunAllocF, RunDeallocF> Drop for RunVec<RunAllocF, RunDeallocF>
+    where
+        RunAllocF: Fn(usize) -> *mut TimSortRun,
+        RunDeallocF: Fn(*mut TimSortRun, usize),
+    {
+        fn drop(&mut self) {
+            // As long as TimSortRun is Copy we don't need to drop them individually but just the
+            // whole allocation.
+            (self.run_dealloc_fn)(self.buf_ptr, self.capacity);
+        }
+    }
+}
+
+/// Internal type used by merge_sort.
+#[derive(Clone, Copy, Debug)]
+pub struct TimSortRun {
+    len: usize,
+    start: usize,
 }
 
 /// Check whether `v` applies for small sort optimization.

@@ -7,7 +7,8 @@
     strict_provenance,
     unchecked_math,
     cell_update,
-    specialization
+    specialization,
+    sized_type_properties
 )]
 
 pub mod patterns;
