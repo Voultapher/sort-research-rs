@@ -189,7 +189,7 @@ where
 }
 
 /// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
-pub fn heapsort<T, F>(v: &mut [T], mut is_less: F)
+pub fn heapsort<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -877,8 +877,41 @@ where
     }
 }
 
+/// Finds a streak of presorted elements starting at the end of the slice.
+/// Returns the first value that is not part of said streak.
+/// Streaks can be increasing or decreasing.
+/// Decreasing streaks will be reversed.
+/// After this call `v[start..len]` will be sorted.
+fn find_streak_rev<T, F>(v: &mut [T], is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    let mut start = len - 1;
+    if start > 0 {
+        start -= 1;
+        unsafe {
+            if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
+                while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
+                    start -= 1;
+                }
+                v[start..len].reverse();
+            } else {
+                while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
+                    start -= 1;
+                }
+            }
+        }
+    }
+
+    debug_assert!(start < len);
+
+    start
+}
+
 /// Sorts `v` using strategies optimized for small sizes.
-pub fn sort_small<T, F>(v: &mut [T], mut is_less: &mut F) -> bool
+fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -912,26 +945,7 @@ where
         // Pattern analyze to minimize comparison count for already sorted or reversed inputs.
         // For larger inputs pdqsort pattern analysis will be used.
 
-        let mut start = len - 1;
-        if start > 0 {
-            start -= 1;
-            unsafe {
-                if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
-                    while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
-                        start -= 1;
-                    }
-                    v[start..len].reverse();
-                } else {
-                    while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1))
-                    {
-                        start -= 1;
-                    }
-                }
-            }
-        }
-
-        debug_assert!(start < len);
-
+        let start = find_streak_rev(v, is_less);
         let already_sorted = len - start;
 
         if already_sorted <= 6 {
