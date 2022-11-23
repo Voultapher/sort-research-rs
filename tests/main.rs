@@ -191,6 +191,22 @@ fn random() {
 }
 
 #[test]
+fn random_dense() {
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) as i32)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_binary() {
+    test_impl(|size| patterns::random_uniform(size, 0..1 as i32));
+}
+
+#[test]
 fn all_equal() {
     test_impl(patterns::all_equal);
 }
@@ -411,8 +427,12 @@ fn observable_is_less() {
 
     test_fn(patterns::ascending(10));
     test_fn(patterns::ascending(19));
+    test_fn(patterns::ascending(200));
     test_fn(patterns::random(12));
     test_fn(patterns::random(20));
+    test_fn(patterns::random(200));
+    test_fn(patterns::ascending_saw(10, 3));
+    test_fn(patterns::ascending_saw(200, 4));
     test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 1]));
 }
 
