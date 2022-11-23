@@ -7,8 +7,37 @@ from collections import defaultdict
 
 from bokeh.plotting import figure, show
 from bokeh.models import BoxZoomTool
+from bokeh import models
 
 TEST_SIZE = 10_000
+
+
+# Needs to be shared instance :/
+TOOLS = None
+
+
+def init_tools():
+    global TOOLS
+    TOOLS = [
+        models.WheelZoomTool(),
+        models.BoxZoomTool(),
+        models.PanTool(),
+        models.HoverTool(
+            tooltips=[
+                ("sub-slice len", "@x"),
+                ("likelihood", "@y"),
+            ],
+        ),
+        models.ResetTool(),
+    ]
+
+
+def add_tools_to_plot(plot):
+    plot.add_tools(*TOOLS)
+
+    plot.toolbar.active_scroll = None
+    plot.toolbar.active_tap = None
+    plot.toolbar.active_drag = TOOLS[1]
 
 
 def draw_dist_plot(p, len_dist_mean_sorted, max_small_sort, name, color):
@@ -70,13 +99,17 @@ def analyze_pivot_data(text):
 
 
 def graph_pivot_data(text_a, text_b):
+    init_tools()
+
     p = figure(
-        title=f"How often will recurse be called with a length when sorting {TEST_SIZE} random elements",
+        title=f"Likelihood of recurse loop iteration with len X | {TEST_SIZE} random_binary elements",
         x_axis_label="v.len() in function recurse (log)",
         x_axis_type="log",
         y_axis_label="Average times called",
-        tools="pan,wheel_zoom,box_zoom,reset,hover",
+        tools="",
     )
+
+    add_tools_to_plot(p)
 
     len_dist_mean_sorted_a = analyze_pivot_data(text_a)
     len_dist_mean_sorted_b = analyze_pivot_data(text_b)
