@@ -738,39 +738,44 @@ where
         (b, true)
     } else if swaps < MAX_SWAPS {
         // If we can't find any element that is less than our pivot, the pivot we chose is uniquely
-        // bad. Probe the slice to find an element that is less than the proposed pivot.
+        // bad. Probe the slice to find an element that is more than the proposed pivot.
         // Probe different regions of the slice to avoid falling into a local pattern.
+        //
+        // This is especially good for low cardinality inputs. Ie. many duplicates.
+        //
+        // Only worth it for larger sizes, to avoid additional comparisons for smaller sizes.
+        if len > 200 {
+            // SAFETY: The math together with len > MAX_INSERTION works out to ensure that all
+            // checked indicies are within bounds.
+            unsafe {
+                let pivot_val = v.get_unchecked(b);
 
-        // SAFETY: The math together with len > MAX_INSERTION works out to ensure that all
-        // checked indicies are within bounds.
-        unsafe {
-            let pivot_val = v.get_unchecked(b);
+                let a_smaller_than_b = is_less(v.get_unchecked(a), pivot_val) as u8;
+                let c_smaller_than_b = is_less(v.get_unchecked(c), pivot_val) as u8;
 
-            let a_smaller_than_b = is_less(v.get_unchecked(a), pivot_val) as u8;
-            let c_smaller_than_b = is_less(v.get_unchecked(c), pivot_val) as u8;
-
-            // If neither a nor c are smaller than pivot_val that is an indication that maybe
-            // nothing is smaller than pivot_val.
-            if a_smaller_than_b + c_smaller_than_b == 0 {
-                // Do further probing.
-                let len_div_8 = len_div_4 / 2;
-                let mut i = 1;
-                while i < len {
-                    if is_less(v.get_unchecked(i), pivot_val) {
-                        break;
-                    }
-                    i += len_div_8;
-                }
-
-                if i >= len {
-                    // We were unable to find a value that is smaller than the pivot value. We don't
-                    // enter this code if swaps == 0, so we know it isn't perfectly sorted and there
-                    // ought to be elements that are more than pivot.
-                    for i in 0..len {
-                        // Find the next value that is larger than pivot.
-                        if is_less(pivot_val, v.get_unchecked(i)) {
-                            b = i;
+                // If neither a nor c are smaller than pivot_val that is an indication that maybe
+                // nothing is smaller than pivot_val.
+                if a_smaller_than_b + c_smaller_than_b == 0 {
+                    // Do further probing.
+                    let len_div_8 = len_div_4 / 2;
+                    let mut i = 1;
+                    while i < len {
+                        if is_less(v.get_unchecked(i), pivot_val) {
                             break;
+                        }
+                        i += len_div_8;
+                    }
+
+                    if i >= len {
+                        // We were unable to find a value that is smaller than the pivot value. We
+                        // don't enter this code if swaps == 0, so we know it isn't perfectly sorted
+                        // and there ought to be elements that are more than pivot.
+                        for i in 0..len {
+                            // Find the next value that is larger than pivot.
+                            if is_less(pivot_val, v.get_unchecked(i)) {
+                                b = i;
+                                break;
+                            }
                         }
                     }
                 }
