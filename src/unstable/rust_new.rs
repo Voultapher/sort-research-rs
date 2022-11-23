@@ -928,7 +928,7 @@ where
         return true;
     }
 
-    if qualifies_for_branchless_sort::<T>() && len <= MAX_BRANCHLESS_SMALL_SORT {
+    if is_cheap_to_move::<T>() && len <= MAX_BRANCHLESS_SMALL_SORT {
         if len < 8 {
             // For small sizes it's better to just sort. The worst case 7, will only go from 6 to 8
             // comparisons for already sorted inputs.
@@ -1362,7 +1362,7 @@ where
 // --- Branchless sorting (less branches not zero) ---
 
 #[inline]
-fn qualifies_for_branchless_sort<T>() -> bool {
+fn is_cheap_to_move<T>() -> bool {
     // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
     // down:
     //
