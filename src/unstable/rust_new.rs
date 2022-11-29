@@ -569,58 +569,7 @@ fn partition_equal<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // Place the pivot at the beginning of slice.
-    v.swap(0, pivot);
-    let (pivot, v) = v.split_at_mut(1);
-    let pivot = &mut pivot[0];
-
-    // Read the pivot into a stack-allocated variable for efficiency. If a following comparison
-    // operation panics, the pivot will be automatically written back into the slice.
-    // SAFETY: The pointer here is valid because it is obtained from a reference to a slice.
-    let tmp = mem::ManuallyDrop::new(unsafe { ptr::read(pivot) });
-    let _pivot_guard = CopyOnDrop {
-        src: &*tmp,
-        dest: pivot,
-    };
-    let pivot = &*tmp;
-
-    // Now partition the slice.
-    let mut l = 0;
-    let mut r = v.len();
-    loop {
-        // SAFETY: The unsafety below involves indexing an array.
-        // For the first one: We already do the bounds checking here with `l < r`.
-        // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
-        //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
-        unsafe {
-            // Find the first element greater than the pivot.
-            while l < r && !is_less(pivot, v.get_unchecked(l)) {
-                l += 1;
-            }
-
-            // Find the last element equal to the pivot.
-            while l < r && is_less(pivot, v.get_unchecked(r - 1)) {
-                r -= 1;
-            }
-
-            // Are we done?
-            if l >= r {
-                break;
-            }
-
-            // Swap the found pair of out-of-order elements.
-            r -= 1;
-            let ptr = v.as_mut_ptr();
-            ptr::swap(ptr.add(l), ptr.add(r));
-            l += 1;
-        }
-    }
-
-    // We found `l` elements equal to the pivot. Add 1 to account for the pivot itself.
-    l + 1
-
-    // `_pivot_guard` goes out of scope and writes the pivot (which is a stack-allocated variable)
-    // back into the slice where it originally was. This step is critical in ensuring safety!
+    partition(v, pivot, &mut |a, b| !is_less(b, a)).0
 }
 
 /// Scatters some elements around in an attempt to break patterns that might cause imbalanced
@@ -743,55 +692,8 @@ where
     let left_len = b;
     let right_len = len - b;
 
-    if swaps == 0 {
-        (b, true)
-    } else if swaps < MAX_SWAPS {
-        // If we can't find any element that is less than our pivot, the pivot we chose is uniquely
-        // bad. Probe the slice to find an element that is more than the proposed pivot.
-        // Probe different regions of the slice to avoid falling into a local pattern.
-        //
-        // This is especially good for low cardinality inputs. Ie. many duplicates.
-        //
-        // Only worth it for larger sizes, to avoid additional comparisons for smaller sizes.
-        if len > 200 {
-            // SAFETY: The math together with len > MAX_INSERTION works out to ensure that all
-            // checked indicies are within bounds.
-            unsafe {
-                let pivot_val = v.get_unchecked(b);
-
-                let a_smaller_than_b = is_less(v.get_unchecked(a), pivot_val) as u8;
-                let c_smaller_than_b = is_less(v.get_unchecked(c), pivot_val) as u8;
-
-                // If neither a nor c are smaller than pivot_val that is an indication that maybe
-                // nothing is smaller than pivot_val.
-                if a_smaller_than_b + c_smaller_than_b == 0 {
-                    // Do further probing.
-                    let len_div_8 = len_div_4 / 2;
-                    let mut i = 1;
-                    while i < len {
-                        if is_less(v.get_unchecked(i), pivot_val) {
-                            break;
-                        }
-                        i += len_div_8;
-                    }
-
-                    if i >= len {
-                        // We were unable to find a value that is smaller than the pivot value. We
-                        // don't enter this code if swaps == 0, so we know it isn't perfectly sorted
-                        // and there ought to be elements that are more than pivot.
-                        for i in 0..len {
-                            // Find the next value that is larger than pivot.
-                            if is_less(pivot_val, v.get_unchecked(i)) {
-                                b = i;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        (b, false)
+    if swaps < MAX_SWAPS {
+        (b, swaps == 0)
     } else {
         // The maximum number of swaps was performed. Chances are the slice is descending or mostly
         // descending, so reversing will probably help sort it faster.
