@@ -61,3 +61,10 @@ rust_radsort = ["radsort"]
 # Enable drop-merge sort developed by Emil Ernerfeldt (emilk)
 # No additional requirements, but disabled by default to keep things lean.
 rust_dmsort = ["dmsort"]
+
+# --- Other ---
+
+# Add the inline(never) attribute to implementation functions of (un)stable::rust_new.
+# This allows better tracing with tools like uftrace.
+# However this skews the results, the measured effect will vary.
+no_inline_sub_functions = []

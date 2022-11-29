@@ -119,6 +119,7 @@ where
     start
 }
 
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     v: &mut [T],
     is_less: &mut CmpF,
@@ -420,6 +421,7 @@ pub struct TimSortRun {
 
 /// Check whether `v` applies for small sort optimization.
 /// `v[start..]` is assumed already sorted.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort_small_stable<T, F>(v: &mut [T], start: usize, is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
@@ -481,6 +483,7 @@ where
 /// Takes a range as denoted by start and end, that is already sorted and extends it if necessary
 /// with sorts optimized for smaller ranges such as insertion sort.
 #[cfg(not(no_global_oom_handling))]
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn provide_sorted_batch<T, F>(v: &mut [T], mut start: usize, end: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
@@ -1025,6 +1028,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn sort24_stable<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,

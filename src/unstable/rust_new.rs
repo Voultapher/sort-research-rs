@@ -103,6 +103,8 @@ where
     quicksort(arr, |a, b| compare(a, b) == Ordering::Less);
 }
 
+// --- IMPL ---
+
 /// When dropped, copies from `src` into `dest`.
 struct CopyOnDrop<T> {
     src: *const T,
@@ -124,6 +126,7 @@ impl<T> Drop for CopyOnDrop<T> {
 ///
 /// Returns `true` if the slice is sorted at the end. This function is *O*(*n*) worst-case.
 #[cold]
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partial_insertion_sort<T, F>(v: &mut [T], is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
@@ -189,6 +192,7 @@ where
 }
 
 /// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 pub fn heapsort<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -239,6 +243,7 @@ where
 /// This idea is presented in the [BlockQuicksort][pdf] paper.
 ///
 /// [pdf]: https://drops.dagstuhl.de/opus/volltexte/2016/6389/pdf/LIPIcs-ESA-2016-38.pdf
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition_in_blocks<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
@@ -497,6 +502,7 @@ where
 ///
 /// 1. Number of elements smaller than `v[pivot]`.
 /// 2. True if `v` was already partitioned.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> (usize, bool)
 where
     F: FnMut(&T, &T) -> bool,
@@ -558,6 +564,7 @@ where
 ///
 /// Returns the number of elements equal to the pivot. It is assumed that `v` does not contain
 /// elements smaller than the pivot.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition_equal<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
@@ -619,6 +626,7 @@ where
 /// Scatters some elements around in an attempt to break patterns that might cause imbalanced
 /// partitions in quicksort.
 #[cold]
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn break_patterns<T>(v: &mut [T]) {
     let len = v.len();
     if len >= 8 {
@@ -664,6 +672,7 @@ fn break_patterns<T>(v: &mut [T]) {
 /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
 ///
 /// Elements in `v` might be reordered in the process.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn choose_pivot<T, F>(v: &mut [T], is_less: &mut F) -> (usize, bool)
 where
     F: FnMut(&T, &T) -> bool,
@@ -800,6 +809,7 @@ const MAX_INSERTION: usize = 20;
 ///
 /// `limit` is the number of allowed imbalanced partitions before switching to `heapsort`. If zero,
 /// this function will immediately switch to heapsort.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn recurse<'a, T, F>(mut v: &'a mut [T], is_less: &mut F, mut pred: Option<&'a T>, mut limit: u32)
 where
     F: FnMut(&T, &T) -> bool,
@@ -887,6 +897,7 @@ where
 /// Streaks can be increasing or decreasing.
 /// Decreasing streaks will be reversed.
 /// After this call `v[start..len]` will be sorted.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn find_streak_rev<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
@@ -916,6 +927,7 @@ where
 }
 
 /// Sorts `v` using strategies optimized for small sizes.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
@@ -1024,6 +1036,7 @@ where
 }
 
 /// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 pub fn quicksort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1242,7 +1255,6 @@ where
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact.
 #[inline(never)]
-#[cfg(not(no_global_oom_handling))]
 unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1557,6 +1569,7 @@ where
     swap_if_less(arr_ptr, 8, 9, is_less);
 }
 
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn sort4_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1569,6 +1582,7 @@ where
     insertion_sort_shift_left(v, 4, is_less);
 }
 
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn sort8_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1590,6 +1604,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn sort16_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1621,6 +1636,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn sort32_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
