@@ -870,19 +870,11 @@ where
         if already_sorted <= 6 {
             // SAFETY: We check the len.
             unsafe {
-                match len {
-                    8..=15 => {
-                        sort8_plus(v, is_less);
-                    }
-                    16..=31 => {
-                        sort16_plus(v, is_less);
-                    }
-                    32..=40 => {
-                        sort32_plus(v, is_less);
-                    }
-                    _ => {
-                        unreachable!()
-                    }
+                if len >= 16 {
+                    // This is the most common case.
+                    sort16_plus(v, is_less);
+                } else {
+                    sort8_plus(v, is_less);
                 }
             }
         } else {
@@ -1513,19 +1505,29 @@ where
 {
     // SAFETY: caller must ensure v.len() >= 16.
     let len = v.len();
-    debug_assert!(len >= 16);
+    debug_assert!(len >= 16 && len <= 40);
 
     sort16_optimal(&mut v[0..16], is_less);
 
     if len >= 17 {
-        let start = if len >= 24 {
-            sort8_optimal(&mut v[16..24], is_less);
-            8
-        } else if len >= 20 {
-            sort4_optimal(&mut v[16..20], is_less);
-            4
-        } else {
-            1
+        let start = match len {
+            17..=19 => 1,
+            20..=23 => {
+                sort4_optimal(&mut v[16..20], is_less);
+                4
+            }
+            24..=31 => {
+                sort8_optimal(&mut v[16..24], is_less);
+                8
+            }
+
+            32..=40 => {
+                sort16_optimal(&mut v[16..32], is_less);
+                16
+            }
+            _ => {
+                unreachable!()
+            }
         };
 
         insertion_sort_shift_left(&mut v[16..], start, is_less);
@@ -1536,24 +1538,4 @@ where
 
         merge(v, 16, swap_ptr, is_less);
     }
-}
-
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-unsafe fn sort32_plus<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 32.
-    debug_assert!(v.len() >= 32 && v.len() <= 40);
-
-    sort16_optimal(&mut v[0..16], is_less);
-    sort16_optimal(&mut v[16..32], is_less);
-
-    insertion_sort_shift_left(&mut v[16..], 16, is_less);
-
-    // We only need place for 16 entries because we know the shorter side is 16 long.
-    let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
-    let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-    merge(v, 16, swap_ptr, is_less);
 }
