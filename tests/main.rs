@@ -383,13 +383,105 @@ fn comp_panic() {
     }
 }
 
+#[cfg(not(miri))] // stacked-borrow issues.
 #[test]
-fn observable_is_less() {
-    // This test, tests that every is_less is actually observable.
-    // Ie. this can go wrong if a hole is created using temporary memory and,
-    // the whole is used as comparison but not copied back.
+fn observable_is_less_u64() {
+    use std::mem;
+
+    // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
+    // is created using temporary memory and, the whole is used as comparison but not copied back.
+    //
+    // If this is not upheld a custom type + comparison function could yield UB in otherwise safe
+    // code. Eg T == Mutex<Option<Box<str>>> which replaces the pointer with none in the comparison
+    // function, which would not be observed in the original slice and would lead to a double free.
+
+    // Pack the comp_count val into a u64, to allow FFI testing, and to ensure that no sort can
+    // cheat by treating builtin types differently.
+    assert_eq!(mem::size_of::<CompCount>(), mem::size_of::<u64>());
+    // Over-aligning is ok.
+    assert!(mem::align_of::<CompCount>() <= mem::align_of::<u64>());
+    // Ensure it is a small endian system.
+    let test_val_u16 = 6043u16;
+    assert_eq!(
+        unsafe { mem::transmute::<u16, [u8; 2]>(test_val_u16) },
+        test_val_u16.to_le_bytes()
+    );
 
     #[derive(PartialEq, Eq, Debug, Clone)]
+    #[repr(C)]
+    struct CompCount {
+        val: i32,
+        comp_count: Cell<u32>,
+    }
+
+    impl CompCount {
+        fn new(val: i32) -> Self {
+            Self {
+                val,
+                comp_count: Cell::new(0),
+            }
+        }
+
+        fn to_u64(self) -> u64 {
+            // SAFETY: See above asserts.
+            unsafe { mem::transmute::<Self, u64>(self) }
+        }
+
+        fn from_u64(val: &u64) -> &Self {
+            // SAFETY: See above asserts.
+            unsafe { mem::transmute::<&u64, &Self>(val) }
+        }
+    }
+
+    let test_fn = |pattern: Vec<i32>| {
+        let mut test_input = pattern
+            .into_iter()
+            .map(|val| CompCount::new(val).to_u64())
+            .collect::<Vec<_>>();
+
+        let mut comp_count_gloabl = 0;
+
+        test_sort::sort_by(&mut test_input, |a_u64, b_u64| {
+            let a = CompCount::from_u64(a_u64);
+            let b = CompCount::from_u64(b_u64);
+
+            a.comp_count.replace(a.comp_count.get() + 1);
+            b.comp_count.replace(b.comp_count.get() + 1);
+            comp_count_gloabl += 1;
+
+            a.val.cmp(&b.val)
+        });
+
+        let total_inner: u64 = test_input
+            .iter()
+            .map(|c| CompCount::from_u64(c).comp_count.get() as u64)
+            .sum();
+
+        assert_eq!(total_inner, comp_count_gloabl * 2);
+    };
+
+    test_fn(patterns::ascending(10));
+    test_fn(patterns::ascending(19));
+    test_fn(patterns::ascending(200));
+    test_fn(patterns::random(12));
+    test_fn(patterns::random(20));
+    test_fn(patterns::random(200));
+    test_fn(patterns::ascending_saw(10, 3));
+    test_fn(patterns::ascending_saw(200, 4));
+    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
+}
+
+#[test]
+fn observable_is_less() {
+    // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
+    // is created using temporary memory and, the whole is used as comparison but not copied back.
+    //
+    // If this is not upheld a custom type + comparison function could yield UB in otherwise safe
+    // code. Eg T == Mutex<Option<Box<str>>> which replaces the pointer with none in the comparison
+    // function, which would not be observed in the original slice and would lead to a double free.
+
+    #[derive(PartialEq, Eq, Debug, Clone)]
+    #[repr(C)]
     struct CompCount {
         val: i32,
         comp_count: Cell<u32>,
@@ -420,7 +512,7 @@ fn observable_is_less() {
             a.val.cmp(&b.val)
         });
 
-        let total_inner: u32 = test_input.iter().map(|c| c.comp_count.get()).sum();
+        let total_inner: u64 = test_input.iter().map(|c| c.comp_count.get() as u64).sum();
 
         assert_eq!(total_inner, comp_count_gloabl * 2);
     };
@@ -433,7 +525,7 @@ fn observable_is_less() {
     test_fn(patterns::random(200));
     test_fn(patterns::ascending_saw(10, 3));
     test_fn(patterns::ascending_saw(200, 4));
-    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 1]));
+    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
 }
 
 fn calc_comps_required(test_data: &[i32]) -> u32 {
