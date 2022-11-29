@@ -634,7 +634,7 @@ where
 
     let len = v.len();
 
-    if len <= MAX_INSERTION {
+    if len <= max_len_small_sort::<T>() {
         // It's a logic bug if this get's called on slice that would be small-sorted.
         debug_assert!(false);
         return (0, false);
@@ -701,9 +701,6 @@ where
         (len - 1 - b, true)
     }
 }
-
-// Slices of up to this length get sorted using insertion sort.
-const MAX_INSERTION: usize = 20;
 
 /// Sorts `v` recursively.
 ///
@@ -828,8 +825,6 @@ where
     start
 }
 
-const MAX_BRANCHLESS_SMALL_SORT: usize = 40;
-
 /// Sorts `v` using strategies optimized for small sizes.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
@@ -842,7 +837,11 @@ where
         return true;
     }
 
-    if is_cheap_to_move::<T>() && len <= MAX_BRANCHLESS_SMALL_SORT {
+    if len > max_len_small_sort::<T>() {
+        return false;
+    }
+
+    if is_cheap_to_move::<T>() {
         if len < 8 {
             // For small sizes it's better to just sort. The worst case 7, will only go from 6 to 8
             // comparisons for already sorted inputs.
@@ -934,13 +933,11 @@ where
                 insertion_sort_shift_left(v, 32, is_less);
             }
         }
-        return true;
-    } else if len <= MAX_INSERTION {
+    } else {
         insertion_sort_shift_left(v, 1, is_less);
-        return true;
     }
 
-    false
+    true
 }
 
 /// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
@@ -1279,10 +1276,17 @@ where
     }
 }
 
-// --- Branchless sorting (less branches not zero) ---
+// Slices of up to this length get sorted using optimized sorting for small slices.
+const fn max_len_small_sort<T>() -> usize {
+    if is_cheap_to_move::<T>() {
+        40
+    } else {
+        20
+    }
+}
 
 #[inline]
-fn is_cheap_to_move<T>() -> bool {
+const fn is_cheap_to_move<T>() -> bool {
     // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
     // down:
     //
@@ -1292,6 +1296,8 @@ fn is_cheap_to_move<T>() -> bool {
     // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
     mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
 }
+
+// --- Branchless sorting (less branches not zero) ---
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline]
@@ -1519,6 +1525,8 @@ where
 {
     // SAFETY: caller must ensure v.len() >= 16.
     let len = v.len();
+    const MAX_BRANCHLESS_SMALL_SORT: usize = max_len_small_sort::<i32>();
+
     debug_assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT);
 
     sort16_optimal(&mut v[0..16], is_less);
