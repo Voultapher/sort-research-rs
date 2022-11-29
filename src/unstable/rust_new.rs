@@ -828,6 +828,8 @@ where
     start
 }
 
+const MAX_BRANCHLESS_SMALL_SORT: usize = 40;
+
 /// Sorts `v` using strategies optimized for small sizes.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
@@ -835,8 +837,6 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
-
-    const MAX_BRANCHLESS_SMALL_SORT: usize = 40;
 
     if len < 2 {
         return true;
@@ -862,12 +862,14 @@ where
         }
 
         // Pattern analyze to minimize comparison count for already sorted or reversed inputs.
-        // For larger inputs pdqsort pattern analysis will be used.
+        // For larger inputs pattern recognition in `recurse` will be used.
 
         let start = find_streak_rev(v, is_less);
         let already_sorted = len - start;
 
-        if already_sorted <= 6 {
+        const MAX_IGNORE_PRE_SORTED: usize = 6;
+
+        if already_sorted <= MAX_IGNORE_PRE_SORTED {
             // SAFETY: We check the len.
             unsafe {
                 if len >= 16 {
@@ -879,8 +881,8 @@ where
             }
         } else {
             // Potentially highly or fully sorted. We know that already_sorted >= 7. and len >= 8.
-            // That leaves the range of start <= 33.
-            debug_assert!(start <= 33);
+            // That leaves the range of:
+            // start <= (MAX_BRANCHLESS_SMALL_SORT - (MAX_IGNORE_PRE_SORTED + 1)).
 
             if start == 0 {
                 return true;
@@ -902,22 +904,34 @@ where
                         sort8_plus(&mut v[0..start], is_less);
                     }
                 }
-                16..=33 => {
+                _ => {
                     // SAFETY: We just checked start >= 16.
                     unsafe {
                         sort16_plus(&mut v[0..start], is_less);
                     }
                 }
-                _ => unreachable!(),
             }
 
-            // The longest possible shortest side is len == 40, start == 20 -> 20.
-            let mut swap = mem::MaybeUninit::<[T; 20]>::uninit();
+            let shorter_side_len = cmp::min(start, len - start);
+
+            let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
             let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-            // SAFETY: swap is long enough and both sides are len >= 1.
-            unsafe {
-                merge(v, start, swap_ptr, is_less);
+            if shorter_side_len <= 16 {
+                // SAFETY: swap is long enough and both sides are len >= 1.
+                unsafe {
+                    merge(v, start, swap_ptr, is_less);
+                }
+            } else {
+                // There are cases where the shorter side is too large for the maximum alloted size
+                // 16 stack array.
+                // Eg. both sides are of len 18.
+                // Merge what is possible and do rest with insertion sort.
+                unsafe {
+                    merge(&mut v[0..32], start, swap_ptr, is_less);
+                }
+
+                insertion_sort_shift_left(v, 32, is_less);
             }
         }
         return true;
@@ -1505,7 +1519,7 @@ where
 {
     // SAFETY: caller must ensure v.len() >= 16.
     let len = v.len();
-    debug_assert!(len >= 16 && len <= 40);
+    debug_assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT);
 
     sort16_optimal(&mut v[0..16], is_less);
 
@@ -1521,7 +1535,7 @@ where
                 8
             }
 
-            32..=40 => {
+            32..=MAX_BRANCHLESS_SMALL_SORT => {
                 sort16_optimal(&mut v[16..32], is_less);
                 16
             }
