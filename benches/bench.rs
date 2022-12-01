@@ -97,56 +97,53 @@ fn measure_comp_count(
     println!("{name}: mean comparisons: {total}");
 }
 
-macro_rules! bench_func {
-    (
-        $c:expr,
-        $test_size:expr,
-        $transform_name:expr,
-        $transform:expr,
-        $pattern_name:expr,
-        $pattern_provider:expr,
-        $bench_name:ident,
-        $bench_module:path,
-    ) => {
-        use $bench_module as $bench_name;
-        let bench_name = stringify!($bench_name);
+#[inline(never)]
+fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_comp::Sort>(
+    c: &mut Criterion,
+    test_size: usize,
+    transform_name: &str,
+    transform: &fn(Vec<i32>) -> Vec<T>,
+    pattern_name: &str,
+    pattern_provider: &fn(usize) -> Vec<i32>,
+    _sort_impl: Sort,
+) {
+    let bench_name = Sort::name();
 
-        if env::var("MEASURE_COMP").is_ok() {
-            // Configure this to filter results. For now the only real difference is copy types.
-            if $transform_name == "i32"
-            // && $test_size <= 100000
-            {
-                // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
-                let name = format!(
-                    "{}-comp-{}-{}-{}",
-                    bench_name, $transform_name, $pattern_name, $test_size
-                );
-                // Instrument via sort_by to ensure the type properties such as Copy of the type
-                // that is being sorted doesn't change. And we get representative numbers.
-                let comp_count = Rc::new(RefCell::new(0u64));
-                let comp_count_copy = comp_count.clone();
-                let instrumented_sort_func = || {
-                    let mut test_data = $transform($pattern_provider($test_size));
-                    $bench_name::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
-                        *comp_count_copy.borrow_mut() += 1;
-                        a.cmp(b)
-                    })
-                };
-                measure_comp_count(&name, $test_size, instrumented_sort_func, comp_count);
-            }
-        } else {
-            bench_sort(
-                $c,
-                $test_size,
-                $transform_name,
-                $transform,
-                $pattern_name,
-                $pattern_provider,
-                bench_name,
-                $bench_name::sort,
+    if env::var("MEASURE_COMP").is_ok() {
+        // Configure this to filter results. For now the only real difference is copy types.
+        if transform_name == "i32"
+        // && $test_size <= 100000
+        {
+            // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
+            let name = format!(
+                "{}-comp-{}-{}-{}",
+                bench_name, transform_name, pattern_name, test_size
             );
+            // Instrument via sort_by to ensure the type properties such as Copy of the type
+            // that is being sorted doesn't change. And we get representative numbers.
+            let comp_count = Rc::new(RefCell::new(0u64));
+            let comp_count_copy = comp_count.clone();
+            let instrumented_sort_func = || {
+                let mut test_data = transform(pattern_provider(test_size));
+                Sort::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
+                    *comp_count_copy.borrow_mut() += 1;
+                    a.cmp(b)
+                })
+            };
+            measure_comp_count(&name, test_size, instrumented_sort_func, comp_count);
         }
-    };
+    } else {
+        bench_sort(
+            c,
+            test_size,
+            transform_name,
+            transform,
+            pattern_name,
+            pattern_provider,
+            &bench_name,
+            Sort::sort,
+        );
+    }
 }
 
 fn shuffle_vec<T: Ord>(mut v: Vec<T>) -> Vec<T> {
@@ -286,220 +283,202 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
 
         // --- Stable sorts ---
 
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_new_stable,
-            stable::rust_new,
+            stable::rust_new::SortImpl,
         );
 
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_std_stable,
-            stable::rust_std,
+            stable::rust_std::SortImpl,
         );
 
         #[cfg(feature = "cpp_std_sys")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_std_sys_stable,
-            stable::cpp_std_sys,
+            stable::cpp_std_sys::SortImpl,
         );
 
         #[cfg(feature = "cpp_std_libcxx")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_std_libcxx_stable,
-            stable::cpp_std_libcxx,
+            stable::cpp_std_libcxx::SortImpl,
         );
 
         #[cfg(feature = "cpp_powersort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_powersort_stable,
-            stable::cpp_powersort,
+            stable::cpp_powersort::SortImpl,
         );
 
         #[cfg(feature = "cpp_powersort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_powersort_4way_stable,
-            stable::cpp_powersort_4way,
+            stable::cpp_powersort_4way::SortImpl,
         );
 
         #[cfg(feature = "c_fluxsort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            c_fluxsort_stable,
-            stable::c_fluxsort,
+            stable::c_fluxsort::SortImpl,
         );
 
         #[cfg(feature = "rust_wpwoodjr")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_wpwoodjr_stable,
-            stable::rust_wpwoodjr,
+            stable::rust_wpwoodjr::SortImpl,
         );
 
         // --- Unstable sorts ---
 
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_new_unstable,
-            unstable::rust_new,
+            unstable::rust_new::SortImpl,
         );
 
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_std_unstable,
-            unstable::rust_std,
+            unstable::rust_std::SortImpl,
         );
 
         #[cfg(feature = "rust_dmsort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_dmsort_unstable,
-            unstable::rust_dmsort,
+            unstable::rust_dmsort::SortImpl,
         );
 
         #[cfg(feature = "cpp_pdqsort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_pdq_unstable,
-            unstable::cpp_pdqsort,
+            unstable::cpp_pdqsort::SortImpl,
         );
 
         #[cfg(feature = "cpp_ips4o")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_ips4o_unstable,
-            unstable::cpp_ips4o,
+            unstable::cpp_ips4o::SortImpl,
         );
 
         #[cfg(feature = "cpp_simdsort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_simdsort_unstable,
-            unstable::cpp_simdsort,
+            unstable::cpp_simdsort::SortImpl,
         );
 
         #[cfg(feature = "c_crumsort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            c_crumsort_unstable,
-            unstable::c_crumsort,
+            unstable::c_crumsort::SortImpl,
         );
 
         #[cfg(feature = "cpp_std_sys")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_std_sys_unstable,
-            unstable::cpp_std_sys,
+            unstable::cpp_std_sys::SortImpl,
         );
 
         #[cfg(feature = "cpp_std_libcxx")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            cpp_std_libcxx_unstable,
-            unstable::cpp_std_libcxx,
+            unstable::cpp_std_libcxx::SortImpl,
         );
 
         // --- Other sorts ---
 
         #[cfg(feature = "rust_radsort")]
-        bench_func!(
+        bench_impl(
             c,
             test_size,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            rust_radsort_radix,
-            sort_comp::other::rust_radsort,
+            sort_comp::other::rust_radsort::SortImpl,
         );
     }
 }

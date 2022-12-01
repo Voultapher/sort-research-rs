@@ -6,6 +6,8 @@ use std::intrinsics;
 use std::mem::{self, SizedTypeProperties};
 use std::ptr;
 
+sort_impl!("rust_new_stable");
+
 #[inline]
 pub fn sort<T>(v: &mut [T])
 where

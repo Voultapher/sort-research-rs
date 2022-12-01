@@ -1,4 +1,5 @@
 ffi_sort_impl!(
+    "cpp_std_libcxx_unstable",
     sort_unstable_i32_libcxx,
     sort_unstable_i32_by_libcxx,
     sort_unstable_u64_libcxx,

@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 
 use radsort;
 
+sort_impl!("rust_radsort_radix");
+
 trait RadSort: Sized {
     fn sort(data: &mut [Self]);
 }

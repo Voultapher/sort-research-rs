@@ -11,6 +11,8 @@ use std::cmp::Ordering;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 
+sort_impl!("rust_std_unstable");
+
 /// Sorts the slice, but might not preserve the order of equal elements.
 ///
 /// This sort is unstable (i.e., may reorder equal elements), in-place

@@ -8,6 +8,8 @@ use std::cmp::Ordering;
 use std::mem::{self, size_of};
 use std::ptr;
 
+sort_impl!("rust_wpwoodjr_stable");
+
 /// Sorts the slice.
 ///
 /// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* \* log(*n*)) worst-case.

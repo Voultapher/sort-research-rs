@@ -58,10 +58,18 @@ macro_rules! make_cpp_sort_by {
 }
 
 macro_rules! ffi_sort_impl {
-    ($sort_i32_name:ident, $sort_i32_by_name:ident, $sort_u64_name:ident, $sort_u64_by_name:ident) => {
+    (
+        $name:expr,
+        $sort_i32_name:ident,
+        $sort_i32_by_name:ident,
+        $sort_u64_name:ident,
+        $sort_u64_by_name:ident
+    ) => {
         use std::cmp::Ordering;
 
         use crate::ffi_util::{rust_fn_cmp, CompResult};
+
+        sort_impl!($name);
 
         extern "C" {
             fn $sort_i32_name(data: *mut i32, len: usize);

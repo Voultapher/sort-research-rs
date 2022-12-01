@@ -10,7 +10,7 @@ use std::sync::Mutex;
 
 use sort_comp::patterns;
 
-use sort_comp::stable::rust_new as test_sort;
+use sort_comp::unstable::rust_new as test_sort;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 24] = [
@@ -31,7 +31,13 @@ fn get_or_init_random_seed() -> u64 {
     if !*seed_writer {
         // Always write the seed before doing anything to ensure reproducibility of crashes.
         io::stdout()
-            .write_all(format!("Seed: {seed}\n").as_bytes())
+            .write_all(
+                format!(
+                    "\nSeed: {seed}\nTesting: {}\n\n",
+                    <test_sort::SortImpl as sort_comp::Sort>::name()
+                )
+                .as_bytes(),
+            )
             .unwrap();
         *seed_writer = true;
     }
@@ -244,6 +250,11 @@ fn pipe_organ() {
 fn stability() {
     // Ensure that the test is stable.
 
+    if <test_sort::SortImpl as sort_comp::Sort>::name().contains("unstable") {
+        // It would be great to mark the test as skipped, but that isn't possible as of now.
+        return;
+    }
+
     // For cpp_sorts that only support u64 we can pack the two i32 inside a u64.
     fn i32_tup_as_u64(val: (i32, i32)) -> u64 {
         let a_bytes = val.0.to_le_bytes();
@@ -388,6 +399,8 @@ fn comp_panic() {
 fn observable_is_less_u64() {
     use std::mem;
 
+    let _seed = get_or_init_random_seed();
+
     // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
     // is created using temporary memory and, the whole is used as comparison but not copied back.
     //
@@ -473,6 +486,8 @@ fn observable_is_less_u64() {
 
 #[test]
 fn observable_is_less() {
+    let _seed = get_or_init_random_seed();
+
     // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
     // is created using temporary memory and, the whole is used as comparison but not copied back.
     //
@@ -543,6 +558,8 @@ fn calc_comps_required(test_data: &[i32]) -> u32 {
 
 #[test]
 fn panic_retain_original_set() {
+    let _seed = get_or_init_random_seed();
+
     for test_size in TEST_SIZES.iter().filter(|x| **x >= 2) {
         let mut test_data = patterns::random(*test_size);
         let sum_before: i64 = test_data.iter().map(|x| *x as i64).sum();
@@ -579,6 +596,8 @@ fn panic_retain_original_set() {
 
 #[test]
 fn violate_ord_retain_original_set() {
+    let _seed = get_or_init_random_seed();
+
     // A user may implement Ord incorrectly for a type or violate it by calling sort_by with a
     // comparison function that violates Ord with the orderings it returns. Even under such
     // circumstances the input must retain its original set of elements.
@@ -667,6 +686,8 @@ fn violate_ord_retain_original_set() {
 
 #[test]
 fn sort_vs_sort_by() {
+    let _seed = get_or_init_random_seed();
+
     // Ensure that sort and sort_by produce the same result.
     let mut input_normal = [i32::MAX, 3, i32::MIN, 5, i32::MIN, -3, 60, 200, 50, 7, 10];
     let expected = [i32::MIN, i32::MIN, -3, 3, 5, 7, 10, 50, 60, 200, i32::MAX];
