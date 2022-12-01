@@ -1741,3 +1741,333 @@ where
 //         println!("v[pivot]: {xx}");
 //     }
 // }
+
+// A beautiful popsicle, sniff :( but slow
+/// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or equal
+/// to `pivot`.
+///
+/// Returns the number of elements smaller than `pivot`.
+///
+/// Novel partitioning algorithm designed to enable as much ILP as possible.
+/// TODO investigate variant that maintains relative order.
+fn partition_in_blocks<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    #[inline]
+    pub unsafe fn swap_if_less_proxy<T>(arr_ptr: *mut T, comp_result_ptr: *mut u8, offset: usize) {
+        // SAFETY: The caller must ensure that TODO
+        unsafe {
+            // Note, it's crucial that this check be performed without a branch.
+            let should_swap = *comp_result_ptr == 0;
+
+            let a_ptr = arr_ptr;
+            let b_ptr = arr_ptr.add(offset);
+
+            let comp_a_ptr = comp_result_ptr;
+            let comp_b_ptr = comp_result_ptr.add(offset);
+
+            branchless_swap(a_ptr, b_ptr, should_swap);
+            branchless_swap(comp_a_ptr, comp_b_ptr, should_swap);
+        }
+    }
+
+    /// Using the comparison results of comp_results, where 1 -> is less and 0 -> equal or more.
+    /// Partition arr_ptr[0..4] so that all values that are less are on the left side.
+    /// Eg. comp_results [0, 1, 0, 1] -> [1, 1, 0, 0]
+    /// Note, it does not preserve input order, in the above example 0 and 0 could have been swapped.
+    #[inline]
+    pub unsafe fn partition4_proxy<T>(arr_ptr: *mut T, comp_results: &mut [u8; 4], i: usize) {
+        // SAFETY: The caller must ensure that 4 elements exist in arr_ptr.add(i).
+        unsafe {
+            let i_ptr = arr_ptr.add(i);
+            let c_ptr = comp_results.as_mut_ptr() as *mut u8;
+
+            // Optimal 4 element sorting network.
+            swap_if_less_proxy(i_ptr.add(0), c_ptr.add(0), 2);
+            swap_if_less_proxy(i_ptr.add(1), c_ptr.add(1), 2);
+            swap_if_less_proxy(i_ptr.add(0), c_ptr.add(0), 1);
+            swap_if_less_proxy(i_ptr.add(2), c_ptr.add(2), 1);
+            swap_if_less_proxy(i_ptr.add(1), c_ptr.add(1), 1);
+        }
+    }
+
+    // Scan with two windows, from left and right.
+    // Rough steps:
+    // 1. Store result of is_less for each window element.
+    // 2. Determine if more values need to move left or right of the pivot.
+    // 3. Use temporary memory to efficiently swap elements.
+    // 4. Adjust windows as required
+    // 5. Repeat.
+
+    let len = v.len();
+
+    // SAFETY: Don't change this value without adjusting the relevant parts of the code below that
+    // are not automatically adjusted to another WINDOW_SIZE, such as write_comp_result calls.
+    const WINDOW_SIZE: usize = 4;
+    // const BLOCK_SIZE: usize = WINDOW_SIZE * 2;
+
+    let write_comp_result =
+        |arr_ptr: *mut T, comp_ptr: *mut u8, i: usize, offset: usize, is_less: &mut F| unsafe {
+            // SAFETY: The caller must ensure that i + offset is inbounds for v and offset is <
+            // WINDOW_SIZE.
+            unsafe {
+                comp_ptr
+                    .add(offset)
+                    .write(is_less(&*arr_ptr.add(i + offset), pivot) as u8);
+            }
+        };
+
+    let arr_ptr = v.as_mut_ptr();
+
+    let mut l_comp_results = [0u8; WINDOW_SIZE];
+    let mut r_comp_results = [0u8; WINDOW_SIZE];
+
+    // The number of elements smaller than pivot.
+    let mut smaller_total = 0;
+
+    // // Worst case WINDOW_SIZE elements have to move from the right window to the left side.
+    // let mut swap = mem::MaybeUninit::<[T; WINDOW_SIZE]>::uninit();
+    // let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+    // let mut index_stack = [0usize; BLOCK_SIZE];
+    // let mut index_stack_ptr = index_stack.as_mut_ptr() as *mut usize;
+
+    let mut l_window_i = 0;
+    let mut r_window_i = len.saturating_sub(WINDOW_SIZE);
+
+    // SAFETY: Ensure there can always be two full windows between the two windows.
+    while ((r_window_i + WINDOW_SIZE) - l_window_i) >= WINDOW_SIZE * 4 {
+        // First perform the is_less calls which can panic. So that later swapping with temporary
+        // elements can be done without special drop guards. Additionally this allows further
+        // comparisons with a fixed cheap cost regardless of the cost of is_less.
+
+        // Loop unrolled to allow ILP.
+        // SAFETY: we checked that i is in bounds and comp_results is large enough.
+        unsafe {
+            let l_comp_ptr = l_comp_results.as_mut_ptr() as *mut u8;
+            write_comp_result(arr_ptr, l_comp_ptr, l_window_i, 0, is_less);
+            write_comp_result(arr_ptr, l_comp_ptr, l_window_i, 1, is_less);
+            write_comp_result(arr_ptr, l_comp_ptr, l_window_i, 2, is_less);
+            write_comp_result(arr_ptr, l_comp_ptr, l_window_i, 3, is_less);
+
+            let r_comp_ptr = r_comp_results.as_mut_ptr() as *mut u8;
+            write_comp_result(arr_ptr, r_comp_ptr, r_window_i, 0, is_less);
+            write_comp_result(arr_ptr, r_comp_ptr, r_window_i, 1, is_less);
+            write_comp_result(arr_ptr, r_comp_ptr, r_window_i, 2, is_less);
+            write_comp_result(arr_ptr, r_comp_ptr, r_window_i, 3, is_less);
+        }
+
+        // Swap elements around in each window so that the values that are less than pivot are on
+        // the left side.
+        //
+        // SAFETY: TODO
+        unsafe {
+            partition4_proxy(arr_ptr, &mut l_comp_results, l_window_i);
+            partition4_proxy(arr_ptr, &mut r_comp_results, r_window_i);
+        }
+
+        // TODO check perf impact of doing this before partition4_proxy.
+        let sum_left = l_comp_results.iter().sum::<u8>() as usize;
+        let sum_right = r_comp_results.iter().sum::<u8>() as usize;
+
+        let in_order_left = sum_left;
+        let in_order_right = WINDOW_SIZE - sum_right;
+
+        let out_of_order_left = WINDOW_SIZE - sum_left;
+        let out_of_order_right = sum_right;
+
+        // Don't increase smaller_total as part of write_comp_result to avoid a memory dependency.
+        smaller_total += in_order_left + out_of_order_right;
+
+        // let window_range = unsafe {
+        //     // FIXME
+        //     let v_i32 = mem::transmute::<&[T], &[i32]>(v);
+
+        //     let left_window = &v_i32[l_window_i..(l_window_i + WINDOW_SIZE)];
+        //     let right_window = &v_i32[r_window_i..(r_window_i + WINDOW_SIZE)];
+
+        //     let save_window_left = &v_i32
+        //         [(l_window_i + in_order_left)..(l_window_i + in_order_left + out_of_order_left)];
+        //     let move_left_from_right = &v_i32[r_window_i..(r_window_i + out_of_order_right)];
+        //     let overwrite_right_from_save =
+        //         &v_i32[(r_window_i - (in_order_right + out_of_order_left) + WINDOW_SIZE)
+        //             ..(r_window_i - (in_order_right + out_of_order_left)
+        //                 + WINDOW_SIZE
+        //                 + out_of_order_left)];
+
+        //     let window_range = l_window_i..(r_window_i + WINDOW_SIZE);
+        //     println!("{:?}", &v_i32[window_range.clone()]);
+        //     println!(
+        //         "{:?} {:?} | {:?} {:?} {:?}",
+        //         left_window,
+        //         right_window,
+        //         save_window_left,
+        //         move_left_from_right,
+        //         overwrite_right_from_save
+        //     );
+
+        //     window_range
+        // };
+
+        // Now that both sides look like this, eg:
+        // left [1, 1, 1, 0] ... right [1, 1, 0, 0]
+        // TODO explain.
+        //
+        // SAFETY: TODO
+        unsafe {
+            let l_swap_ptr = arr_ptr.add(l_window_i + in_order_left);
+            let r_swap_ptr = arr_ptr.add(r_window_i - in_order_right);
+
+            // Combined swap and rotate operation.
+            // Always swap fixed size for good code gen.
+            ptr::swap_nonoverlapping(l_swap_ptr.add(0), r_swap_ptr.add(3), 1);
+            ptr::swap_nonoverlapping(l_swap_ptr.add(1), r_swap_ptr.add(2), 1);
+            ptr::swap_nonoverlapping(l_swap_ptr.add(2), r_swap_ptr.add(1), 1);
+            ptr::swap_nonoverlapping(l_swap_ptr.add(3), r_swap_ptr.add(0), 1);
+
+            // Now it looks like this, where _ is unknown if less than pivot.
+            // left [1, 1, 1, 1, 1, _, _] right [_, _, _, 0, 0, 0]
+        }
+
+        l_window_i += in_order_left + out_of_order_right;
+        r_window_i -= in_order_right + out_of_order_left;
+
+        // unsafe {
+        //     // FIXME
+        //     let v_i32 = mem::transmute::<&[T], &[i32]>(v);
+        //     println!("{:?}", &v_i32[window_range.clone()]);
+        //     println!();
+        // }
+    }
+
+    // smaller_total
+
+    // Partition the remaining elements between the last windows with a simple algorithm.
+    let mut l = l_window_i;
+    let mut r = cmp::min(r_window_i + WINDOW_SIZE, len);
+    loop {
+        // SAFETY: The unsafety below involves indexing an array.
+        // For the first one: We already do the bounds checking here with `l < r`.
+        // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
+        //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
+        unsafe {
+            // Find the first element less than the pivot.
+            while l < r && is_less(v.get_unchecked(l), pivot) {
+                l += 1;
+            }
+
+            // Find the last element equal or more to the pivot.
+            while l < r && !is_less(v.get_unchecked(r - 1), pivot) {
+                r -= 1;
+            }
+
+            // Are we done?
+            if l >= r {
+                break;
+            }
+
+            // Swap the found pair of out-of-order elements.
+            r -= 1;
+            let ptr = v.as_mut_ptr();
+            ptr::swap(ptr.add(l), ptr.add(r));
+            l += 1;
+        }
+    }
+
+    (smaller_total + l) - l_window_i
+    // let r = cmp::min(r_window_i + WINDOW_SIZE, len);
+    // let rest = partition_in_blocks_old(&mut v[l..r], pivot, is_less);
+
+    // let l = l_window_i;
+    // smaller_total + rest
+}
+
+// Cute and slow sigh
+fn partition_in_blocks<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    if len < 2 {
+        if len == 0 {
+            return 0;
+        }
+        // SAFETY: We know v has len 1.
+        unsafe {
+            return is_less(v.get_unchecked(0), pivot) as usize;
+        }
+    }
+
+    // let mut smaller_total = 0;
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: TODO
+    unsafe {
+        let mut l_ptr = arr_ptr;
+        let mut r_ptr = arr_ptr.add(len - 1);
+
+        while r_ptr > l_ptr {
+            let l_less = is_less(&*l_ptr, pivot);
+
+            let should_swap = !l_less;
+            branchless_swap(l_ptr, r_ptr, should_swap);
+
+            // Only increase l_ptr if it was not swapped.
+            l_ptr = l_ptr.add(l_less as usize);
+
+            // Only decrease r_ptr if it was swapped.
+            r_ptr = r_ptr.sub(should_swap as usize);
+        }
+
+        // Do final fixup.
+        l_ptr = l_ptr.add(is_less(&*l_ptr, pivot) as usize);
+
+        intrinsics::ptr_offset_from_unsigned(l_ptr, arr_ptr)
+    }
+}
+
+// Still slower than BlockQuicksort partition !!
+fn partition_in_blocks<T, F>(
+    v: &mut [T],
+    pivot: &T,
+    buf_left: *mut T,
+    buf_right: *mut T,
+    is_less: &mut F,
+) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // let's just use memory hihi :)
+    let len = v.len();
+
+    let mut left_ptr = buf_left;
+    let mut right_ptr = buf_right;
+
+    for elem in v.iter() {
+        let belong_on_left = is_less(elem, pivot);
+        let target_ptr = if belong_on_left { left_ptr } else { right_ptr };
+
+        // SAFETY: TODO
+        unsafe {
+            ptr::copy_nonoverlapping(elem, target_ptr, 1);
+
+            left_ptr = left_ptr.add(belong_on_left as usize);
+            right_ptr = right_ptr.add(!belong_on_left as usize);
+        }
+    }
+
+    // SAFETY: TODO
+    let smaller_count = unsafe { intrinsics::ptr_offset_from_unsigned(left_ptr, buf_left) };
+
+    // SAFETY: TODO
+    unsafe {
+        let arr_ptr = v.as_mut_ptr();
+        ptr::copy_nonoverlapping(buf_left, arr_ptr, smaller_count);
+        ptr::copy_nonoverlapping(buf_right, arr_ptr.add(smaller_count), len - smaller_count);
+    }
+
+    smaller_count
+}
