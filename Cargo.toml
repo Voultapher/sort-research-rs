@@ -2,7 +2,10 @@
 name = "sort_comp"
 version = "0.1.0"
 edition = "2021"
-# type = "lib"
+
+[lib]
+# They are just noisy and this is not meant as a documented library, but as a testbed.
+doctest = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
