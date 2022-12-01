@@ -46,6 +46,10 @@ cpp_powersort = []
 # Uses system C++ standard lib.
 cpp_simdsort = []
 
+# Enable ips4o from Engineering In-place (Shared-memory) Sorting Algorithms (2020) paper.
+# Uses system C++ standard lib.
+cpp_ips4o = []
+
 # Enable support for c_crumsort.
 # Uses system C++ standard lib.
 c_crumsort = []

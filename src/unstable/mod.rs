@@ -12,6 +12,10 @@ pub mod cpp_pdqsort;
 #[cfg(feature = "cpp_simdsort")]
 pub mod cpp_simdsort;
 
+// Call ips4o sort via FFI.
+#[cfg(feature = "cpp_ips4o")]
+pub mod cpp_ips4o;
+
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
 pub mod c_crumsort;

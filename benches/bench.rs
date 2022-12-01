@@ -428,6 +428,18 @@ fn bench_patterns<T: Ord + std::fmt::Debug + Clone>(
             unstable::cpp_pdqsort,
         );
 
+        #[cfg(feature = "cpp_ips4o")]
+        bench_func!(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            cpp_ips4o_unstable,
+            unstable::cpp_ips4o,
+        );
+
         #[cfg(feature = "cpp_simdsort")]
         bench_func!(
             c,
