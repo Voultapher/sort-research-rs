@@ -105,23 +105,6 @@ where
 
 // --- IMPL ---
 
-/// When dropped, copies from `src` into `dest`.
-struct CopyOnDrop<T> {
-    src: *const T,
-    dest: *mut T,
-}
-
-impl<T> Drop for CopyOnDrop<T> {
-    fn drop(&mut self) {
-        // SAFETY:  This is a helper class.
-        //          Please refer to its usage for correctness.
-        //          Namely, one must be sure that `src` and `dst` does not overlap as required by `ptr::copy_nonoverlapping`.
-        unsafe {
-            ptr::copy_nonoverlapping(self.src, self.dest, 1);
-        }
-    }
-}
-
 /// Partially sorts a slice by shifting several out-of-order elements around.
 ///
 /// Returns `true` if the slice is sorted at the end. This function is *O*(*n*) worst-case.
@@ -518,7 +501,7 @@ where
 
         // SAFETY: `pivot` is a reference to the first element of `v`, so `ptr::read` is safe.
         let tmp = mem::ManuallyDrop::new(unsafe { ptr::read(pivot) });
-        let _pivot_guard = CopyOnDrop {
+        let _pivot_guard = InsertionHole {
             src: &*tmp,
             dest: pivot,
         };
@@ -533,14 +516,20 @@ where
         // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
         //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
         unsafe {
-            // Find the first element greater than or equal to the pivot.
-            while l < r && is_less(v.get_unchecked(l), pivot) {
-                l += 1;
-            }
+            // This search introduces a non-trivial amount of branch mis-prediction. It is only
+            // useful for larger sizes where was_partitioned is relevant and likely. It's hard to
+            // quantify the total impact of this, across various benchmarks I saw better performance
+            // in some cases and never worse performance.
+            if v.len() > ((max_len_small_sort::<T>() * 3) / 2) {
+                // Find the first element greater than or equal to the pivot.
+                while l < r && is_less(v.get_unchecked(l), pivot) {
+                    l += 1;
+                }
 
-            // Find the last element smaller that the pivot.
-            while l < r && !is_less(v.get_unchecked(r - 1), pivot) {
-                r -= 1;
+                // Find the last element smaller that the pivot.
+                while l < r && !is_less(v.get_unchecked(r - 1), pivot) {
+                    r -= 1;
+                }
             }
         }
 
