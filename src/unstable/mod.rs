@@ -8,6 +8,10 @@ pub mod rust_dmsort;
 #[cfg(feature = "cpp_pdqsort")]
 pub mod cpp_pdqsort;
 
+// Call simdsort sort via FFI.
+#[cfg(feature = "cpp_simdsort")]
+pub mod cpp_simdsort;
+
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
 pub mod c_crumsort;

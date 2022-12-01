@@ -2,7 +2,7 @@ use std::env;
 use std::path::PathBuf;
 
 #[allow(dead_code)]
-fn link_simple_cpp_sort(file_name: &str) {
+fn link_simple_cpp_sort(file_name: &str, specialize_fn: Option<fn(&mut cc::Build)>) {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 
     let file_path = manifest_dir
@@ -15,7 +15,9 @@ fn link_simple_cpp_sort(file_name: &str) {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    cc::Build::new()
+    let mut builder = cc::Build::new();
+
+    builder
         .file(file_path)
         .cpp(true)
         .warnings(false) // The thirdparties just have too many.
@@ -25,8 +27,13 @@ fn link_simple_cpp_sort(file_name: &str) {
         .flag_if_supported("-fdiagnostics-color=always")
         .force_frame_pointer(false)
         .define("NDEBUG", None)
-        .opt_level(3)
-        .compile(file_name);
+        .opt_level(3);
+
+    if let Some(spec_fn) = specialize_fn {
+        spec_fn(&mut builder);
+    }
+
+    builder.compile(file_name);
 
     println!("cargo:rustc-link-search={}", out_dir.display());
     println!("cargo:rustc-link-lib=static={}", file_name);
@@ -34,7 +41,7 @@ fn link_simple_cpp_sort(file_name: &str) {
 
 #[cfg(feature = "cpp_pdqsort")]
 fn build_and_link_cpp_pdqsort() {
-    link_simple_cpp_sort("cpp_pdqsort");
+    link_simple_cpp_sort("cpp_pdqsort", None);
 }
 
 #[cfg(not(feature = "cpp_pdqsort"))]
@@ -42,15 +49,29 @@ fn build_and_link_cpp_pdqsort() {}
 
 #[cfg(feature = "cpp_powersort")]
 fn build_and_link_cpp_powersort() {
-    link_simple_cpp_sort("cpp_powersort");
+    link_simple_cpp_sort("cpp_powersort", None);
 }
 
 #[cfg(not(feature = "cpp_powersort"))]
 fn build_and_link_cpp_powersort() {}
 
+#[cfg(feature = "cpp_simdsort")]
+fn build_and_link_cpp_simdsort() {
+    link_simple_cpp_sort(
+        "cpp_simdsort",
+        Some(|builder: &mut cc::Build| {
+            // Make an exception for march=native here because AVX2 will not work without it.
+            builder.flag_if_supported("-march=native");
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_simdsort"))]
+fn build_and_link_cpp_simdsort() {}
+
 #[cfg(feature = "c_crumsort")]
 fn build_and_link_c_crumsort() {
-    link_simple_cpp_sort("c_crumsort");
+    link_simple_cpp_sort("c_crumsort", None);
 }
 
 #[cfg(not(feature = "c_crumsort"))]
@@ -58,7 +79,7 @@ fn build_and_link_c_crumsort() {}
 
 #[cfg(feature = "c_fluxsort")]
 fn build_and_link_c_fluxsort() {
-    link_simple_cpp_sort("c_fluxsort");
+    link_simple_cpp_sort("c_fluxsort", None);
 }
 
 #[cfg(not(feature = "c_fluxsort"))]
@@ -161,6 +182,7 @@ fn main() {
 
     build_and_link_cpp_pdqsort();
     build_and_link_cpp_powersort();
+    build_and_link_cpp_simdsort();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
     build_and_link_cpp_std_sys();

@@ -42,6 +42,10 @@ cpp_pdqsort = []
 # Uses system C++ standard lib.
 cpp_powersort = []
 
+# Enable avx2 sort from simd-sort https://github.com/WojciechMula/simd-sort.
+# Uses system C++ standard lib.
+cpp_simdsort = []
+
 # Enable support for c_crumsort.
 # Uses system C++ standard lib.
 c_crumsort = []
