@@ -234,7 +234,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // Number of elements in a typical block.
-    const BLOCK: usize = 128;
+    const BLOCK: usize = u8::MAX as usize;
 
     // The partitioning algorithm repeats the following steps until completion:
     //
@@ -536,8 +536,8 @@ where
         }
 
         (
-            l + <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less),
-            // l + partition_in_blocks(&mut v[l..r], pivot, is_less),
+            // l + <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less),
+            l + partition_in_blocks(&mut v[l..r], pivot, is_less),
             l >= r,
         )
 
