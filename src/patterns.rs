@@ -121,6 +121,7 @@ pub fn disable_fixed_seed() {
 }
 
 pub fn random_init_seed() -> u64 {
+    // return 360013155987181959;
     if USE_FIXED_SEED.load(Ordering::Acquire) {
         static SEED: OnceCell<u64> = OnceCell::new();
         *SEED.get_or_init(|| -> u64 { thread_rng().gen() })

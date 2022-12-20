@@ -536,7 +536,8 @@ where
         }
 
         (
-            l + partition_in_blocks(&mut v[l..r], pivot, is_less),
+            l + <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less),
+            // l + partition_in_blocks(&mut v[l..r], pivot, is_less),
             l >= r,
         )
 

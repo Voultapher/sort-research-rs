@@ -8,7 +8,8 @@
     unchecked_math,
     cell_update,
     specialization,
-    sized_type_properties
+    sized_type_properties,
+    portable_simd
 )]
 
 pub trait Sort {

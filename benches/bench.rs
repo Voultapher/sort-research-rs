@@ -10,6 +10,9 @@ use sort_comp::{patterns, stable, unstable};
 mod trash_prediction;
 use trash_prediction::trash_prediction_state;
 
+mod bench_custom;
+use bench_custom::bench_custom;
+
 #[inline(never)]
 fn bench_sort<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
@@ -132,6 +135,19 @@ fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_comp::Sort>(
             };
             measure_comp_count(&name, test_size, instrumented_sort_func, comp_count);
         }
+    } else if env::var("BENCH_CUSTOM").is_ok() {
+        let args = env::args().collect::<Vec<_>>();
+        // No clue how stable that is.
+        let filter_arg = &args[args.len() - 2];
+
+        bench_custom(
+            filter_arg,
+            test_size,
+            transform_name,
+            transform,
+            pattern_name,
+            pattern_provider,
+        );
     } else {
         bench_sort(
             c,
@@ -565,8 +581,8 @@ fn ensure_true_random() {
 
 fn criterion_benchmark(c: &mut Criterion) {
     let test_sizes = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15, 16, 17, 19, 20, 24, 36, 50, 101, 200, 500, 1_000,
-        2_048, 10_000, 100_000, 1_000_000,
+        36, 50, 60, 70, 80, 90, 101, 130, 160, 200, 300, 500, 1_000, 2_048, 10_000, 100_000,
+        1_000_000,
     ];
 
     patterns::disable_fixed_seed();

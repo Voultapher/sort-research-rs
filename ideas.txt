@@ -1,0 +1,5 @@
+[Partition]
+
+- Fill both blocks all the time. (double iter core)
+- Speedup remaining element partition (maybe use swap space?)
+- Special purpose partition for sizes < 100 (use swap?)

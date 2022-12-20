@@ -26,7 +26,20 @@ name = "bench"
 harness = false
 
 [features]
-default = []
+default = [
+    # "cpp_std_sys",
+    # "cpp_std_libcxx",
+    # "cpp_pdqsort",
+    # "cpp_powersort",
+    # "cpp_simdsort",
+    # "cpp_ips4o",
+    # "cpp_ips4o",
+    # "c_crumsort",
+    # "c_fluxsort",
+    # "rust_wpwoodjr",
+    # "rust_radsort",
+    # "rust_dmsort",
+]
 
 # Enable support for C++ std::sort and std::sort_stable.
 cpp_std_sys = []

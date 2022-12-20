@@ -2071,3 +2071,122 @@ where
 
     smaller_count
 }
+
+// partition attempts
+
+#![allow(unused)]
+
+use core::cmp;
+use core::intrinsics;
+use core::mem;
+use core::ptr;
+use core::simd;
+
+use crate::unstable::rust_new::branchless_swap;
+
+partition_impl!("ilp_partition");
+
+const OFFSET_SENTINEL: u8 = u8::MAX;
+
+unsafe fn collect_offsets_16<T, F>(v: &[T], pivot: &T, offset_lane_ptr: *mut u8, is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    debug_assert!(v.len() == BLOCK_SIZE);
+
+    // SAFETY: offset_lane_ptr must be able to hold 16 elements.
+
+    const LANES: usize = 4;
+    const BLOCK_SIZE: usize = LANES * LANES;
+
+    let mut offset_lane_ptrs = [ptr::null_mut::<u8>(); LANES];
+
+    let check_offset = |l_ptr: *const T, i: usize, offsets_ptr: *mut u8, is_less: &mut F| unsafe {};
+
+    let arr_ptr = v.as_ptr();
+
+    for lane in 0..LANES {
+        let offsets_base_ptr = offset_lane_ptr.add(lane * LANES);
+        offset_lane_ptrs[lane] = offsets_base_ptr;
+
+        // This inner loop should be unfolded by the optimizer.
+        for lane_offset in 0..LANES {
+            let offset = (LANES * lane) + lane_offset;
+            let is_r_elem = !is_less(&*arr_ptr.add(offset), pivot);
+            offset_lane_ptrs[lane].write(offset as u8);
+            offset_lane_ptrs[lane] = offset_lane_ptrs[lane].add(is_r_elem as usize);
+        }
+    }
+}
+
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+unsafe fn collect_offsets_n<const N: usize, T, F>(v: &[T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    debug_assert!(v.len() == N && N >= 16 && N % 16 == 0 && N < u8::MAX as usize);
+
+    use core::arch::x86_64;
+
+    // let mut offsets = [OFFSET_SENTINEL; N];
+    // let offsets_ptr = offsets.as_mut_ptr();
+
+    let arr_ptr = v.as_ptr();
+
+    // for offset in 0..(N as u8) {
+    //     let is_r_elem = !is_less(&*arr_ptr.add(offset as usize), pivot);
+    //     offsets_ptr.write(offset);
+    //     offsets_ptr = offsets_ptr.add(is_r_elem as usize);
+    // }
+    // let sum = intrinsics::ptr_offset_from_unsigned(offsets_ptr, offsets.as_mut_ptr());
+
+    let mask = x86_64::__m128i::from(simd::u8x16::splat(u8::MAX));
+
+    let mut sum = 0;
+    let mut i = 0;
+    while i < N {
+        let mut offsets = simd::u8x16::splat(u8::MAX);
+        collect_offsets_16(&v[i..], pivot, offsets.as_mut_array().as_mut_ptr(), is_less);
+
+        // let cmp_result = x86_64::_mm_cmpeq_epi8(x86_64::__m128i::from(offsets), mask);
+
+        // let c = simd::u8x16::from(cmp_result);
+        println!("{:?}", offsets.as_array());
+        // println!("{:?}", c.as_array());
+
+        i += 16;
+    }
+
+    sum
+    // (offsets, sum)
+}
+
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+    let arr_ptr = v.as_mut_ptr();
+
+    const BLOCK_SIZE: usize = 128;
+
+    let mut sum_offsets = 0;
+
+    unsafe {
+        let mut i = 0;
+        while i < len - BLOCK_SIZE {
+            let sum =
+                collect_offsets_n::<BLOCK_SIZE, T, F>(&v[i..(i + BLOCK_SIZE)], pivot, is_less);
+
+            // for offset in offsets {
+            //     sum_offsets += (offset != OFFSET_SENTINEL) as usize;
+            // }
+            sum_offsets += sum;
+
+            i += BLOCK_SIZE;
+        }
+    }
+
+    sum_offsets
+}
