@@ -517,10 +517,11 @@ where
         // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
         //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
         unsafe {
-            // This search introduces a non-trivial amount of branch mis-prediction. It is only
-            // useful for larger sizes where was_partitioned is relevant and likely. It's hard to
-            // quantify the total impact of this, across various benchmarks I saw better performance
-            // in some cases and never worse performance.
+            // This search introduces a non-trivial amount of branch mis-prediction. And less work
+            // can be done in the faster partition_in_blocks. It is only useful for larger sizes
+            // where was_partitioned is relevant and likely. It's hard to quantify the total impact
+            // of this, across various benchmarks I saw better performance in some cases and never
+            // worse performance.
             if v.len() > ((max_len_small_sort::<T>() * 3) / 2) {
                 // Find the first element greater than or equal to the pivot.
                 while l < r && is_less(v.get_unchecked(l), pivot) {
