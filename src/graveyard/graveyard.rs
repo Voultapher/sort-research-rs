@@ -2190,3 +2190,223 @@ where
 
     sum_offsets
 }
+
+const MAX_SWAP_PAIRS: usize = 12;
+
+#[derive(Copy, Clone)]
+struct Layer {
+    swap_pairs: [(u8, u8); MAX_SWAP_PAIRS],
+    count: u8,
+}
+
+impl Layer {
+    const fn new<const N: usize>(swap_pairs: [(u8, u8); N]) -> Self {
+        assert!(N <= MAX_SWAP_PAIRS);
+
+        let mut this_swap_pairs = [(0u8, 0u8); MAX_SWAP_PAIRS];
+        unsafe {
+            ptr::copy_nonoverlapping(swap_pairs.as_ptr(), this_swap_pairs.as_mut_ptr(), N);
+        }
+
+        Self {
+            swap_pairs: this_swap_pairs,
+            count: N as u8,
+        }
+    }
+}
+
+const MAX_LAYERS: usize = 16;
+
+#[derive(Copy, Clone)]
+struct Network {
+    layers: [Layer; MAX_LAYERS],
+    count: u8,
+}
+
+impl Network {
+    const fn new<const N: usize>(layers: [Layer; N]) -> Self {
+        assert!(N <= MAX_LAYERS);
+
+        let mut this_layers = [Layer::new([]); MAX_LAYERS];
+        unsafe {
+            ptr::copy_nonoverlapping(layers.as_ptr(), this_layers.as_mut_ptr(), N);
+        }
+
+        Self {
+            layers: this_layers,
+            count: N as u8,
+        }
+    }
+}
+
+// This can be re-used across types.
+#[rustfmt::skip]
+static SORT_NETWORKS: [Network; 3] = [
+    Network::new([Layer::new([(0, 2),(1, 3),(4, 6),(5, 7)]),Layer::new([(0, 4),(1, 5),(2, 6),(3, 7)]),Layer::new([(0, 1),(2, 3),(4, 5),(6, 7)]),Layer::new([(2, 4),(3, 5)]),Layer::new([(1, 4),(3, 6)]),Layer::new([(1, 2),(3, 4),(5, 6)])]),
+    Network::new([Layer::new([(0, 13),(1, 12),(2, 15),(3, 14),(4, 8),(5, 6),(7, 11),(9, 10)]),Layer::new([(0, 5),(1, 7),(2, 9),(3, 4),(6, 13),(8, 14),(10, 15),(11, 12)]),Layer::new([(0, 1),(2, 3),(4, 5),(6, 8),(7, 9),(10, 11),(12, 13),(14, 15)]),Layer::new([(0, 2),(1, 3),(4, 10),(5, 11),(6, 7),(8, 9),(12, 14),(13, 15)]),Layer::new([(1, 2),(3, 12),(4, 6),(5, 7),(8, 10),(9, 11),(13, 14)]),Layer::new([(1, 4),(2, 6),(5, 8),(7, 10),(9, 13),(11, 14)]),Layer::new([(2, 4),(3, 6),(9, 12),(11, 13)]),Layer::new([(3, 5),(6, 8),(7, 9),(10, 12)]),Layer::new([(3, 4),(5, 6),(7, 8),(9, 10),(11, 12)]),Layer::new([(6, 7),(8, 9)])]),
+    Network::new([Layer::new([(0, 1),(2, 3),(4, 5),(6, 7),(8, 9),(10, 11),(12, 13),(14, 15),(16, 17),(18, 19),(20, 21),(22, 23)]),Layer::new([(0, 2),(1, 3),(4, 6),(5, 7),(8, 10),(9, 11),(12, 14),(13, 15),(16, 18),(17, 19),(20, 22),(21, 23)]),Layer::new([(0, 4),(1, 5),(2, 6),(3, 7),(8, 12),(9, 13),(10, 14),(11, 15),(16, 20),(17, 21),(18, 22),(19, 23)]),Layer::new([(0, 16),(1, 18),(2, 17),(3, 19),(4, 20),(5, 22),(6, 21),(7, 23),(9, 10),(13, 14)]),Layer::new([(2, 10),(3, 11),(5, 18),(6, 14),(7, 15),(8, 16),(9, 17),(12, 20),(13, 21)]),Layer::new([(0, 8),(1, 9),(2, 12),(3, 20),(4, 16),(5, 13),(6, 17),(7, 19),(10, 18),(11, 21),(14, 22),(15, 23)]),Layer::new([(1, 8),(3, 16),(4, 12),(5, 10),(6, 9),(7, 20),(11, 19),(13, 18),(14, 17),(15, 22)]),Layer::new([(2, 4),(3, 5),(7, 13),(9, 12),(10, 16),(11, 14),(18, 20),(19, 21)]),Layer::new([(1, 2),(4, 8),(5, 9),(6, 10),(7, 11),(12, 16),(13, 17),(14, 18),(15, 19),(21, 22)]),Layer::new([(2, 4),(3, 8),(5, 6),(7, 9),(10, 12),(11, 13),(14, 16),(15, 20),(17, 18),(19, 21)]),Layer::new([(3, 5),(6, 8),(7, 10),(9, 12),(11, 14),(13, 16),(15, 17),(18, 20)]),Layer::new([(3, 4),(5, 6),(7, 8),(9, 10),(11, 12),(13, 14),(15, 16),(17, 18),(19, 20)])]),
+
+];
+
+#[inline(never)]
+unsafe fn eval_sort_network<T, F>(network: &Network, v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    fn eval_swap_pair<T, F>(layer: &Layer, offset: usize, arr_ptr: *mut T, is_less: &mut F)
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        // SAFETY: the network must match the input size.
+        unsafe {
+            swap_if_less(
+                arr_ptr,
+                layer.swap_pairs[offset].0 as usize,
+                layer.swap_pairs[offset].1 as usize,
+                is_less,
+            );
+        }
+    }
+
+    let swap_pair_eval_unrolled: [fn(&Layer, *mut T, &mut F); MAX_SWAP_PAIRS] = [
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+            eval_swap_pair(layer, 6, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+            eval_swap_pair(layer, 6, arr_ptr, is_less);
+            eval_swap_pair(layer, 7, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+            eval_swap_pair(layer, 6, arr_ptr, is_less);
+            eval_swap_pair(layer, 7, arr_ptr, is_less);
+            eval_swap_pair(layer, 8, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+            eval_swap_pair(layer, 6, arr_ptr, is_less);
+            eval_swap_pair(layer, 7, arr_ptr, is_less);
+            eval_swap_pair(layer, 8, arr_ptr, is_less);
+            eval_swap_pair(layer, 9, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+            eval_swap_pair(layer, 6, arr_ptr, is_less);
+            eval_swap_pair(layer, 7, arr_ptr, is_less);
+            eval_swap_pair(layer, 8, arr_ptr, is_less);
+            eval_swap_pair(layer, 9, arr_ptr, is_less);
+            eval_swap_pair(layer, 10, arr_ptr, is_less);
+        },
+        |layer: &Layer, arr_ptr: *mut T, is_less: &mut F| {
+            eval_swap_pair(layer, 0, arr_ptr, is_less);
+            eval_swap_pair(layer, 1, arr_ptr, is_less);
+            eval_swap_pair(layer, 2, arr_ptr, is_less);
+            eval_swap_pair(layer, 3, arr_ptr, is_less);
+            eval_swap_pair(layer, 4, arr_ptr, is_less);
+            eval_swap_pair(layer, 5, arr_ptr, is_less);
+            eval_swap_pair(layer, 6, arr_ptr, is_less);
+            eval_swap_pair(layer, 7, arr_ptr, is_less);
+            eval_swap_pair(layer, 8, arr_ptr, is_less);
+            eval_swap_pair(layer, 9, arr_ptr, is_less);
+            eval_swap_pair(layer, 10, arr_ptr, is_less);
+            eval_swap_pair(layer, 11, arr_ptr, is_less);
+        },
+    ];
+
+    let arr_ptr = v.as_mut_ptr();
+
+    for layer_i in 0..network.count {
+        let layer = network.layers[layer_i as usize];
+
+        swap_pair_eval_unrolled[layer.count as usize - 1](&layer, arr_ptr, is_less);
+        // for swap_pair_i in 0..layer.count {
+        //     unsafe {
+        //         swap_if_less(
+        //             arr_ptr,
+        //             layer.swap_pairs[swap_pair_i as usize].0 as usize,
+        //             layer.swap_pairs[swap_pair_i as usize].1 as usize,
+        //             is_less,
+        //         );
+        //     }
+        // }
+    }
+}
+
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+unsafe fn sort8_to_40<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() <= 40.
+    let len = v.len();
+    debug_assert!(len >= 8 && len <= 40);
+
+    // TODO table lookup.
+    if len == 8 {
+        eval_sort_network(&SORT_NETWORKS[0], v, is_less);
+    } else if len == 16 {
+        eval_sort_network(&SORT_NETWORKS[1], v, is_less);
+    } else if len == 24 {
+        eval_sort_network(&SORT_NETWORKS[2], v, is_less);
+    }
+}

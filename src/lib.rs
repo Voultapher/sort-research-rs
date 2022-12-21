@@ -9,7 +9,8 @@
     cell_update,
     specialization,
     sized_type_properties,
-    portable_simd
+    portable_simd,
+    const_mut_refs
 )]
 
 pub trait Sort {
