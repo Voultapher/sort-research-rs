@@ -1,6 +1,6 @@
 use core::cmp;
-use core::intrinsics;
-use core::mem;
+// use core::intrinsics;
+use core::mem::{self, MaybeUninit};
 use core::ptr;
 
 partition_impl!("new_block_quicksort");
@@ -20,7 +20,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // Number of elements in a typical block.
-    const BLOCK: usize = 128;
+    const BLOCK: usize = u8::MAX as usize;
 
     // The partitioning algorithm repeats the following steps until completion:
     //
@@ -40,7 +40,7 @@ where
     let mut block_l = BLOCK;
     let mut start_l = ptr::null_mut();
     let mut end_l = ptr::null_mut();
-    let mut offsets_l = [mem::MaybeUninit::<u8>::uninit(); BLOCK];
+    let mut offsets_l = [MaybeUninit::<u8>::uninit(); BLOCK];
 
     // The current block on the right side (from `r.sub(block_r)` to `r`).
     // SAFETY: The documentation for .add() specifically mention that `vec.as_ptr().add(vec.len())` is always safe`
@@ -48,102 +48,112 @@ where
     let mut block_r = BLOCK;
     let mut start_r = ptr::null_mut();
     let mut end_r = ptr::null_mut();
-    let mut offsets_r = [mem::MaybeUninit::<u8>::uninit(); BLOCK];
+    let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK];
 
     // FIXME: When we get VLAs, try creating one array of length `min(v.len(), 2 * BLOCK)` rather
     // than two fixed-size arrays of length `BLOCK`. VLAs might be more cache-efficient.
 
     // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
-    fn width<T>(l: *const T, r: *const T) -> usize {
+    fn width<T>(l: *mut T, r: *mut T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        // SAFETY: r >= l and not T::IS_ZST
-        unsafe { intrinsics::ptr_offset_from_unsigned(r, l) }
+        unsafe { r.sub_ptr(l) }
     }
 
-    fn trace_block_l<T, F>(
-        mut values: *const T,
-        mut offsets_ptr: *mut u8,
-        block_l: usize,
-        check: &mut F,
-    ) -> *mut u8
-    where
-        F: FnMut(&T) -> bool,
-    {
-        for i in 0..block_l {
-            // SAFETY: The unsafety operations below involve the usage of the `offset`.
-            //         According to the conditions required by the function, we satisfy them because:
-            //         1. `offsets_l` is stack-allocated, and thus considered separate allocated object.
-            //         2. The function `is_less` returns a `bool`.
-            //            Casting a `bool` will never overflow `isize`.
-            //         3. We have guaranteed that `block_l` will be `<= BLOCK`.
-            //            Plus, `end_l` was initially set to the begin pointer of `offsets_` which was declared on the stack.
-            //            Thus, we know that even in the worst case (all invocations of `is_less` returns false) we will only be at most 1 byte pass the end.
-            //        Another unsafety operation here is dereferencing `elem`.
-            //        However, `elem` was initially the begin pointer to the slice which is always valid.
-            unsafe {
-                // Branchless comparison.
-                *offsets_ptr = i as u8;
-                offsets_ptr = offsets_ptr.offset(check(&*values) as isize);
-                values = values.add(1);
+    loop {
+        // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
+        // some patch-up work in order to partition the remaining elements in between.
+        let is_done = width(l, r) <= 2 * BLOCK;
+
+        if is_done {
+            // Number of remaining elements (still not compared to the pivot).
+            let mut rem = width(l, r);
+            if start_l < end_l || start_r < end_r {
+                rem -= BLOCK;
+            }
+
+            // Adjust block sizes so that the left and right block don't overlap, but get perfectly
+            // aligned to cover the whole remaining gap.
+            if start_l < end_l {
+                block_r = rem;
+            } else if start_r < end_r {
+                block_l = rem;
+            } else {
+                // There were the same number of elements to switch on both blocks during the last
+                // iteration, so there are no remaining elements on either block. Cover the remaining
+                // items with roughly equally-sized blocks.
+                block_l = rem / 2;
+                block_r = rem - block_l;
+            }
+            debug_assert!(block_l <= BLOCK && block_r <= BLOCK);
+            debug_assert!(width(l, r) == block_l + block_r);
+        }
+
+        if start_l == end_l {
+            // Trace `block_l` elements from the left side.
+            start_l = MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
+            end_l = start_l;
+            let mut elem = l;
+
+            for i in 0..block_l {
+                // SAFETY: The unsafety operations below involve the usage of the `offset`.
+                //         According to the conditions required by the function, we satisfy them because:
+                //         1. `offsets_l` is stack-allocated, and thus considered separate allocated object.
+                //         2. The function `is_less` returns a `bool`.
+                //            Casting a `bool` will never overflow `isize`.
+                //         3. We have guaranteed that `block_l` will be `<= BLOCK`.
+                //            Plus, `end_l` was initially set to the begin pointer of `offsets_` which was declared on the stack.
+                //            Thus, we know that even in the worst case (all invocations of `is_less` returns false) we will only be at most 1 byte pass the end.
+                //        Another unsafety operation here is dereferencing `elem`.
+                //        However, `elem` was initially the begin pointer to the slice which is always valid.
+                unsafe {
+                    // Branchless comparison.
+                    *end_l = i as u8;
+                    end_l = end_l.add(!is_less(&*elem, pivot) as usize);
+                    elem = elem.add(1);
+                }
             }
         }
 
-        offsets_ptr
-    }
+        if start_r == end_r {
+            // Trace `block_r` elements from the right side.
+            start_r = MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
+            end_r = start_r;
+            let mut elem = r;
 
-    fn trace_block_r<T, F>(
-        mut values: *const T,
-        mut offsets_ptr: *mut u8,
-        block_r: usize,
-        check: &mut F,
-    ) -> *mut u8
-    where
-        F: FnMut(&T) -> bool,
-    {
-        for i in 0..block_r {
-            // SAFETY: The unsafety operations below involve the usage of the `offset`.
-            //         According to the conditions required by the function, we satisfy them because:
-            //         1. `offsets_r` is stack-allocated, and thus considered separate allocated object.
-            //         2. The function `is_less` returns a `bool`.
-            //            Casting a `bool` will never overflow `isize`.
-            //         3. We have guaranteed that `block_r` will be `<= BLOCK`.
-            //            Plus, `end_r` was initially set to the begin pointer of `offsets_` which was declared on the stack.
-            //            Thus, we know that even in the worst case (all invocations of `is_less` returns true) we will only be at most 1 byte pass the end.
-            //        Another unsafety operation here is dereferencing `elem`.
-            //        However, `elem` was initially `1 * sizeof(T)` past the end and we decrement it by `1 * sizeof(T)` before accessing it.
-            //        Plus, `block_r` was asserted to be less than `BLOCK` and `elem` will therefore at most be pointing to the beginning of the slice.
-            unsafe {
-                // Branchless comparison.
-                values = values.offset(-1);
-                *offsets_ptr = i as u8;
-                offsets_ptr = offsets_ptr.offset(check(&*values) as isize);
+            for i in 0..block_r {
+                // SAFETY: The unsafety operations below involve the usage of the `offset`.
+                //         According to the conditions required by the function, we satisfy them because:
+                //         1. `offsets_r` is stack-allocated, and thus considered separate allocated object.
+                //         2. The function `is_less` returns a `bool`.
+                //            Casting a `bool` will never overflow `isize`.
+                //         3. We have guaranteed that `block_r` will be `<= BLOCK`.
+                //            Plus, `end_r` was initially set to the begin pointer of `offsets_` which was declared on the stack.
+                //            Thus, we know that even in the worst case (all invocations of `is_less` returns true) we will only be at most 1 byte pass the end.
+                //        Another unsafety operation here is dereferencing `elem`.
+                //        However, `elem` was initially `1 * sizeof(T)` past the end and we decrement it by `1 * sizeof(T)` before accessing it.
+                //        Plus, `block_r` was asserted to be less than `BLOCK` and `elem` will therefore at most be pointing to the beginning of the slice.
+                unsafe {
+                    // Branchless comparison.
+                    elem = elem.sub(1);
+                    *end_r = i as u8;
+                    end_r = end_r.add(is_less(&*elem, pivot) as usize);
+                }
             }
         }
 
-        offsets_ptr
-    }
-
-    fn swap_out_of_order_elements<T>(
-        l: *mut T,
-        mut start_l: *const u8,
-        end_l: *const u8,
-        r: *mut T,
-        mut start_r: *const u8,
-        end_r: *const u8,
-    ) -> usize {
         // Number of out-of-order elements to swap between the left and right side.
         let count = cmp::min(width(start_l, end_l), width(start_r, end_r));
 
         if count > 0 {
             macro_rules! left {
                 () => {
-                    l.offset(*start_l as isize)
+                    l.add(*start_l as usize)
                 };
             }
             macro_rules! right {
                 () => {
-                    r.offset(-(*start_r as isize) - 1)
+                    r.sub(*start_r as usize + 1)
                 };
             }
 
@@ -171,69 +181,17 @@ where
                 ptr::copy_nonoverlapping(right!(), left!(), 1);
 
                 for _ in 1..count {
-                    start_l = start_l.offset(1);
+                    start_l = start_l.add(1);
                     ptr::copy_nonoverlapping(left!(), right!(), 1);
-                    start_r = start_r.offset(1);
+                    start_r = start_r.add(1);
                     ptr::copy_nonoverlapping(right!(), left!(), 1);
                 }
 
                 ptr::copy_nonoverlapping(&tmp, right!(), 1);
                 mem::forget(tmp);
+                start_l = start_l.add(1);
+                start_r = start_r.add(1);
             }
-        }
-
-        count
-    }
-
-    loop {
-        // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
-        // some patch-up work in order to partition the remaining elements in between.
-        let is_done = width(l, r) <= BLOCK * 2;
-
-        if is_done {
-            // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
-            // some patch-up work in order to partition the remaining elements in between.
-            // Number of remaining elements (still not compared to the pivot).
-            let mut rem = width(l, r);
-            if start_l < end_l || start_r < end_r {
-                rem -= BLOCK;
-            }
-
-            // Adjust block sizes so that the left and right block don't overlap, but get perfectly
-            // aligned to cover the whole remaining gap.
-            if start_l < end_l {
-                block_r = rem;
-            } else if start_r < end_r {
-                block_l = rem;
-            } else {
-                // There were the same number of elements to switch on both blocks during the last
-                // iteration, so there are no remaining elements on either block. Cover the remaining
-                // items with roughly equally-sized blocks.
-                block_l = rem / 2;
-                block_r = rem - block_l;
-            }
-            debug_assert!(block_l <= BLOCK && block_r <= BLOCK);
-            debug_assert!(width(l, r) == block_l + block_r);
-        }
-
-        if start_l == end_l {
-            // Trace `block_l` elements from the left side.
-            start_l = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
-            end_l = trace_block_l(l, start_l, block_l, &mut |elem| !is_less(elem, pivot));
-        }
-
-        if start_r == end_r {
-            // Trace `block_r` elements from the right side.
-            start_r = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
-            end_r = trace_block_r(r, start_r, block_r, &mut |elem| is_less(elem, pivot));
-        }
-
-        let swapped_count = swap_out_of_order_elements(l, start_l, end_l, r, start_r, end_r);
-
-        // SAFETY: TODO
-        unsafe {
-            start_l = start_l.add(swapped_count);
-            start_r = start_r.add(swapped_count);
         }
 
         if start_l == end_l {
@@ -245,7 +203,7 @@ where
             // safe. Otherwise, the debug assertions in the `is_done` case guarantee that
             // `width(l, r) == block_l + block_r`, namely, that the block sizes have been adjusted to account
             // for the smaller number of remaining elements.
-            l = unsafe { l.offset(block_l as isize) };
+            l = unsafe { l.add(block_l) };
         }
 
         if start_r == end_r {
@@ -253,7 +211,7 @@ where
 
             // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
             // or `block_r` has been adjusted for the last handful of elements.
-            r = unsafe { r.offset(-(block_r as isize)) };
+            r = unsafe { r.sub(block_r) };
         }
 
         if is_done {
@@ -282,9 +240,9 @@ where
             //  - `offsets_l` contains valid offsets into `v` collected during the partitioning of
             //    the last block, so the `l.offset` calls are valid.
             unsafe {
-                end_l = end_l.offset(-1);
-                ptr::swap(l.offset(*end_l as isize), r.offset(-1));
-                r = r.offset(-1);
+                end_l = end_l.sub(1);
+                ptr::swap(l.add(*end_l as usize), r.sub(1));
+                r = r.sub(1);
             }
         }
         width(v.as_mut_ptr(), r)
@@ -295,9 +253,9 @@ where
         while start_r < end_r {
             // SAFETY: See the reasoning in [remaining-elements-safety].
             unsafe {
-                end_r = end_r.offset(-1);
-                ptr::swap(l, r.offset(-(*end_r as isize) - 1));
-                l = l.offset(1);
+                end_r = end_r.sub(1);
+                ptr::swap(l, r.sub(*end_r as usize + 1));
+                l = l.add(1);
             }
         }
         width(v.as_mut_ptr(), l)

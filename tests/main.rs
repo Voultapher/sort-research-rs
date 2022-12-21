@@ -701,23 +701,23 @@ fn sort_vs_sort_by() {
     assert_eq!(input_sort_by, expected);
 }
 
-#[test]
-fn xx() {
-    let input = vec![
-        0, 5, 5, 2, 2, 2, 0, 3, 1, 5, 5, 4, 1, 5, 1, 6, 0, 5, 1, 2, 6, 6, 6, 6, 3, 2, 4, 3, 3, 6,
-        2, 5, 6, 4, 3, 6, 0, 3, 1, 4, 4, 5, 3, 4, 5, 4, 5, 5, 6,
-    ];
+// #[test]
+// fn xx() {
+//     let input = vec![
+//         0, 5, 5, 2, 2, 2, 0, 3, 1, 5, 5, 4, 1, 5, 1, 6, 0, 5, 1, 2, 6, 6, 6, 6, 3, 2, 4, 3, 3, 6,
+//         2, 5, 6, 4, 3, 6, 0, 3, 1, 4, 4, 5, 3, 4, 5, 4, 5, 5, 6,
+//     ];
 
-    let pivot = 5;
+//     let pivot = 5;
 
-    println!("NEW");
-    let mut a = input.clone();
-    let x_a = <sort_comp::other::partition::small_fast::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut a, &pivot, &mut |a, b| a.lt(b));
+//     println!("NEW");
+//     let mut a = input.clone();
+//     let x_a = <sort_comp::other::partition::small_fast::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut a, &pivot, &mut |a, b| a.lt(b));
 
-    println!("EXISTING");
-    let mut b = input.clone();
-    let x_b = <sort_comp::other::partition::block_quicksort::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut b, &pivot, &mut |a, b| a.lt(b));
+//     println!("EXISTING");
+//     let mut b = input.clone();
+//     let x_b = <sort_comp::other::partition::block_quicksort::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut b, &pivot, &mut |a, b| a.lt(b));
 
-    assert_eq!(a, b);
-    assert_eq!(x_a, x_b);
-}
+//     assert_eq!(a, b);
+//     assert_eq!(x_a, x_b);
+// }

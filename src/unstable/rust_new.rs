@@ -271,8 +271,7 @@ where
     fn width<T>(l: *mut T, r: *mut T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        // SAFETY: r >= l and not T::IS_ZST
-        unsafe { intrinsics::ptr_offset_from_unsigned(r, l) }
+        unsafe { r.sub_ptr(l) }
     }
 
     loop {
@@ -324,8 +323,8 @@ where
                 unsafe {
                     // Branchless comparison.
                     *end_l = i as u8;
-                    end_l = end_l.offset(!is_less(&*elem, pivot) as isize);
-                    elem = elem.offset(1);
+                    end_l = end_l.add(!is_less(&*elem, pivot) as usize);
+                    elem = elem.add(1);
                 }
             }
         }
@@ -350,9 +349,9 @@ where
                 //        Plus, `block_r` was asserted to be less than `BLOCK` and `elem` will therefore at most be pointing to the beginning of the slice.
                 unsafe {
                     // Branchless comparison.
-                    elem = elem.offset(-1);
+                    elem = elem.sub(1);
                     *end_r = i as u8;
-                    end_r = end_r.offset(is_less(&*elem, pivot) as isize);
+                    end_r = end_r.add(is_less(&*elem, pivot) as usize);
                 }
             }
         }
@@ -363,12 +362,12 @@ where
         if count > 0 {
             macro_rules! left {
                 () => {
-                    l.offset(*start_l as isize)
+                    l.add(*start_l as usize)
                 };
             }
             macro_rules! right {
                 () => {
-                    r.offset(-(*start_r as isize) - 1)
+                    r.sub(*start_r as usize + 1)
                 };
             }
 
@@ -396,16 +395,16 @@ where
                 ptr::copy_nonoverlapping(right!(), left!(), 1);
 
                 for _ in 1..count {
-                    start_l = start_l.offset(1);
+                    start_l = start_l.add(1);
                     ptr::copy_nonoverlapping(left!(), right!(), 1);
-                    start_r = start_r.offset(1);
+                    start_r = start_r.add(1);
                     ptr::copy_nonoverlapping(right!(), left!(), 1);
                 }
 
                 ptr::copy_nonoverlapping(&tmp, right!(), 1);
                 mem::forget(tmp);
-                start_l = start_l.offset(1);
-                start_r = start_r.offset(1);
+                start_l = start_l.add(1);
+                start_r = start_r.add(1);
             }
         }
 
@@ -418,7 +417,7 @@ where
             // safe. Otherwise, the debug assertions in the `is_done` case guarantee that
             // `width(l, r) == block_l + block_r`, namely, that the block sizes have been adjusted to account
             // for the smaller number of remaining elements.
-            l = unsafe { l.offset(block_l as isize) };
+            l = unsafe { l.add(block_l) };
         }
 
         if start_r == end_r {
@@ -426,7 +425,7 @@ where
 
             // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
             // or `block_r` has been adjusted for the last handful of elements.
-            r = unsafe { r.offset(-(block_r as isize)) };
+            r = unsafe { r.sub(block_r) };
         }
 
         if is_done {
@@ -455,9 +454,9 @@ where
             //  - `offsets_l` contains valid offsets into `v` collected during the partitioning of
             //    the last block, so the `l.offset` calls are valid.
             unsafe {
-                end_l = end_l.offset(-1);
-                ptr::swap(l.offset(*end_l as isize), r.offset(-1));
-                r = r.offset(-1);
+                end_l = end_l.sub(1);
+                ptr::swap(l.add(*end_l as usize), r.sub(1));
+                r = r.sub(1);
             }
         }
         width(v.as_mut_ptr(), r)
@@ -468,9 +467,9 @@ where
         while start_r < end_r {
             // SAFETY: See the reasoning in [remaining-elements-safety].
             unsafe {
-                end_r = end_r.offset(-1);
-                ptr::swap(l, r.offset(-(*end_r as isize) - 1));
-                l = l.offset(1);
+                end_r = end_r.sub(1);
+                ptr::swap(l, r.sub(*end_r as usize + 1));
+                l = l.add(1);
             }
         }
         width(v.as_mut_ptr(), l)
@@ -536,8 +535,8 @@ where
         }
 
         (
-            l + <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less),
-            // l + partition_in_blocks(&mut v[l..r], pivot, is_less),
+            // l + <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less),
+            l + partition_in_blocks(&mut v[l..r], pivot, is_less),
             l >= r,
         )
 
