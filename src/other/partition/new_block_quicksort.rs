@@ -185,74 +185,36 @@ where
         count
     }
 
-    // TODO could that be more or equal?
-    while width(l, r) > 2 * BLOCK {
-        if start_l == end_l {
-            // Trace `block_l` elements from the left side.
-            start_l = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
-            end_l = trace_block_l(l, start_l, block_l, &mut |elem| !is_less(elem, pivot));
-        }
-
-        if start_r == end_r {
-            // Trace `block_r` elements from the right side.
-            start_r = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
-            end_r = trace_block_r(r, start_r, block_r, &mut |elem| is_less(elem, pivot));
-        }
-
-        let swapped_count = swap_out_of_order_elements(l, start_l, end_l, r, start_r, end_r);
-
-        // SAFETY: TODO
-        unsafe {
-            start_l = start_l.add(swapped_count);
-            start_r = start_r.add(swapped_count);
-        }
-
-        if start_l == end_l {
-            // All out-of-order elements in the left block were moved. Move to the next block.
-
-            // block-width-guarantee
-            // SAFETY: if `!is_done` then the slice width is guaranteed to be at least `2*BLOCK` wide. There
-            // are at most `BLOCK` elements in `offsets_l` because of its size, so the `offset` operation is
-            // safe. Otherwise, the debug assertions in the `is_done` case guarantee that
-            // `width(l, r) == block_l + block_r`, namely, that the block sizes have been adjusted to account
-            // for the smaller number of remaining elements.
-            l = unsafe { l.offset(block_l as isize) };
-        }
-
-        if start_r == end_r {
-            // All out-of-order elements in the right block were moved. Move to the previous block.
-
-            // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
-            // or `block_r` has been adjusted for the last handful of elements.
-            r = unsafe { r.offset(-(block_r as isize)) };
-        }
-    }
-
-    // Done with full block tracing, assign smaller blocks.
-    {
+    loop {
         // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
         // some patch-up work in order to partition the remaining elements in between.
-        // Number of remaining elements (still not compared to the pivot).
-        let mut rem = width(l, r);
-        if start_l < end_l || start_r < end_r {
-            rem -= BLOCK;
-        }
+        let is_done = width(l, r) <= BLOCK * 2;
 
-        // Adjust block sizes so that the left and right block don't overlap, but get perfectly
-        // aligned to cover the whole remaining gap.
-        if start_l < end_l {
-            block_r = rem;
-        } else if start_r < end_r {
-            block_l = rem;
-        } else {
-            // There were the same number of elements to switch on both blocks during the last
-            // iteration, so there are no remaining elements on either block. Cover the remaining
-            // items with roughly equally-sized blocks.
-            block_l = rem / 2;
-            block_r = rem - block_l;
+        if is_done {
+            // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
+            // some patch-up work in order to partition the remaining elements in between.
+            // Number of remaining elements (still not compared to the pivot).
+            let mut rem = width(l, r);
+            if start_l < end_l || start_r < end_r {
+                rem -= BLOCK;
+            }
+
+            // Adjust block sizes so that the left and right block don't overlap, but get perfectly
+            // aligned to cover the whole remaining gap.
+            if start_l < end_l {
+                block_r = rem;
+            } else if start_r < end_r {
+                block_l = rem;
+            } else {
+                // There were the same number of elements to switch on both blocks during the last
+                // iteration, so there are no remaining elements on either block. Cover the remaining
+                // items with roughly equally-sized blocks.
+                block_l = rem / 2;
+                block_r = rem - block_l;
+            }
+            debug_assert!(block_l <= BLOCK && block_r <= BLOCK);
+            debug_assert!(width(l, r) == block_l + block_r);
         }
-        debug_assert!(block_l <= BLOCK && block_r <= BLOCK);
-        debug_assert!(width(l, r) == block_l + block_r);
 
         if start_l == end_l {
             // Trace `block_l` elements from the left side.
@@ -292,6 +254,10 @@ where
             // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
             // or `block_r` has been adjusted for the last handful of elements.
             r = unsafe { r.offset(-(block_r as isize)) };
+        }
+
+        if is_done {
+            break;
         }
     }
 

@@ -710,13 +710,13 @@ fn xx() {
 
     let pivot = 5;
 
+    println!("NEW");
+    let mut a = input.clone();
+    let x_a = <sort_comp::other::partition::small_fast::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut a, &pivot, &mut |a, b| a.lt(b));
+
     println!("EXISTING");
     let mut b = input.clone();
     let x_b = <sort_comp::other::partition::block_quicksort::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut b, &pivot, &mut |a, b| a.lt(b));
-
-    println!("NEW");
-    let mut a = input.clone();
-    let x_a = <sort_comp::other::partition::new_block_quicksort::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut a, &pivot, &mut |a, b| a.lt(b));
 
     assert_eq!(a, b);
     assert_eq!(x_a, x_b);

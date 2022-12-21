@@ -232,6 +232,16 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
     //     transform,
     //     pattern_name,
     //     pattern_provider,
+    //     partition::small_fast::PartitionImpl,
+    // );
+
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
     //     partition::ilp_partition::PartitionImpl,
     // );
 }

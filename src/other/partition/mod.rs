@@ -46,4 +46,5 @@ pub mod ilp_partition;
 pub mod new_block_quicksort;
 pub mod simple_scan_branchless;
 pub mod simple_scan_branchy;
+pub mod small_fast;
 pub mod sum_is_less;

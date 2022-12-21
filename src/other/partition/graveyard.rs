@@ -314,3 +314,49 @@ where
         width(v.as_mut_ptr(), l)
     }
 }
+
+fn xx() {
+    // Nice idea but really slow.
+    let mut swap = mem::MaybeUninit::<[T; SWAP]>::uninit();
+    let mut swap_ptr = swap.as_mut_ptr() as *mut T;
+
+    let mut offsets_r = mem::MaybeUninit::<[u8; SWAP]>::uninit();
+    let mut offsets_ptr = offsets_r.as_mut_ptr() as *mut u8;
+
+    for i in 0..len {
+        unsafe {
+            let value = v.get_unchecked(i);
+
+            let is_l = is_less(value, pivot);
+
+            swap_ptr.write(*value);
+            offsets_ptr.write(i as u8);
+
+            swap_ptr = swap_ptr.add(is_l as usize);
+            offsets_ptr = offsets_ptr.add(!is_l as usize);
+        }
+    }
+
+    // SAFETY: swap now contains all elements that belong on the left side of the pivot. All
+    // comparisons have been done if is_less would have panicked v would have stayed untouched.
+    unsafe {
+        let arr_ptr = v.as_mut_ptr();
+        let l_elems = swap_ptr.sub_ptr(swap.as_ptr() as *const T);
+        let r_elems = offsets_ptr.sub_ptr(offsets_r.as_ptr() as *const u8);
+
+        let offsets_base_ptr = offsets_r.as_ptr() as *const u8;
+
+        for i in 0..r_elems {
+            ptr::copy_nonoverlapping(
+                arr_ptr.add(*offsets_base_ptr.add(i) as usize),
+                swap_ptr.add(i),
+                1,
+            );
+        }
+
+        // Now that swap has the correct order overwrite arr_ptr.
+        ptr::copy_nonoverlapping(swap.as_ptr() as *const T, arr_ptr, len);
+
+        l_elems
+    }
+}
