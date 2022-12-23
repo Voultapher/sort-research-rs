@@ -40,6 +40,7 @@ macro_rules! partition_impl {
     };
 }
 
+pub mod avx2;
 pub mod block_quicksort;
 pub mod crumsort;
 pub mod ilp_partition;
