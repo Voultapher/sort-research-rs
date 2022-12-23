@@ -1022,12 +1022,9 @@ where
 {
     let len = v.len();
 
-    // This is a logic but not a safety bug.
-    debug_assert!(offset != 0 && offset <= len);
-
-    if intrinsics::unlikely(((len < 2) as u8 + (offset == 0) as u8) != 0) {
-        return;
-    }
+    // This would be a logic bug.
+    // Using assert here improves performance.
+    assert!(offset != 0 && offset <= len);
 
     // Shift each element of the unsorted region v[i..] as far left as is needed to make v sorted.
     for i in offset..len {
@@ -1050,12 +1047,9 @@ where
 {
     let len = v.len();
 
-    // This is a logic but not a safety bug.
-    debug_assert!(offset != 0 && offset <= len);
-
-    if intrinsics::unlikely(((len < 2) as u8 + (offset == 0) as u8) != 0) {
-        return;
-    }
+    // This would be a logic bug.
+    // Using assert here improves performance.
+    assert!(offset != 0 && offset <= len);
 
     // Shift each element of the unsorted region v[..i] as far left as is needed to make v sorted.
     for i in (0..offset).rev() {
