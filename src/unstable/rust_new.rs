@@ -825,104 +825,25 @@ where
 {
     let len = v.len();
 
-    if len < 2 {
-        return true;
-    }
-
     if len > max_len_small_sort::<T>() {
         return false;
     }
 
     if is_cheap_to_move::<T>() {
-        if len < 8 {
-            // For small sizes it's better to just sort. The worst case 7, will only go from 6 to 8
-            // comparisons for already sorted inputs.
-            let start = if len >= 4 {
-                // SAFETY: We just checked the len.
-                unsafe {
-                    sort4_optimal(&mut v[0..4], is_less);
-                }
-                4
-            } else {
-                1
-            };
-
-            insertion_sort_shift_left(v, start, is_less);
-
-            return true;
+        // Always sort assuming somewhat random distribution.
+        // Patterns should have already been found by the other analysis steps.
+        //
+        // Small total slices are handled separately, see function quicksort.
+        if len >= 16 {
+            sort16_plus(v, is_less);
+        } else if len >= 8 {
+            sort8_plus(v, is_less);
+        } else if len >= 4 {
+            sort4_plus(v, is_less);
+        } else if len >= 2 {
+            insertion_sort_shift_left(v, 1, is_less);
         }
-
-        // Pattern analyze to minimize comparison count for already sorted or reversed inputs.
-        // For larger inputs pattern recognition in `recurse` will be used.
-
-        let start = find_streak_rev(v, is_less);
-        let already_sorted = len - start;
-
-        const MAX_IGNORE_PRE_SORTED: usize = 6;
-
-        if already_sorted <= MAX_IGNORE_PRE_SORTED {
-            if len >= 16 {
-                // This is the most common case.
-                sort16_plus(v, is_less);
-            } else {
-                sort8_plus(v, is_less);
-            }
-        } else {
-            // Potentially highly or fully sorted. We know that already_sorted >= 7. and len >= 8.
-            // That leaves the range of:
-            // start <= (MAX_BRANCHLESS_SMALL_SORT - (MAX_IGNORE_PRE_SORTED + 1)).
-
-            if start == 0 {
-                return true;
-            } else if start <= 3 {
-                insertion_sort_shift_right(v, start, is_less);
-                return true;
-            }
-
-            match start {
-                4..=7 => {
-                    // SAFETY: We just checked start >= 4.
-                    unsafe {
-                        sort4_plus(&mut v[0..start], is_less);
-                    }
-                }
-                8..=15 => {
-                    // SAFETY: We just checked start >= 8.
-                    unsafe {
-                        sort8_plus(&mut v[0..start], is_less);
-                    }
-                }
-                _ => {
-                    // SAFETY: We just checked start >= 16.
-                    unsafe {
-                        sort16_plus(&mut v[0..start], is_less);
-                    }
-                }
-            }
-
-            let shorter_side_len = cmp::min(start, len - start);
-
-            let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
-            let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-            if shorter_side_len <= 16 {
-                // SAFETY: swap is long enough and both sides are len >= 1.
-                unsafe {
-                    merge(v, start, swap_ptr, is_less);
-                }
-            } else {
-                // There are cases where the shorter side is too large for the maximum alloted size
-                // 16 stack array.
-                // Eg. both sides are of len 18.
-                // Merge what is possible and do rest with insertion sort.
-                unsafe {
-                    merge(&mut v[0..32], start, swap_ptr, is_less);
-                }
-
-                insertion_sort_shift_left(v, 32, is_less);
-            }
-        }
-    } else {
+    } else if len >= 2 {
         insertion_sort_shift_left(v, 1, is_less);
     }
 
@@ -940,7 +861,16 @@ where
         return;
     }
 
-    // TODO call new_stable_sort small_sort here?
+    const MAX_INSERTION: usize = 20;
+    if v.len() <= 20 {
+        // By doing it here, we ensure that even cold code is fast and already sorted inputs are
+        // handled very quickly.
+        if v.len() >= 2 {
+            // TODO use custom small sort here?
+            insertion_sort_shift_left(v, 1, &mut is_less);
+        }
+        return;
+    }
 
     // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
     let limit = usize::BITS - v.len().leading_zeros();
@@ -1814,16 +1744,22 @@ where
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-unsafe fn sort4_plus<T, F>(v: &mut [T], is_less: &mut F)
+fn sort4_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v.len() >= 4.
     let len = v.len();
-    debug_assert!(len >= 4);
+    assert!(len >= 4);
 
-    sort4_optimal(&mut v[0..4], is_less);
-    insertion_sort_shift_left(v, 4, is_less);
+    // SAFETY: We checked the len.
+    unsafe {
+        sort4_optimal(&mut v[0..4], is_less);
+    }
+
+    if len > 4 {
+        insertion_sort_shift_left(v, 4, is_less);
+    }
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
@@ -1839,7 +1775,7 @@ where
         sort8_optimal(&mut v[0..8], is_less);
     }
 
-    if len >= 9 {
+    if len > 8 {
         insertion_sort_shift_left(&mut v[8..], 1, is_less);
 
         // SAFETY: We only need place for 8 entries because we know the shorter side is at most 8
