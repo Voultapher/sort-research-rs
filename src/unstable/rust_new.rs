@@ -323,7 +323,7 @@ where
                 unsafe {
                     // Branchless comparison.
                     *end_l = i as u8;
-                    end_l = end_l.add(!is_less(&*elem, pivot) as usize);
+                    end_l = end_l.wrapping_add(!is_less(&*elem, pivot) as usize);
                     elem = elem.add(1);
                 }
             }
@@ -351,7 +351,7 @@ where
                     // Branchless comparison.
                     elem = elem.sub(1);
                     *end_r = i as u8;
-                    end_r = end_r.add(is_less(&*elem, pivot) as usize);
+                    end_r = end_r.wrapping_add(is_less(&*elem, pivot) as usize);
                 }
             }
         }
