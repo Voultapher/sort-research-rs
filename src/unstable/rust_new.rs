@@ -1204,18 +1204,18 @@ where
     //
     // if is_less(&*src_left, &*src_right) {
     //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
-    //     src_left = src_left.add(1);
+    //     src_left = src_left.wrapping_add(1);
     // } else {
     //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
-    //     src_right = src_right.add(1);
+    //     src_right = src_right.wrapping_add(1);
     // }
     // dest_ptr = dest_ptr.add(1);
 
     let is_l = is_less(&*src_left, &*src_right);
     let copy_ptr = if is_l { src_left } else { src_right };
     ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
-    src_right = src_right.add(!is_l as usize);
-    src_left = src_left.add(is_l as usize);
+    src_right = src_right.wrapping_add(!is_l as usize);
+    src_left = src_left.wrapping_add(is_l as usize);
     dest_ptr = dest_ptr.add(1);
 
     (src_left, src_right, dest_ptr)
@@ -1236,18 +1236,18 @@ where
     //
     // if is_less(&*src_left, &*src_right) {
     //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
-    //     src_right = src_right.sub(1);
+    //     src_right = src_right.wrapping_sub(1);
     // } else {
     //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
-    //     src_left = src_left.sub(1);
+    //     src_left = src_left.wrapping_sub(1);
     // }
     // dest_ptr = dest_ptr.sub(1);
 
     let is_l = is_less(&*src_left, &*src_right);
     let copy_ptr = if is_l { src_right } else { src_left };
     ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
-    src_right = src_right.sub(is_l as usize);
-    src_left = src_left.sub(!is_l as usize);
+    src_right = src_right.wrapping_sub(is_l as usize);
+    src_left = src_left.wrapping_sub(!is_l as usize);
     dest_ptr = dest_ptr.sub(1);
 
     (src_left, src_right, dest_ptr)
@@ -1265,88 +1265,28 @@ where
     let len = v.len();
     let src_ptr = v.as_ptr();
 
-    let mut block = len / 2;
+    let block = len / 2;
 
     let mut ptr_left = src_ptr;
-    let mut ptr_right = src_ptr.add(block);
+    let mut ptr_right = src_ptr.wrapping_add(block);
     let mut ptr_data = dest_ptr;
 
-    let mut t_ptr_left = src_ptr.add(block - 1);
-    let mut t_ptr_right = src_ptr.add(len - 1);
-    let mut t_ptr_data = dest_ptr.add(len - 1);
+    let mut t_ptr_left = src_ptr.wrapping_add(block - 1);
+    let mut t_ptr_right = src_ptr.wrapping_add(len - 1);
+    let mut t_ptr_data = dest_ptr.wrapping_add(len - 1);
 
     for _ in 0..block {
         (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
         (t_ptr_left, t_ptr_right, t_ptr_data) =
             merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
-
-        // let x = ptr_right.sub_ptr(ptr_left);
-        // let y = t_ptr_right.sub_ptr(t_ptr_left);
-        // let z = t_ptr_right.sub_ptr(ptr_left);
-        // println!("x {x} y: {y} z: {z}");
     }
 
-    // TODO check for Ord violation.
+    let left_diff = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
+    let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
 
-    // let x = t_ptr_left.sub_ptr(ptr_left);
-    // let y = t_ptr_right.sub_ptr(ptr_right);
-    // println!("x: {x} y: {y} block: {block}");
-
-    // panic!();
-
-    // let a = finish_up(ptr_left, ptr_right, ptr_data, is_less);
-    // let b = finish_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
-
-    // dbg!(ptr_left, ptr_right, ptr_data);
-    // dbg!(t_ptr_left, t_ptr_right, t_ptr_data);
-    // dbg!(ptr_right.sub_ptr(ptr_left));
-    // dbg!(t_ptr_right.sub_ptr(t_ptr_left));
-    // dbg!(t_ptr_left.sub_ptr(ptr_left));
-    // dbg!(t_ptr_right.sub_ptr(ptr_right));
-    // dbg!(t_ptr_right.sub_ptr(ptr_left));
-    // dbg!(t_ptr_left.sub_ptr(ptr_right));
-    // dbg!(len, len / 2);
-    // dbg!(a);
-    // dbg!(b);
-    // dbg!(b.sub_ptr(a));
-    // dbg!(a.sub_ptr(b));
-
-    // let arrived = t_ptr_data.sub_ptr(dest_ptr.add(block));
-    // if arrived != 0 {
-    //     panic!("Ord violation");
-    // }
-
-    // let x = ptr_right.sub_ptr(ptr_left);
-    // let y = t_ptr_right.sub_ptr(t_ptr_left);
-
-    // let x = if t_ptr_left >= ptr_left {
-    //     t_ptr_left.sub_ptr(ptr_left)
-    // } else {
-    //     ptr_left.sub_ptr(t_ptr_left)
-    // };
-
-    // let y = if t_ptr_right >= ptr_right {
-    //     t_ptr_right.sub_ptr(ptr_right)
-    // } else {
-    //     ptr_right.sub_ptr(t_ptr_right)
-    // };
-
-    // println!("x {} y: {}", x, y);
-
-    // if (x > 1 || x != y) {
-    //     panic!("Ord violation");
-    // }
-
-    // let t_diff_a = t_ptr_left.sub_ptr(src_ptr.add(block));
-    // let t_diff_b = t_ptr_right.sub_ptr(src_ptr.add(len - 1));
-
-    // println!("t_x {}, t_y {} block: {block}", t_diff_a, t_diff_b);
-
-    // println!("b-a {}, a-b {}", b.sub_ptr(a), a.sub_ptr(b));
-    // dbg!(src_ptr);
-    // dbg!(src_ptr.add(len / 2));
-
-    // TODO check pointers to safeguard against Ord violation.
+    if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
+        panic!("Ord violation");
+    }
 }
 
 // Slices of up to this length get sorted using optimized sorting for small slices.

@@ -674,7 +674,11 @@ fn violate_ord_retain_original_set() {
             let mut test_data = patterns::random(*test_size);
             let sum_before: i64 = test_data.iter().map(|x| *x as i64).sum();
 
-            test_sort::sort_by(&mut test_data, &mut *comp_func);
+            // It's ok to panic on Ord violation or to complete.
+            // In both cases the original elements must still be present.
+            let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                test_sort::sort_by(&mut test_data, &mut *comp_func);
+            }));
 
             // If the sum before and after don't match, it means the set of elements hasn't remained the
             // same.
