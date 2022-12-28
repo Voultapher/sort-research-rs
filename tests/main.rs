@@ -394,9 +394,17 @@ fn comp_panic() {
     }
 }
 
-#[cfg(not(miri))] // stacked-borrow issues.
+#[cfg(not(miri))]
 #[test]
 fn observable_is_less_u64() {
+    // Technically this is unsound as per Rust semantics, but the only way to do this that works
+    // across C FFI. In C and C++ it would be valid to interpret for example a uint64_t as pointer
+    // and modify the object it points to. C and C++ have no concept of a UnsafeCell.
+    if <test_sort::SortImpl as sort_comp::Sort>::name().contains("rust_") {
+        // It would be great to mark the test as skipped, but that isn't possible as of now.
+        return;
+    }
+
     use std::mem;
 
     let _seed = get_or_init_random_seed();
@@ -528,6 +536,71 @@ fn observable_is_less() {
         });
 
         let total_inner: u64 = test_input.iter().map(|c| c.comp_count.get() as u64).sum();
+
+        assert_eq!(total_inner, comp_count_gloabl * 2);
+    };
+
+    test_fn(patterns::ascending(10));
+    test_fn(patterns::ascending(19));
+    test_fn(patterns::ascending(200));
+    test_fn(patterns::random(12));
+    test_fn(patterns::random(20));
+    test_fn(patterns::random(200));
+    test_fn(patterns::ascending_saw(10, 3));
+    test_fn(patterns::ascending_saw(200, 4));
+    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
+}
+
+#[test]
+fn observable_is_less_mut_ptr() {
+    let _seed = get_or_init_random_seed();
+
+    #[derive(PartialEq, Eq, Debug, Clone)]
+    struct CompCount {
+        val: i32,
+        comp_count: u32,
+    }
+
+    impl CompCount {
+        fn new(val: i32) -> Self {
+            Self { val, comp_count: 0 }
+        }
+    }
+
+    // This test, tests the same as observable_is_less but instead of mutating a Cell like object it
+    // mutates *mut pointers.
+
+    let test_fn = |pattern: Vec<i32>| {
+        // The sort type T is Copy, yet it still allows mutable access during comparison.
+        let mut test_input: Vec<*mut CompCount> = pattern
+            .into_iter()
+            .map(|val| Box::into_raw(Box::new(CompCount::new(val))))
+            .collect::<Vec<_>>();
+
+        let mut comp_count_gloabl = 0;
+
+        test_sort::sort_by(&mut test_input, |a_ptr, b_ptr| {
+            let a: &mut CompCount = unsafe { &mut **a_ptr };
+            let b: &mut CompCount = unsafe { &mut **b_ptr };
+
+            a.comp_count += 1;
+            b.comp_count += 1;
+            comp_count_gloabl += 1;
+
+            a.val.cmp(&b.val)
+        });
+
+        let total_inner: u64 = test_input
+            .iter()
+            .map(|c| unsafe { &**c }.comp_count as u64)
+            .sum();
+
+        // Drop heap allocated elements.
+        for ptr in test_input {
+            unsafe {
+                drop(Box::from_raw(ptr));
+            }
+        }
 
         assert_eq!(total_inner, comp_count_gloabl * 2);
     };
@@ -704,24 +777,3 @@ fn sort_vs_sort_by() {
     assert_eq!(input_normal, expected);
     assert_eq!(input_sort_by, expected);
 }
-
-// #[test]
-// fn xx() {
-//     let input = vec![
-//         0, 5, 5, 2, 2, 2, 0, 3, 1, 5, 5, 4, 1, 5, 1, 6, 0, 5, 1, 2, 6, 6, 6, 6, 3, 2, 4, 3, 3, 6,
-//         2, 5, 6, 4, 3, 6, 0, 3, 1, 4, 4, 5, 3, 4, 5, 4, 5, 5, 6,
-//     ];
-
-//     let pivot = 5;
-
-//     println!("NEW");
-//     let mut a = input.clone();
-//     let x_a = <sort_comp::other::partition::small_fast::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut a, &pivot, &mut |a, b| a.lt(b));
-
-//     println!("EXISTING");
-//     let mut b = input.clone();
-//     let x_b = <sort_comp::other::partition::block_quicksort::PartitionImpl as sort_comp::other::partition::Partition>::partition_by(&mut b, &pivot, &mut |a, b| a.lt(b));
-
-//     assert_eq!(a, b);
-//     assert_eq!(x_a, x_b);
-// }
