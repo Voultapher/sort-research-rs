@@ -850,6 +850,35 @@ where
     true
 }
 
+/// Sorts `v` using strategies optimized for small sizes.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn sort_small_with_pattern_analysis<T, F>(v: &mut [T], is_less: &mut F) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+    assert!(len <= max_len_small_sort::<T>());
+
+    if len < 2 {
+        return true;
+    }
+
+    // Handles both ascending and descending inputs in N-1 comparisons.
+    let start = find_streak_rev(v, is_less);
+    if start == 0 {
+        return true;
+    }
+
+    if start < cmp::min(len / 2, 8) {
+        insertion_sort_shift_right(v, start, is_less);
+        return true;
+    }
+
+    // For some reasons calling sort_small here has a 5+% perf overhead.
+    // Delegate it by returning a bool, this also improves binary size.
+    false
+}
+
 /// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 pub fn quicksort<T, F>(v: &mut [T], mut is_less: F)
@@ -861,15 +890,12 @@ where
         return;
     }
 
-    const MAX_INSERTION: usize = 20;
-    if v.len() <= 20 {
-        // By doing it here, we ensure that even cold code is fast and already sorted inputs are
-        // handled very quickly.
-        if v.len() >= 2 {
-            // TODO use custom small sort here?
-            insertion_sort_shift_left(v, 1, &mut is_less);
+    if v.len() <= max_len_small_sort::<T>() {
+        // This code cannot rely on external pattern analysis,
+        // so add extra code for already sorted inputs.
+        if sort_small_with_pattern_analysis(v, &mut is_less) {
+            return;
         }
-        return;
     }
 
     // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
