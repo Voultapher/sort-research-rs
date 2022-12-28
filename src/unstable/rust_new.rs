@@ -1640,7 +1640,7 @@ where
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort16_plus_small<T, F>(v: &mut [T], is_less: &mut F)
+fn sort16_plus_parity<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -1701,7 +1701,7 @@ where
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort16_plus_large<T, F>(v: &mut [T], is_less: &mut F)
+fn sort16_plus_min_cmp<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -1753,8 +1753,9 @@ where
 {
     if qualifies_for_parity_merge::<T>() {
         // Allows it to use more stack space.
-        sort16_plus_small(v, is_less);
+        sort16_plus_parity(v, is_less);
     } else {
-        sort16_plus_large(v, is_less);
+        // Minimize the amount of comparisons.
+        sort16_plus_min_cmp(v, is_less);
     }
 }
