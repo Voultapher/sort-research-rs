@@ -430,7 +430,9 @@ where
 {
     let len = v.len();
 
-    if qualifies_for_branchless_sort::<T>() {
+    if qualifies_for_parity_merge::<T>() {
+        // TODO rework this.
+
         // Testing showed that even though this incurs more comparisons, up to size 32 (4 * 8),
         // avoiding the allocation and sticking with simple code is worth it. Going further eg. 40
         // is still worth it for u64 or even types with more expensive comparisons, but risks
@@ -501,9 +503,9 @@ where
     let start_found = start;
     let start_end_diff = end - start;
 
-    const FAST_SORT_SIZE: usize = 24;
+    const FAST_SORT_SIZE: usize = 32;
 
-    if qualifies_for_branchless_sort::<T>() && end >= (FAST_SORT_SIZE + 3) && start_end_diff <= 6 {
+    if qualifies_for_parity_merge::<T>() && end >= (FAST_SORT_SIZE + 3) && start_end_diff <= 6 {
         // For random inputs on average how many elements are naturally already sorted
         // (start_end_diff) will be relatively small. And it's faster to avoid a merge operation
         // between the newly sorted elements on the left by the sort network and the already sorted
@@ -522,14 +524,11 @@ where
             start_found - (FAST_SORT_SIZE - 3)
         };
 
-        // SAFETY: start >= 0 && start + FAST_SORT_SIZE <= end
-        unsafe {
-            // Use a straight-line sorting network here instead of some hybrid network with early
-            // exit. If the input is already sorted the previous adaptive analysis path of TimSort
-            // ought to have found it. So we prefer minimizing the total amount of comparisons,
-            // which are user provided and may be of arbitrary cost.
-            sort24_stable(&mut v[start..(start + FAST_SORT_SIZE)], is_less);
-        }
+        // Use a straight-line sorting network here instead of some hybrid network with early
+        // exit. If the input is already sorted the previous adaptive analysis path of TimSort
+        // ought to have found it. So we prefer minimizing the total amount of comparisons,
+        // which are user provided and may be of arbitrary cost.
+        sort32_stable(&mut v[start..(start + FAST_SORT_SIZE)], is_less);
 
         // For most patterns this branch should have good prediction accuracy.
         if !is_small_pre_sorted {
@@ -798,6 +797,13 @@ where
             // Consume the lesser side.
             // If equal, prefer the left run to maintain stability.
             unsafe {
+                // let is_l = is_less(&*right, &**left);
+                // let copy_ptr = if is_l { right } else { *left };
+                // ptr::copy_nonoverlapping(copy_ptr, *out, 1);
+                // right = right.wrapping_add(is_l as usize);
+                // *left = left.wrapping_add(!is_l as usize);
+                // *out = out.add(1);
+
                 let to_copy = if is_less(&*right, &**left) {
                     get_and_increment(&mut right)
                 } else {
@@ -888,19 +894,122 @@ impl<T: IsCopyMarker> IsCopy for T {
     }
 }
 
+// I would like to make this a const fn.
 #[inline]
-fn qualifies_for_branchless_sort<T>() -> bool {
-    // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
-    // down:
+fn qualifies_for_parity_merge<T>() -> bool {
+    // This checks two things:
     //
-    // - Copy: We guess that copy types have relatively cheap comparison functions. The branchless
-    //         sort does on average 8% more comparisons for random inputs and up to 50% in some
-    //         circumstances. The time won avoiding branches can be offset by this increase in
-    //         comparisons if the type is expensive to compare.
+    // - Type size: Is it ok to create 40 of them on the stack.
     //
-    // - Type size: Large types are more expensive to move and the time won avoiding branches can be
-    //              offset by the increased cost of moving the values.
-    T::is_copy() && (mem::size_of::<T>() <= mem::size_of::<[usize; 4]>())
+    // - Can the type have interior mutability, this is checked by testing if T is Copy.
+    //   If the type can have interior mutability it may alter itself during comparison in a way
+    //   that must be observed after the sort operation concludes.
+    //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
+
+    let is_small = mem::size_of::<T>() <= mem::size_of::<[usize; 2]>();
+    let is_copy = T::is_copy();
+
+    return is_small && is_copy;
+}
+
+#[inline]
+pub unsafe fn merge_up<T, F>(
+    mut src_left: *const T,
+    mut src_right: *const T,
+    mut dest_ptr: *mut T,
+    is_less: &mut F,
+) -> (*const T, *const T, *mut T)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // This is a branchless merge utility function.
+    // The equivalent code with a branch would be:
+    //
+    // if !is_less(&*src_right, &*src_left) {
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
+    //     src_left = src_left.wrapping_add(1);
+    // } else {
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
+    //     src_right = src_right.wrapping_add(1);
+    // }
+    // dest_ptr = dest_ptr.add(1);
+
+    let is_l = !is_less(&*src_right, &*src_left);
+    let copy_ptr = if is_l { src_left } else { src_right };
+    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
+    src_right = src_right.wrapping_add(!is_l as usize);
+    src_left = src_left.wrapping_add(is_l as usize);
+    dest_ptr = dest_ptr.add(1);
+
+    (src_left, src_right, dest_ptr)
+}
+
+#[inline]
+pub unsafe fn merge_down<T, F>(
+    mut src_left: *const T,
+    mut src_right: *const T,
+    mut dest_ptr: *mut T,
+    is_less: &mut F,
+) -> (*const T, *const T, *mut T)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // This is a branchless merge utility function.
+    // The equivalent code with a branch would be:
+    //
+    // if !is_less(&*src_right, &*src_left) {
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
+    //     src_right = src_right.wrapping_sub(1);
+    // } else {
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
+    //     src_left = src_left.wrapping_sub(1);
+    // }
+    // dest_ptr = dest_ptr.sub(1);
+
+    let is_l = !is_less(&*src_right, &*src_left);
+    let copy_ptr = if is_l { src_right } else { src_left };
+    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
+    src_right = src_right.wrapping_sub(is_l as usize);
+    src_left = src_left.wrapping_sub(!is_l as usize);
+    dest_ptr = dest_ptr.sub(1);
+
+    (src_left, src_right, dest_ptr)
+}
+
+// Adapted from crumsort/quadsort.
+unsafe fn parity_merge<T, F>(v: &[T], dest_ptr: *mut T, is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: the caller must guarantee that `dest_ptr` is valid for v.len() writes.
+    // Also `v.as_ptr` and `dest_ptr` must not alias.
+    //
+    // The caller must guarantee that T cannot modify itself inside is_less.
+    let len = v.len();
+    let src_ptr = v.as_ptr();
+
+    let block = len / 2;
+
+    let mut ptr_left = src_ptr;
+    let mut ptr_right = src_ptr.wrapping_add(block);
+    let mut ptr_data = dest_ptr;
+
+    let mut t_ptr_left = src_ptr.wrapping_add(block - 1);
+    let mut t_ptr_right = src_ptr.wrapping_add(len - 1);
+    let mut t_ptr_data = dest_ptr.wrapping_add(len - 1);
+
+    for _ in 0..block {
+        (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+        (t_ptr_left, t_ptr_right, t_ptr_data) =
+            merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    }
+
+    let left_diff = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
+    let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
+
+    if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
+        panic!("Ord violation");
+    }
 }
 
 // --- Branchless sorting (less branches not zero) ---
@@ -1031,26 +1140,32 @@ where
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-unsafe fn sort24_stable<T, F>(v: &mut [T], is_less: &mut F)
+fn sort32_stable<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: caller must ensure v is exactly len 24.
-    unsafe {
-        debug_assert!(v.len() == 24);
+    assert!(v.len() == 32 && T::is_copy());
 
+    let mut swap = mem::MaybeUninit::<[T; 32]>::uninit();
+    let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: We checked the len for sort8 and that T is Copy and thus observation safe.
+    // Should is_less panic v was not modified in parity_merge and retains it's original input.
+    // swap and v must not alias and swap has v.len() space.
+    unsafe {
         sort8_stable(&mut v[0..8], is_less);
         sort8_stable(&mut v[8..16], is_less);
+        parity_merge(&v[0..16], swap_ptr, is_less);
+
         sort8_stable(&mut v[16..24], is_less);
+        sort8_stable(&mut v[24..32], is_less);
+        parity_merge(&v[16..32], swap_ptr.add(16), is_less);
 
-        // We only need place for 8 entries because we know both sides are of length 8.
-        let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
-        let swap_ptr = swap.as_mut_ptr() as *mut T;
+        ptr::copy_nonoverlapping(swap_ptr, arr_ptr, 32);
 
-        // We only need place for 8 entries because we know both sides are of length 8.
-        merge(&mut v[..16], 8, swap_ptr, is_less);
-
-        // We only need place for 8 entries because the shorter side is length 8.
-        merge(&mut v[..24], 16, swap_ptr, is_less);
+        parity_merge(v, swap_ptr, is_less);
+        ptr::copy_nonoverlapping(swap_ptr, arr_ptr, 32);
     }
 }

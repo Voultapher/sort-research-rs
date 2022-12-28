@@ -1228,7 +1228,7 @@ where
     // This is a branchless merge utility function.
     // The equivalent code with a branch would be:
     //
-    // if is_less(&*src_left, &*src_right) {
+    // if !is_less(&*src_right, &*src_left) {
     //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
     //     src_left = src_left.wrapping_add(1);
     // } else {
@@ -1237,7 +1237,7 @@ where
     // }
     // dest_ptr = dest_ptr.add(1);
 
-    let is_l = is_less(&*src_left, &*src_right);
+    let is_l = !is_less(&*src_right, &*src_left);
     let copy_ptr = if is_l { src_left } else { src_right };
     ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
     src_right = src_right.wrapping_add(!is_l as usize);
@@ -1260,7 +1260,7 @@ where
     // This is a branchless merge utility function.
     // The equivalent code with a branch would be:
     //
-    // if is_less(&*src_left, &*src_right) {
+    // if !is_less(&*src_right, &*src_left) {
     //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
     //     src_right = src_right.wrapping_sub(1);
     // } else {
@@ -1269,7 +1269,7 @@ where
     // }
     // dest_ptr = dest_ptr.sub(1);
 
-    let is_l = is_less(&*src_left, &*src_right);
+    let is_l = !is_less(&*src_right, &*src_left);
     let copy_ptr = if is_l { src_right } else { src_left };
     ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
     src_right = src_right.wrapping_sub(is_l as usize);
@@ -1674,7 +1674,7 @@ where
     let len = v.len();
     const MAX_BRANCHLESS_SMALL_SORT: usize = max_len_small_sort::<i32>();
 
-    assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT);
+    assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT && T::is_copy());
 
     if len <= 23 {
         // SAFETY: we checked the len.
@@ -1712,7 +1712,9 @@ where
     let mut swap = mem::MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    // SAFETY: TODO
+    // SAFETY: We checked that T is Copy and thus observation safe.
+    // Should is_less panic v was not modified in parity_merge and retains it's original input.
+    // swap and v must not alias and swap has v.len() space.
     unsafe {
         parity_merge(&mut v[..even_len], swap_ptr, is_less);
         ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
