@@ -1202,36 +1202,20 @@ where
     // This is a branchless merge utility function.
     // The equivalent code with a branch would be:
     //
-    // if is_less(&*src_right, &*src_left) {
-    //     // x == 0 && y == 1
-    //     // Elements should be swapped in final order.
-    //
-    //     // Copy right side into dest[0] and the left side into dest[1]
-    //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
-    //     ptr::copy_nonoverlapping(src_left, dest_ptr.add(1), 1);
-    //
-    //     // Move right cursor one further, because we swapped.
-    //     src_right = src_right.add(1);
-    // } else {
-    //     // x == 1 && y == 0
-    //     // Elements are in order and don't need to be swapped.
-    //
-    //     // Copy left side into dest[0] and the right side into dest[1]
+    // if is_less(&*src_left, &*src_right) {
     //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
-    //     ptr::copy_nonoverlapping(src_right, dest_ptr.add(1), 1);
-    //
-    //     // Move left cursor one further, because we didn't swap.
     //     src_left = src_left.add(1);
+    // } else {
+    //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
+    //     src_right = src_right.add(1);
     // }
-    //
     // dest_ptr = dest_ptr.add(1);
 
-    let x = !is_less(&*src_right, &*src_left);
-    let y = !x;
-    ptr::copy_nonoverlapping(src_right, dest_ptr.add(x as usize), 1);
-    ptr::copy_nonoverlapping(src_left, dest_ptr.add(y as usize), 1);
-    src_right = src_right.add(y as usize);
-    src_left = src_left.add(x as usize);
+    let is_l = is_less(&*src_left, &*src_right);
+    let copy_ptr = if is_l { src_left } else { src_right };
+    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
+    src_right = src_right.add(!is_l as usize);
+    src_left = src_left.add(is_l as usize);
     dest_ptr = dest_ptr.add(1);
 
     (src_left, src_right, dest_ptr)
@@ -1250,80 +1234,26 @@ where
     // This is a branchless merge utility function.
     // The equivalent code with a branch would be:
     //
-    // dest_ptr = dest_ptr.sub(1);
-    //
-    // if is_less(&*src_right, &*src_left) {
-    //     // x == 0 && y == 1
-    //     // Elements should be swapped in final order.
-    //
-    //     // Copy right side into dest[0] and the left side into dest[1]
+    // if is_less(&*src_left, &*src_right) {
     //     ptr::copy_nonoverlapping(src_right, dest_ptr, 1);
-    //     ptr::copy_nonoverlapping(src_left, dest_ptr.add(1), 1);
-    //
-    //     // Move left cursor one back, because we swapped.
-    //     src_left = src_left.sub(1);
-    // } else {
-    //     // x == 1 && y == 0
-    //     // Elements are in order and don't need to be swapped.
-    //
-    //     // Copy left side into dest[0] and the right side into dest[1]
-    //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
-    //     ptr::copy_nonoverlapping(src_right, dest_ptr.add(1), 1);
-    //
-    //     // Move right cursor one back, because we didn't swap.
     //     src_right = src_right.sub(1);
+    // } else {
+    //     ptr::copy_nonoverlapping(src_left, dest_ptr, 1);
+    //     src_left = src_left.sub(1);
     // }
+    // dest_ptr = dest_ptr.sub(1);
 
-    let x = !is_less(&*src_right, &*src_left);
-    let y = !x;
+    let is_l = is_less(&*src_left, &*src_right);
+    let copy_ptr = if is_l { src_right } else { src_left };
+    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
+    src_right = src_right.sub(is_l as usize);
+    src_left = src_left.sub(!is_l as usize);
     dest_ptr = dest_ptr.sub(1);
-    ptr::copy_nonoverlapping(src_right, dest_ptr.add(x as usize), 1);
-    ptr::copy_nonoverlapping(src_left, dest_ptr.add(y as usize), 1);
-    src_right = src_right.sub(x as usize);
-    src_left = src_left.sub(y as usize);
 
     (src_left, src_right, dest_ptr)
 }
 
-// #[inline]
-// pub unsafe fn finish_up<T, F>(
-//     src_left: *const T,
-//     src_right: *const T,
-//     dest_ptr: *mut T,
-//     is_less: &mut F,
-// ) -> *const T
-// where
-//     F: FnMut(&T, &T) -> bool,
-// {
-//     let copy_ptr = if is_less(&*src_right, &*src_left) {
-//         src_right
-//     } else {
-//         src_left
-//     };
-//     ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
-//     copy_ptr
-// }
-
-// #[inline]
-// pub unsafe fn finish_down<T, F>(
-//     src_left: *const T,
-//     src_right: *const T,
-//     dest_ptr: *mut T,
-//     is_less: &mut F,
-// ) -> *const T
-// where
-//     F: FnMut(&T, &T) -> bool,
-// {
-//     let copy_ptr = if is_less(&*src_right, &*src_left) {
-//         src_left
-//     } else {
-//         src_right
-//     };
-//     ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
-//     copy_ptr
-// }
-
-// Ported from crumsort/quadsort.
+// Adapted from crumsort/quadsort.
 unsafe fn parity_merge<T, F>(v: &[T], dest_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1345,7 +1275,7 @@ where
     let mut t_ptr_right = src_ptr.add(len - 1);
     let mut t_ptr_data = dest_ptr.add(len - 1);
 
-    for _ in 0..(block - 1) {
+    for _ in 0..block {
         (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
         (t_ptr_left, t_ptr_right, t_ptr_data) =
             merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
@@ -1357,20 +1287,6 @@ where
     }
 
     // TODO check for Ord violation.
-
-    let copy_ptr = if is_less(&*ptr_right, &*ptr_left) {
-        ptr_right
-    } else {
-        ptr_left
-    };
-    ptr::copy_nonoverlapping(copy_ptr, ptr_data, 1);
-
-    let t_copy_ptr = if is_less(&*t_ptr_right, &*t_ptr_left) {
-        t_ptr_left
-    } else {
-        t_ptr_right
-    };
-    ptr::copy_nonoverlapping(t_copy_ptr, t_ptr_data, 1);
 
     // let x = t_ptr_left.sub_ptr(ptr_left);
     // let y = t_ptr_right.sub_ptr(ptr_right);
