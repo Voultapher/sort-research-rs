@@ -398,8 +398,11 @@ fn comp_panic() {
 #[test]
 fn observable_is_less_u64() {
     // Technically this is unsound as per Rust semantics, but the only way to do this that works
-    // across C FFI. In C and C++ it would be valid to interpret for example a uint64_t as pointer
-    // and modify the object it points to. C and C++ have no concept of a UnsafeCell.
+    // across C FFI. In C and C++ it would be valid to have some trivial POD containing an int that
+    // is marked as mutable. Thus allowing member functions to mutate it even though they only have
+    // access to a const reference. Now this int could be a pointer that was cleared inside the
+    // comparison function, but this clearing is potentially not observable after the sort and it
+    // will be freed again. C and C++ have no concept similar to UnsafeCell.
     if <test_sort::SortImpl as sort_comp::Sort>::name().contains("rust_") {
         // It would be great to mark the test as skipped, but that isn't possible as of now.
         return;
