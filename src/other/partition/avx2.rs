@@ -9,6 +9,7 @@ use core::ptr;
 partition_impl!("avx2");
 
 #[inline]
+#[cfg(target_arch = "x86_64")]
 unsafe fn update_offsets_ptr(
     partiton_mask: u8,
     mut offsets_ptr: *mut u8,
@@ -290,14 +291,14 @@ unsafe fn update_offsets_ptr(
     offsets_ptr
 }
 
-#[target_feature(enable = "avx2")]
 #[inline]
+#[target_feature(enable = "avx2")]
+#[cfg(target_arch = "x86_64")]
 unsafe fn analyze_block<T, F>(
     v_block: &[T],
     pivot: &T,
     mut offsets_ptr: *mut u8,
     is_less: &mut F,
-    reverse: bool,
 ) -> *mut u8
 where
     F: FnMut(&T, &T) -> bool,
@@ -307,14 +308,6 @@ where
 
     let block_len = v_block.len();
     assert!(block_len <= u8::MAX as usize);
-
-    let elem_at = |offset: usize| -> &T {
-        if reverse {
-            v_block.get_unchecked(block_len - offset - 1)
-        } else {
-            v_block.get_unchecked(offset)
-        }
-    };
 
     const UNROLL_SIZE: usize = 32;
 
@@ -330,9 +323,9 @@ where
             // SAFETY: TODO
             unsafe {
                 for i in 0..UNROLL_SIZE {
-                    comp_results_ptr
-                        .add(i)
-                        .write(is_less(elem_at(unroll_offset + i), pivot) as u8 * u8::MAX);
+                    comp_results_ptr.add(i).write(
+                        is_less(v_block.get_unchecked(unroll_offset + i), pivot) as u8 * u8::MAX,
+                    );
                 }
 
                 // Each byte is either 0u8 -> is_partitioned or all bits set 255u8 -> not is_partitioned.
@@ -365,7 +358,8 @@ where
         unsafe {
             // Branchless comparison.
             *offsets_ptr = i as u8;
-            offsets_ptr = offsets_ptr.wrapping_add(is_less(elem_at(i), pivot) as usize);
+            offsets_ptr =
+                offsets_ptr.wrapping_add(is_less(v_block.get_unchecked(i), pivot) as usize);
         }
     }
 
@@ -373,11 +367,16 @@ where
 }
 
 #[target_feature(enable = "avx2")]
+#[cfg(target_arch = "x86_64")]
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn partition_avx2<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
+    if !is_x86_feature_detected!("avx2") {
+        panic!("Unsupported platform");
+    }
+
     // Number of elements in a typical block.
     const BLOCK: usize = 256 - 32;
 
@@ -406,6 +405,8 @@ where
     let mut r = unsafe { l.add(v.len()) };
     let mut block_r = BLOCK;
     let mut start_r = ptr::null_mut();
+    let mut start_r_rev = ptr::null_mut();
+    let mut r_block_start = ptr::null_mut();
     let mut end_r = ptr::null_mut();
     let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK];
 
@@ -457,7 +458,6 @@ where
                     pivot,
                     start_l,
                     &mut |a, b| !is_less(a, b),
-                    false, // reverse
                 )
             };
         }
@@ -473,37 +473,10 @@ where
                     pivot,
                     start_r,
                     is_less,
-                    true, // reverse
                 )
             };
-
-            // let mut elem = r;
-
-            // for i in 0..block_r {
-            //     // SAFETY: The unsafety operations below involve the usage of the `offset`.
-            //     //         According to the conditions required by the function, we satisfy them because:
-            //     //         1. `offsets_r` is stack-allocated, and thus considered separate allocated object.
-            //     //         2. The function `is_less` returns a `bool`.
-            //     //            Casting a `bool` will never overflow `isize`.
-            //     //         3. We have guaranteed that `block_r` will be `<= BLOCK`.
-            //     //            Plus, `end_r` was initially set to the begin pointer of `offsets_` which was declared on the stack.
-            //     //            Thus, we know that even in the worst case (all invocations of `is_less` returns true) we will only be at most 1 byte pass the end.
-            //     //        Another unsafety operation here is dereferencing `elem`.
-            //     //        However, `elem` was initially `1 * sizeof(T)` past the end and we decrement it by `1 * sizeof(T)` before accessing it.
-            //     //        Plus, `block_r` was asserted to be less than `BLOCK` and `elem` will therefore at most be pointing to the beginning of the slice.
-            //     unsafe {
-            //         // Branchless comparison.
-            //         elem = elem.sub(1);
-            //         *end_r = i as u8;
-            //         end_r = end_r.wrapping_add(is_less(&*elem, pivot) as usize);
-            //     }
-            // }
-
-            // println!(
-            //     "{:?}",
-            //     &*ptr::slice_from_raw_parts(start_r, width(start_r, end_r))
-            // );
-            // panic!();
+            start_r_rev = end_r.sub(1);
+            r_block_start = r.sub(block_r);
         }
 
         // Number of out-of-order elements to swap between the left and right side.
@@ -517,7 +490,7 @@ where
             }
             macro_rules! right {
                 () => {
-                    r.sub(*start_r as usize + 1)
+                    r_block_start.add(*start_r_rev as usize)
                 };
             }
 
@@ -547,14 +520,16 @@ where
                 for _ in 1..count {
                     start_l = start_l.offset(1);
                     ptr::copy_nonoverlapping(left!(), right!(), 1);
-                    start_r = start_r.offset(1);
+                    start_r_rev = start_r_rev.sub(1);
                     ptr::copy_nonoverlapping(right!(), left!(), 1);
                 }
 
                 ptr::copy_nonoverlapping(&tmp, right!(), 1);
                 mem::forget(tmp);
-                start_l = start_l.offset(1);
-                start_r = start_r.offset(1);
+                start_r_rev = start_r_rev.sub(1);
+
+                start_l = start_l.add(1);
+                start_r = start_r.add(count);
             }
         }
 
@@ -614,12 +589,18 @@ where
         // The right block remains.
         // Move its remaining out-of-order elements to the far left.
         debug_assert_eq!(width(l, r), block_r);
-        while start_r < end_r {
+
+        // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
+        // or `block_r` has been adjusted for the last handful of elements.
+        // let r_block_start = unsafe { r.sub(block_r) };
+        let end_r_rev = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
+
+        while start_r_rev >= end_r_rev {
             // SAFETY: See the reasoning in [remaining-elements-safety].
             unsafe {
-                end_r = end_r.offset(-1);
-                ptr::swap(l, r.offset(-(*end_r as isize) - 1));
-                l = l.offset(1);
+                ptr::swap(l, r_block_start.add(*start_r_rev as usize));
+                start_r_rev = start_r_rev.sub(1);
+                l = l.add(1);
             }
         }
         width(v.as_mut_ptr(), l)
@@ -629,11 +610,18 @@ where
     }
 }
 
+#[cfg(not(target_arch = "x86_64"))]
+unsafe fn partition_avx2<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    panic!("Unsupported platform");
+}
+
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // TODO feature detection.
     unsafe { partition_avx2(v, pivot, is_less) }
 }
