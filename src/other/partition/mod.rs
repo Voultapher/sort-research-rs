@@ -49,3 +49,4 @@ pub mod simple_scan_branchless;
 pub mod simple_scan_branchy;
 pub mod small_fast;
 pub mod sum_is_less;
+pub mod sum_lookup;

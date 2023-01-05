@@ -2410,3 +2410,96 @@ where
         eval_sort_network(&SORT_NETWORKS[2], v, is_less);
     }
 }
+
+// Seems allowing unrolling is not doing this any good.
+/// Find the next offset where pred yields true.
+/// May call pred slightly more often than strictly necessary to allow unrolling.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+#[inline]
+fn find_elem_pred<T, F>(v: &[T], mut pred: F) -> usize
+where
+    F: FnMut(&T) -> bool,
+{
+    let len = v.len();
+
+    const MIN_UNROLL_SIZE: usize = 256;
+    if len < MIN_UNROLL_SIZE {
+        return v.iter().position(pred).unwrap_or(len);
+    }
+
+    let mut offset = 0;
+
+    // May call pred at most UNROLL_SIZE times too many times.
+    const UNROLL_SIZE: usize = 4;
+    let unroll_end = len - UNROLL_SIZE;
+
+    while offset < unroll_end {
+        let mut pred_matches = 0;
+        for i in 0..UNROLL_SIZE {
+            // SAFETY: offset + UNROLL_SIZE is < len.
+            let elem: &T = unsafe { v.get_unchecked(offset + i) };
+            pred_matches += !pred(elem) as usize;
+        }
+
+        if pred_matches != UNROLL_SIZE {
+            break;
+        }
+
+        offset += UNROLL_SIZE;
+    }
+
+    // SAFETY: offset is less than len.
+    while offset < len && !pred(unsafe { v.get_unchecked(offset) }) {
+        offset += 1;
+    }
+
+    offset
+}
+
+/// Find the next offset where pred yields true, reverse scanning.
+/// May call pred slightly more often than strictly necessary to allow unrolling.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+#[inline]
+fn find_elem_pred_rev<T, F>(v: &[T], mut pred: F) -> usize
+where
+    F: FnMut(&T) -> bool,
+{
+    let len = v.len();
+
+    const MIN_UNROLL_SIZE: usize = 256;
+    if len < MIN_UNROLL_SIZE {
+        return v
+            .iter()
+            .rev()
+            .position(pred)
+            .map(|pos| len - pos)
+            .unwrap_or(0);
+    }
+
+    let mut offset = len - 1;
+
+    // May call pred at most UNROLL_SIZE times too many times.
+    const UNROLL_SIZE: usize = 4;
+
+    while offset >= UNROLL_SIZE {
+        let mut pred_matches = 0;
+        for i in 0..UNROLL_SIZE {
+            // SAFETY: offset + UNROLL_SIZE is < len.
+            let elem: &T = unsafe { v.get_unchecked(offset - i) };
+            pred_matches += !pred(elem) as usize;
+        }
+
+        if pred_matches != UNROLL_SIZE {
+            break;
+        }
+
+        offset -= UNROLL_SIZE;
+    }
+
+    // SAFETY: offset is less than len.
+    while offset > 0 && !pred(unsafe { v.get_unchecked(offset) }) {
+        offset -= 1;
+    }
+
+    offset
+}

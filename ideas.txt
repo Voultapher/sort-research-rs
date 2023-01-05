@@ -4,3 +4,5 @@
 - Speedup remaining element partition (maybe use swap space?)
 - Special purpose partition for sizes < 100 (use swap?)
 - use bextr + count leading zeros
+- block quicksort with read elems to avoid read + write indirection in cyclic permutation 
+- bucketize u8 classifications 8 out-of-order 7 out-of-order and then walk through matching pairs and have optimized code for each case. How to do rest, leave leftover for next run like block_quicksort partition?

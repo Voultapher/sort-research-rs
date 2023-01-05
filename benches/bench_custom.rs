@@ -163,15 +163,25 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
         return;
     }
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_size,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::sum_is_less::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_size,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::sum_is_less::PartitionImpl,
+    );
+
+    bench_partition_impl(
+        filter_arg,
+        test_size,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::sum_lookup::PartitionImpl,
+    );
 
     // bench_partition_impl(
     //     filter_arg,
@@ -215,15 +225,15 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
     //     partition::crumsort::PartitionImpl,
     // );
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_size,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::new_block_quicksort::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_size,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::new_block_quicksort::PartitionImpl,
+    );
 
     // bench_partition_impl(
     //     filter_arg,
@@ -245,13 +255,13 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
     //     partition::ilp_partition::PartitionImpl,
     // );
 
-    bench_partition_impl(
-        filter_arg,
-        test_size,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::avx2::PartitionImpl,
-    );
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::avx2::PartitionImpl,
+    // );
 }
