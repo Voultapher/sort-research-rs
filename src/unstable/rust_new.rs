@@ -533,11 +533,15 @@ where
             }
         }
 
-        (
-            // l + <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less),
-            l + partition_in_blocks(&mut v[l..r], pivot, is_less),
-            l >= r,
-        )
+        if l >= r {
+            (l, true) // was partitioned
+        } else {
+            // let is_less_count = <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
+
+            let is_less_count = partition_in_blocks(&mut v[l..r], pivot, is_less);
+
+            (l + is_less_count, false)
+        }
 
         // `_pivot_guard` goes out of scope and writes the pivot (which is a stack-allocated
         // variable) back into the slice where it originally was. This step is critical in ensuring
