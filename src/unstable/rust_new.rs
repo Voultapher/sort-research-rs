@@ -232,7 +232,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // Number of elements in a typical block.
-    const BLOCK: usize = u8::MAX as usize;
+    const BLOCK: usize = 2usize.pow(u8::BITS);
 
     // The partitioning algorithm repeats the following steps until completion:
     //
@@ -266,7 +266,7 @@ where
     // than two fixed-size arrays of length `BLOCK`. VLAs might be more cache-efficient.
 
     // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
-    fn width<T>(l: *mut T, r: *mut T) -> usize {
+    fn width<T>(l: *const T, r: *const T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
         unsafe { r.sub_ptr(l) }
