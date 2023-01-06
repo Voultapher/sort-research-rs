@@ -163,25 +163,25 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
         return;
     }
 
-    bench_partition_impl(
-        filter_arg,
-        test_size,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::sum_is_less::PartitionImpl,
-    );
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::sum_is_less::PartitionImpl,
+    // );
 
-    bench_partition_impl(
-        filter_arg,
-        test_size,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::sum_lookup::PartitionImpl,
-    );
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::sum_lookup::PartitionImpl,
+    // );
 
     // bench_partition_impl(
     //     filter_arg,
