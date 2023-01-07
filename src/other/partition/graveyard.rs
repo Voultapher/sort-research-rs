@@ -995,3 +995,184 @@ where
         width(v.as_mut_ptr(), l)
     }
 }
+
+// Wow this is suprisingly slow, I guess it doesn't like the changing write location in fill_block.
+
+use core::cmp;
+use core::mem;
+use core::ptr;
+
+partition_impl!("new_block_quicksort");
+
+const U8_BITS_USED: usize = 8;
+const U8_COMBINATIONS: usize = 2usize.pow(u8::BITS);
+const BLOCK: usize = 16;
+const BLOCK_ELEMS: usize = BLOCK * U8_BITS_USED;
+
+#[derive(Copy, Clone)]
+struct BlockEntry {
+    partition_mask: u8,
+    offset: u8,
+}
+
+#[inline]
+unsafe fn gen_partition_mask<T, F>(block_ptr: *const T, is_out_of_order: &mut F) -> u8
+where
+    F: FnMut(&T) -> bool,
+{
+    let mut partition_mask = 0;
+
+    // This should be unrolled by the optimizer.
+    // TODO try out smaller spread for better occupancy.
+    for i in 0..U8_BITS_USED {
+        let elem: &T = unsafe { &*block_ptr.add(i) };
+        partition_mask |= (is_out_of_order(elem) as u8).wrapping_shl(i as u32);
+    }
+
+    partition_mask
+}
+
+#[inline]
+unsafe fn fill_block<T, F>(
+    base_ptr: *const T,
+    blocks_ptrs: *mut *mut BlockEntry,
+    is_out_of_order: &mut F,
+) where
+    F: FnMut(&T) -> bool,
+{
+    for i in 0..BLOCK as u8 {
+        // TODO check if it is cheaper to mut base_ptr instead of mult here.
+        unsafe {
+            let partition_mask =
+                gen_partition_mask(base_ptr.add(i as usize * U8_BITS_USED), is_out_of_order);
+
+            // TODO check branchless version.
+            // if partition_mask == 0 {
+            //     continue;
+            // }
+
+            let block_entry = BlockEntry {
+                partition_mask,
+                offset: i,
+            };
+
+            let bucket = U8_BIT_COUNT_TABLE
+                .get_unchecked(partition_mask as usize)
+                .saturating_sub(1);
+
+            let bucket_ptr = blocks_ptrs.add(bucket as usize);
+            (*bucket_ptr).write(block_entry);
+            bucket_ptr.write((*bucket_ptr).add(1));
+        }
+    }
+}
+
+fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
+    fn width<T>(l: *const T, r: *const T) -> usize {
+        debug_assert!(r.addr() >= l.addr());
+
+        unsafe { r.sub_ptr(l) }
+    }
+
+    // TODO check smaller sizes right now this uses BLOCK * 16 * 8 * 2 stack space.
+    let mut blocks_l = [mem::MaybeUninit::<[BlockEntry; BLOCK]>::uninit(); U8_BITS_USED];
+    let mut blocks_l_ptrs = [mem::MaybeUninit::<*mut BlockEntry>::uninit(); U8_BITS_USED];
+
+    let mut blocks_r = [mem::MaybeUninit::<[BlockEntry; BLOCK]>::uninit(); U8_BITS_USED];
+    let mut blocks_r_ptrs = [mem::MaybeUninit::<*mut BlockEntry>::uninit(); U8_BITS_USED];
+
+    let len = v.len();
+
+    let mut l_base_ptr = v.as_ptr();
+    let mut r_base_ptr = unsafe { v.as_ptr().add(len.saturating_sub(BLOCK_ELEMS)) };
+
+    let mut side_effect = 0;
+
+    while width(l_base_ptr, r_base_ptr) >= (BLOCK_ELEMS * 2) {
+        // Reset blocks pointers
+        for i in 0..U8_BITS_USED {
+            unsafe {
+                *blocks_l_ptrs[i].as_mut_ptr() = blocks_l[i].as_mut_ptr() as *mut BlockEntry;
+                *blocks_r_ptrs[i].as_mut_ptr() = blocks_r[i].as_mut_ptr() as *mut BlockEntry;
+            }
+        }
+
+        unsafe {
+            fill_block(
+                l_base_ptr,
+                blocks_l_ptrs.as_mut_ptr() as *mut *mut BlockEntry,
+                &mut |elem| !is_less(elem, pivot),
+            );
+
+            fill_block(
+                r_base_ptr,
+                blocks_r_ptrs.as_mut_ptr() as *mut *mut BlockEntry,
+                &mut |elem| is_less(elem, pivot),
+            );
+        }
+
+        // Now blocks_l and blocks_r should contain BlockEntry in their associated bucket
+        // denoting how many elements are out-of-order. Match up bucket entries that have
+        // the same amount of out-of-order entries. There is no bucket for zero elements are
+        // out-of-order. Those should just stay in-place.
+        let calc_block_count_l = |bucket: usize| {
+            let l_block_base_ptr = blocks_l[bucket].as_ptr() as *mut BlockEntry;
+            unsafe { width(l_block_base_ptr, blocks_l_ptrs[bucket].assume_init()) }
+        };
+
+        let calc_block_count_r = |bucket: usize| {
+            let r_block_base_ptr = blocks_r[bucket].as_ptr() as *mut BlockEntry;
+            unsafe { width(r_block_base_ptr, blocks_r_ptrs[bucket].assume_init()) }
+        };
+
+        let calc_block_count = |bucket| {
+            let count_l = calc_block_count_l(bucket);
+            let count_r = calc_block_count_r(bucket);
+            (count_l, count_r, cmp::min(count_l, count_r))
+        };
+
+        // Debug
+        // for i in 0..U8_BITS_USED {
+        //     let l_block_count = calc_block_count_l(i);
+        //     let r_block_count = calc_block_count_r(i);
+
+        //     println!("[{i}] l_block_count: {l_block_count} r_block_count: {r_block_count}");
+        // }
+
+        let l_block_base_ptr_8 = blocks_l[7].as_ptr() as *mut BlockEntry;
+        let r_block_base_ptr_8 = blocks_r[7].as_ptr() as *mut BlockEntry;
+        let (block_count_8_l, block_count_8_r, block_count_8_min) = calc_block_count(7);
+        // for i in 0..block_count_8_min {
+        //     unsafe {
+        //         ptr::swap_nonoverlapping(l_block_base_ptr_8.add(i), r_block_base_ptr_8.add(8), 8);
+        //     }
+        // }
+
+        side_effect += block_count_8_min;
+
+        unsafe {
+            l_base_ptr = l_base_ptr.add(BLOCK_ELEMS);
+            r_base_ptr = r_base_ptr.sub(BLOCK_ELEMS);
+        }
+    }
+
+    // FIXME for test
+    // <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(v, pivot, is_less)
+    side_effect
+}
+
+// Using a lookup table is significantly faster than .count_ones()
+const U8_BIT_COUNT_TABLE: [u8; U8_COMBINATIONS] = [
+    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,
+];
