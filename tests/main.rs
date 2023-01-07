@@ -709,10 +709,23 @@ fn violate_ord_retain_original_set() {
     // Just using random_uniform with the same size and range will always yield the same value.
     let random_orderings = patterns::random_uniform(5_000, 0..2);
 
-    let mut random_idx: u32 = 0;
+    let get_random_0_1_or_2 = |random_idx: &mut usize| {
+        let ridx = *random_idx;
+        *random_idx += 1;
+        if ridx + 1 == random_orderings.len() {
+            *random_idx = 0;
+        }
+
+        random_orderings[ridx] as usize
+    };
+
+    let mut random_idx_a = 0;
+    let mut random_idx_b = 0;
 
     let mut last_element_a = -1;
     let mut last_element_b = -1;
+
+    let mut rand_counter = 0;
 
     // Examples, a = 3, b = 5, c = 9.
     // Correct Ord -> 10010 | is_less(a, b) is_less(a, a) is_less(b, a) is_less(a, c) is_less(c, a)
@@ -721,13 +734,7 @@ fn violate_ord_retain_original_set() {
             // random
             // Eg. is_less(3, 5) == true, is_less(3, 5) == false
 
-            let ridx = random_idx as usize;
-            random_idx += 1;
-            if ridx + 1 == random_orderings.len() {
-                random_idx = 0;
-            }
-
-            let idx = random_orderings[ridx] as usize;
+            let idx = get_random_0_1_or_2(&mut random_idx_a);
             [Ordering::Less, Ordering::Equal, Ordering::Greater][idx]
         }),
         Box::new(|_a, _b| -> Ordering {
@@ -760,6 +767,16 @@ fn violate_ord_retain_original_set() {
             last_element_b = *b;
 
             if *a == lea && *b != leb {
+                b.cmp(a)
+            } else {
+                a.cmp(b)
+            }
+        }),
+        Box::new(|a, b| -> Ordering {
+            // Sampled random 1% of comparisons are reversed..
+            rand_counter += get_random_0_1_or_2(&mut random_idx_b);
+            if rand_counter >= 100 {
+                rand_counter = 0;
                 b.cmp(a)
             } else {
                 a.cmp(b)
