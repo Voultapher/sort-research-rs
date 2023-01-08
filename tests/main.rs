@@ -203,7 +203,19 @@ fn random() {
 fn random_dense() {
     test_impl(|size| {
         if size > 3 {
-            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) as i32)
+            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32))
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_narrow() {
+    // Great for debugging.
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) * 100)
         } else {
             Vec::new()
         }
@@ -281,7 +293,7 @@ fn stability() {
     let rand_vals = patterns::random_uniform(5_000, 0..9);
     let mut rand_idx = 0;
 
-    for len in (2..25).chain(large_range) {
+    for len in (2..55).chain(large_range) {
         for _ in 0..rounds {
             let mut counts = [0; 10];
 
@@ -721,11 +733,16 @@ fn violate_ord_retain_original_set() {
 
     let mut random_idx_a = 0;
     let mut random_idx_b = 0;
+    let mut random_idx_c = 0;
 
     let mut last_element_a = -1;
     let mut last_element_b = -1;
 
-    let mut rand_counter = 0;
+    let mut rand_counter_b = 0;
+    let mut rand_counter_c = 0;
+
+    let mut streak_counter_a = 0;
+    let mut streak_counter_b = 0;
 
     // Examples, a = 3, b = 5, c = 9.
     // Correct Ord -> 10010 | is_less(a, b) is_less(a, a) is_less(b, a) is_less(a, c) is_less(c, a)
@@ -773,13 +790,55 @@ fn violate_ord_retain_original_set() {
             }
         }),
         Box::new(|a, b| -> Ordering {
-            // Sampled random 1% of comparisons are reversed..
-            rand_counter += get_random_0_1_or_2(&mut random_idx_b);
-            if rand_counter >= 100 {
-                rand_counter = 0;
+            // Sampled random 1% of comparisons are reversed.
+            rand_counter_b += get_random_0_1_or_2(&mut random_idx_b);
+            if rand_counter_b >= 100 {
+                rand_counter_b = 0;
                 b.cmp(a)
             } else {
                 a.cmp(b)
+            }
+        }),
+        Box::new(|a, b| -> Ordering {
+            // Sampled random 33% of comparisons are reversed.
+            rand_counter_c += get_random_0_1_or_2(&mut random_idx_c);
+            if rand_counter_c >= 3 {
+                rand_counter_c = 0;
+                b.cmp(a)
+            } else {
+                a.cmp(b)
+            }
+        }),
+        Box::new(|a, b| -> Ordering {
+            // STREAK_LEN comparisons yield a.cmp(b) then STREAK_LEN comparisons less. This can
+            // discover bugs that neither, random Ord, or just Less or Greater can find. Because it
+            // can push a pointer further than expected. Random Ord will average out how far a
+            // comparison based pointer travels. Just Less or Greater will be caught by pattern
+            // analysis and never enter interesting code.
+            const STREAK_LEN: usize = 50;
+
+            streak_counter_a += 1;
+            if streak_counter_a <= STREAK_LEN {
+                a.cmp(b)
+            } else {
+                if streak_counter_a == STREAK_LEN * 2 {
+                    streak_counter_a = 0;
+                }
+                Ordering::Less
+            }
+        }),
+        Box::new(|a, b| -> Ordering {
+            // See above.
+            const STREAK_LEN: usize = 50;
+
+            streak_counter_b += 1;
+            if streak_counter_b <= STREAK_LEN {
+                a.cmp(b)
+            } else {
+                if streak_counter_b == STREAK_LEN * 2 {
+                    streak_counter_b = 0;
+                }
+                Ordering::Greater
             }
         }),
     ];
