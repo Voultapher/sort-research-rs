@@ -154,9 +154,17 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    let buf_len = len / 2;
-    let buf = BufGuard::new(buf_len, elem_alloc_fn, elem_dealloc_fn);
-    let buf_ptr = buf.buf_ptr;
+    // I'd argue most system are not as memory constrained that the double
+    let buf_len_wish = len;
+    let buf_len_fallback_min = len / 2;
+    let buf = BufGuard::new(
+        buf_len_wish,
+        buf_len_fallback_min,
+        elem_alloc_fn,
+        elem_dealloc_fn,
+    );
+    let buf_ptr = buf.buf_ptr.as_ptr();
+    let buf_len = buf.capacity;
 
     let mut runs = RunVec::new(run_alloc_fn, run_dealloc_fn);
 
@@ -251,7 +259,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     where
         ElemDeallocF: Fn(*mut T, usize),
     {
-        buf_ptr: *mut T,
+        buf_ptr: ptr::NonNull<T>,
         capacity: usize,
         elem_dealloc_fn: ElemDeallocF,
     }
@@ -261,16 +269,32 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         ElemDeallocF: Fn(*mut T, usize),
     {
         fn new<ElemAllocF>(
-            len: usize,
+            len_wish: usize,
+            len_fallback_min: usize,
             elem_alloc_fn: ElemAllocF,
             elem_dealloc_fn: ElemDeallocF,
         ) -> Self
         where
             ElemAllocF: Fn(usize) -> *mut T,
         {
+            let mut buf_ptr = elem_alloc_fn(len_wish);
+            let mut capacity = len_wish;
+
+            // There are overcommit style global allocators, but on such systems chances are half
+            // the length is gonna be a problem too.
+            if buf_ptr.is_null() {
+                buf_ptr = elem_alloc_fn(len_fallback_min);
+                capacity = len_fallback_min;
+
+                if buf_ptr.is_null() {
+                    // Maybe fall back to in-place stable sort?
+                    panic!("Unable to allocate memory for sort");
+                }
+            }
+
             Self {
-                buf_ptr: elem_alloc_fn(len),
-                capacity: len,
+                buf_ptr: ptr::NonNull::new(buf_ptr).unwrap(),
+                capacity,
                 elem_dealloc_fn,
             }
         }
@@ -281,7 +305,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         ElemDeallocF: Fn(*mut T, usize),
     {
         fn drop(&mut self) {
-            (self.elem_dealloc_fn)(self.buf_ptr, self.capacity);
+            (self.elem_dealloc_fn)(self.buf_ptr.as_ptr(), self.capacity);
         }
     }
 
@@ -290,7 +314,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         RunAllocF: Fn(usize) -> *mut TimSortRun,
         RunDeallocF: Fn(*mut TimSortRun, usize),
     {
-        buf_ptr: *mut TimSortRun,
+        buf_ptr: ptr::NonNull<TimSortRun>,
         capacity: usize,
         len: usize,
         run_alloc_fn: RunAllocF,
@@ -307,7 +331,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             const START_RUN_CAPACITY: usize = 16;
 
             Self {
-                buf_ptr: run_alloc_fn(START_RUN_CAPACITY),
+                buf_ptr: ptr::NonNull::new(run_alloc_fn(START_RUN_CAPACITY)).unwrap(),
                 capacity: START_RUN_CAPACITY,
                 len: 0,
                 run_alloc_fn,
@@ -318,15 +342,15 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         fn push(&mut self, val: TimSortRun) {
             if self.len == self.capacity {
                 let old_capacity = self.capacity;
-                let old_buf_ptr = self.buf_ptr;
+                let old_buf_ptr = self.buf_ptr.as_ptr();
 
                 self.capacity = self.capacity * 2;
-                self.buf_ptr = (self.run_alloc_fn)(self.capacity);
+                self.buf_ptr = ptr::NonNull::new((self.run_alloc_fn)(self.capacity)).unwrap();
 
                 // SAFETY: buf_ptr new and old were correctly allocated and old_buf_ptr has
                 // old_capacity valid elements.
                 unsafe {
-                    ptr::copy_nonoverlapping(old_buf_ptr, self.buf_ptr, old_capacity);
+                    ptr::copy_nonoverlapping(old_buf_ptr, self.buf_ptr.as_ptr(), old_capacity);
                 }
 
                 (self.run_dealloc_fn)(old_buf_ptr, old_capacity);
@@ -334,7 +358,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
 
             // SAFETY: The invariant was just checked.
             unsafe {
-                self.buf_ptr.add(self.len).write(val);
+                self.buf_ptr.as_ptr().add(self.len).write(val);
             }
             self.len += 1;
         }
@@ -347,7 +371,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             // SAFETY: buf_ptr needs to be valid and len invariant upheld.
             unsafe {
                 // the place we are taking from.
-                let ptr = self.buf_ptr.add(index);
+                let ptr = self.buf_ptr.as_ptr().add(index);
 
                 // Shift everything down to fill in that spot.
                 ptr::copy(ptr.add(1), ptr, self.len - index - 1);
@@ -357,7 +381,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
 
         fn as_slice(&self) -> &[TimSortRun] {
             // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
-            unsafe { &*ptr::slice_from_raw_parts(self.buf_ptr, self.len) }
+            unsafe { &*ptr::slice_from_raw_parts(self.buf_ptr.as_ptr(), self.len) }
         }
 
         fn len(&self) -> usize {
@@ -376,7 +400,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             if index < self.len {
                 // SAFETY: buf_ptr and len invariant must be upheld.
                 unsafe {
-                    return &*(self.buf_ptr.add(index));
+                    return &*(self.buf_ptr.as_ptr().add(index));
                 }
             }
 
@@ -393,7 +417,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             if index < self.len {
                 // SAFETY: buf_ptr and len invariant must be upheld.
                 unsafe {
-                    return &mut *(self.buf_ptr.add(index));
+                    return &mut *(self.buf_ptr.as_ptr().add(index));
                 }
             }
 
@@ -409,7 +433,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         fn drop(&mut self) {
             // As long as TimSortRun is Copy we don't need to drop them individually but just the
             // whole allocation.
-            (self.run_dealloc_fn)(self.buf_ptr, self.capacity);
+            (self.run_dealloc_fn)(self.buf_ptr.as_ptr(), self.capacity);
         }
     }
 }
