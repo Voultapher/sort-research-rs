@@ -154,7 +154,8 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    let buf = BufGuard::new(len / 2, elem_alloc_fn, elem_dealloc_fn);
+    let buf_len = len / 2;
+    let buf = BufGuard::new(buf_len, elem_alloc_fn, elem_dealloc_fn);
     let buf_ptr = buf.buf_ptr;
 
     let mut runs = RunVec::new(run_alloc_fn, run_dealloc_fn);
@@ -190,13 +191,26 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         while let Some(r) = collapse(runs.as_slice()) {
             let left = runs[r + 1];
             let right = runs[r];
+            let merge_slice = &mut v[left.start..right.start + right.len];
             unsafe {
-                merge(
-                    &mut v[left.start..right.start + right.len],
-                    left.len,
-                    buf_ptr,
-                    is_less,
-                );
+                if qualifies_for_parity_merge::<T>() && merge_slice.len() <= buf_len
+                // && merge_slice.len() % 2 == 0
+                {
+                    // println!("a");
+                    if parity_merge_plus(merge_slice, left.len, buf_ptr, is_less) {
+                        ptr::copy_nonoverlapping(
+                            buf_ptr,
+                            merge_slice.as_mut_ptr(),
+                            merge_slice.len(),
+                        );
+                    } else {
+                        // See TODO in parity_merge_plus.
+                        merge(merge_slice, left.len, buf_ptr, is_less);
+                    }
+                } else {
+                    // println!("b");
+                    merge(merge_slice, left.len, buf_ptr, is_less);
+                }
             }
             runs[r] = TimSortRun {
                 start: left.start,
@@ -756,6 +770,8 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
+    assert!(mid > 0 && mid < len);
+
     let arr_ptr = v.as_mut_ptr();
     let (v_mid, v_end) = unsafe { (arr_ptr.add(mid), arr_ptr.add(len)) };
 
@@ -977,8 +993,11 @@ where
     (src_left, src_right, dest_ptr)
 }
 
-// Adapted from crumsort/quadsort.
-unsafe fn parity_merge<T, F>(v: &[T], dest_ptr: *mut T, is_less: &mut F)
+/// Merge v assuming the len is even and v[..len / 2] and v[len / 2..] are sorted.
+///
+/// Adapted from crumsort/quadsort.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+pub unsafe fn parity_merge<T, F>(v: &[T], dest_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -989,17 +1008,17 @@ where
     let len = v.len();
     let src_ptr = v.as_ptr();
 
-    let block = len / 2;
+    let len_div_2 = len / 2;
 
     let mut ptr_left = src_ptr;
-    let mut ptr_right = src_ptr.wrapping_add(block);
+    let mut ptr_right = src_ptr.wrapping_add(len_div_2);
     let mut ptr_data = dest_ptr;
 
-    let mut t_ptr_left = src_ptr.wrapping_add(block - 1);
+    let mut t_ptr_left = src_ptr.wrapping_add(len_div_2 - 1);
     let mut t_ptr_right = src_ptr.wrapping_add(len - 1);
     let mut t_ptr_data = dest_ptr.wrapping_add(len - 1);
 
-    for _ in 0..block {
+    for _ in 0..len_div_2 {
         (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
         (t_ptr_left, t_ptr_right, t_ptr_data) =
             merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
@@ -1011,6 +1030,406 @@ where
     if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
         panic!("Ord violation");
     }
+}
+
+/// Merge v assuming v[..mid] and v[mid..] are already sorted.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+pub unsafe fn parity_merge_plus<T, F>(
+    v: &[T],
+    mid: usize,
+    dest_ptr: *mut T,
+    is_less: &mut F,
+) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: the caller must guarantee that `dest_ptr` is valid for v.len() writes.
+    // Also `v.as_ptr` and `dest_ptr` must not alias.
+    //
+    // The caller must guarantee that T cannot modify itself inside is_less.
+    let len = v.len();
+    let src_ptr = v.as_ptr();
+
+    assert!(mid > 0 && mid < len);
+
+    // println!("len: {len} mid: {mid}");
+
+    let mut ptr_left = src_ptr;
+    let mut ptr_right = src_ptr.wrapping_add(mid);
+    let mut ptr_data = dest_ptr;
+
+    let mut t_ptr_left = src_ptr.wrapping_add(mid - 1);
+    let mut t_ptr_right = src_ptr.wrapping_add(len - 1);
+    let mut t_ptr_data = dest_ptr.wrapping_add(len - 1);
+
+    type DebugT = u64;
+    const SHOULD_DEBUG_STATE: bool = false;
+
+    let should_debug_state_impl: bool =
+        SHOULD_DEBUG_STATE && std::any::type_name::<T>() == std::any::type_name::<DebugT>();
+
+    if should_debug_state_impl {
+        for i in 0..len {
+            (dest_ptr as *mut DebugT).add(i).write(DebugT::default());
+        }
+    }
+
+    macro_rules! debug_state {
+        () => {
+            if should_debug_state_impl {
+                let left_diff_x = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
+                let right_diff_x = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
+
+                println!(
+                    "\nlen: {len} mid: {mid} left_diff: {} right_diff: {}",
+                    left_diff_x / mem::size_of::<T>(),
+                    right_diff_x / mem::size_of::<T>()
+                );
+
+                println!(
+                    "ptr_left o: {} ptr_right o: {} t_ptr_left o: {} t_ptr_right o: {}",
+                    ptr_left.sub_ptr(src_ptr),
+                    ptr_right.sub_ptr(src_ptr),
+                    t_ptr_left.sub_ptr(src_ptr),
+                    t_ptr_right.sub_ptr(src_ptr)
+                );
+
+                let ptr_left = mem::transmute::<*const T, *const DebugT>(ptr_left);
+                let ptr_right = mem::transmute::<*const T, *const DebugT>(ptr_right);
+                let t_ptr_left = mem::transmute::<*const T, *const DebugT>(t_ptr_left);
+                let t_ptr_right = mem::transmute::<*const T, *const DebugT>(t_ptr_right);
+                println!(
+                    "ptr_left: {} ptr_right: {} t_ptr_left: {} t_ptr_right: {}",
+                    *ptr_left, *ptr_right, *t_ptr_left, *t_ptr_right
+                );
+                let v_as = mem::transmute::<&[T], &[DebugT]>(v);
+                println!("v: {v_as:?}");
+
+                let buf_as =
+                    mem::transmute::<&[T], &[DebugT]>(&*ptr::slice_from_raw_parts(dest_ptr, len));
+                println!("b: {buf_as:?}");
+            }
+        };
+    }
+
+    let left_side_shorter = mid < len - mid;
+    let shorter_side = if left_side_shorter { mid } else { len - mid };
+    let longer_side = len - shorter_side;
+
+    // TODO explain why this is safe even with Ord violations.
+    for _ in 0..shorter_side {
+        (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+        (t_ptr_left, t_ptr_right, t_ptr_data) =
+            merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    }
+
+    let calc_ptr_diff = |ptr, base_ptr| (ptr as usize).wrapping_sub(base_ptr as usize);
+
+    if shorter_side != longer_side {
+        let end_ptr = src_ptr.add(len);
+        // dbg!(end_ptr.sub_ptr(src_ptr));
+
+        let is_out_of_bounds = |ptr_left, ptr_right, t_ptr_left, t_ptr_right| -> bool {
+            ((ptr_left == end_ptr) as u8
+                + (ptr_right == end_ptr) as u8
+                + (t_ptr_left < src_ptr) as u8
+                + (t_ptr_right < src_ptr) as u8)
+                != 0
+        };
+
+        let mut left_ptr_done = calc_ptr_diff(ptr_left, t_ptr_left) == mem::size_of::<T>();
+        let mut right_ptr_done = calc_ptr_diff(ptr_right, t_ptr_right) == mem::size_of::<T>();
+        let mut out_of_bound = is_out_of_bounds(ptr_left, ptr_right, t_ptr_left, t_ptr_right);
+
+        // TODO checkout transitive check, 4 vs 6 comps:
+        // ptr_left <= t_ptr_left && t_ptr_left >= src_ptr && ptr_right <= t_ptr_right && t_ptr_right >= src_ptr
+        // The goal is to generate a single jmp instruction. TODO experiment.
+        while ((left_ptr_done as u8) + (right_ptr_done as u8) + (out_of_bound as u8)) == 0 {
+            (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+            (t_ptr_left, t_ptr_right, t_ptr_data) =
+                merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+
+            left_ptr_done = calc_ptr_diff(ptr_left, t_ptr_left) == mem::size_of::<T>();
+            right_ptr_done = calc_ptr_diff(ptr_right, t_ptr_right) == mem::size_of::<T>();
+            out_of_bound = is_out_of_bounds(ptr_left, ptr_right, t_ptr_left, t_ptr_right);
+        }
+
+        if out_of_bound && !left_ptr_done && !right_ptr_done {
+            panic!("Ord violation");
+        }
+
+        debug_state!();
+
+        if !left_ptr_done {
+            assert!(t_ptr_data >= ptr_data);
+            let buf_rest_len = t_ptr_data.sub_ptr(ptr_data) + 1;
+            // t_ptr_left must be within the left side and larger or equal to ptr_left.
+            assert!(t_ptr_left < src_ptr.add(mid) && t_ptr_left >= ptr_left);
+            let copy_len = t_ptr_left.sub_ptr(ptr_left) + 1;
+            assert!(copy_len == buf_rest_len);
+            ptr::copy_nonoverlapping(ptr_left, ptr_data, copy_len);
+            ptr_left = ptr_left.add(copy_len);
+        } else if !right_ptr_done {
+            assert!(t_ptr_data >= ptr_data);
+            let buf_rest_len = t_ptr_data.sub_ptr(ptr_data) + 1;
+            // t_ptr_right must be within the right side and larger or equal to ptr_right.
+            assert!(t_ptr_right < src_ptr.add(len) && t_ptr_right >= ptr_right);
+            let copy_len = t_ptr_right.sub_ptr(ptr_right) + 1;
+            assert!(copy_len == buf_rest_len);
+            ptr::copy_nonoverlapping(ptr_right, ptr_data, copy_len);
+            ptr_right = ptr_right.add(copy_len);
+        }
+
+        // let (rest_ptr, target_ptr, rest_offset): (&mut *const T, *const T, isize) =
+        //     if !left_ptr_done {
+        //         if is_less(&*ptr_left, &*t_ptr_left) {
+        //             (&mut ptr_left, t_ptr_left, 1)
+        //         } else {
+        //             (&mut t_ptr_left, ptr_left, -1)
+        //         }
+
+        //         //     (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+        //         //     (t_ptr_left, t_ptr_right, t_ptr_data) =
+        //         //         merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+
+        //         //     left_ptr_done = calc_ptr_diff(ptr_left, t_ptr_left) == mem::size_of::<T>();
+        //         //     out_of_bound = is_out_of_bounds(ptr_left, ptr_right, t_ptr_left, t_ptr_right);
+        //         // }
+        //         // dbg!(t_ptr_left.sub_ptr(ptr_left) + 1);
+        //         // for _ in 0..(t_ptr_left.sub_ptr(ptr_left) + 1) {
+        //         //     if ptr_left == end_ptr {
+        //         //         panic!("Ord violation");
+        //         //     }
+
+        //         //     ptr::copy_nonoverlapping(ptr_left, ptr_data, 1);
+        //         //     ptr_left = ptr_left.wrapping_add(1);
+        //         //     ptr_data = ptr_data.wrapping_add(1);
+        //         // }
+        //         // return false; // FIXME
+        //     } else if !right_ptr_done {
+        //         if is_less(&*ptr_right, &*t_ptr_right) {
+        //             (&mut ptr_right, t_ptr_right, 1)
+        //         } else {
+        //             (&mut t_ptr_right, ptr_right, -1)
+        //         }
+
+        //         // dbg!(t_ptr_right.sub_ptr(ptr_right) + 1);
+        //         // // let rest_ptr = if is_less(
+
+        //         // for _ in 0..(t_ptr_right.sub_ptr(ptr_right) + 1) {
+        //         //     if t_ptr_right < src_ptr {
+        //         //         panic!("Ord violation");
+        //         //     }
+
+        //         //     ptr::copy_nonoverlapping(t_ptr_right, ptr_data, 1);
+        //         //     t_ptr_right = t_ptr_right.wrapping_sub(1);
+        //         //     ptr_data = ptr_data.wrapping_add(1);
+        //         // }
+        //         // FIXME
+        //         // return false;
+        //     } else {
+        //         // TODO this is wrong and we need to check Ord, just bypass until end.
+        //         return true;
+        //     };
+
+        // let rest_loop_len = (target_ptr as usize).abs_diff(*rest_ptr as usize);
+        // let rest_buf_len = (t_ptr_data as usize) - ptr_data as usize;
+
+        // dbg!(rest_loop_len, rest_buf_len);
+
+        // if target_ptr < src_ptr || target_ptr >= src_ptr.add(len) || rest_loop_len != rest_buf_len {
+        //     panic!("Ord violation");
+        // }
+
+        // // TODO explain why this can't be out-of-bounds, or a Ord violation.
+        // for _ in 0..((rest_loop_len / mem::size_of::<T>()) + 1) {
+        //     ptr::copy_nonoverlapping(*rest_ptr, ptr_data, 1);
+        //     *rest_ptr = rest_ptr.wrapping_offset(rest_offset);
+        //     ptr_data = ptr_data.add(1);
+        // }
+
+        debug_state!();
+
+        // Track all regions that have been written and ensure they don't overlap.
+        // [.., .., .., .., .., .., .., .., .., .., .., .., ..]
+        // ________________
+        //
+
+        // TODO is that the same check as before?
+        // let ptr_left_written =
+
+        // println!(
+        //     "l: {} r: {} tl: {} tr: {} | ls: {} rs: {} tls: {} trs: {}",
+        //     ptr_left.sub_ptr(src_ptr),
+        //     ptr_right.sub_ptr(src_ptr),
+        //     t_ptr_left.sub_ptr(src_ptr),
+        //     t_ptr_right.sub_ptr(src_ptr),
+        //     (src_ptr).sub_ptr(src_ptr),
+        //     (src_ptr.wrapping_add(mid)).sub_ptr(src_ptr),
+        //     (src_ptr.wrapping_add(mid - 1)).sub_ptr(src_ptr),
+        //     (src_ptr.wrapping_add(len - 1)).sub_ptr(src_ptr),
+        // );
+    }
+
+    let left_diff = calc_ptr_diff(ptr_left, t_ptr_left);
+    let right_diff = calc_ptr_diff(ptr_right, t_ptr_right);
+
+    if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
+        panic!("Ord violation");
+    }
+
+    return true; // FIXME
+
+    // return true; // FIXME
+
+    // dbg!(ptr_left.sub_ptr(src_ptr));
+    // dbg!(t_ptr_left.sub_ptr(src_ptr));
+
+    // dbg!(ptr_right.sub_ptr(src_ptr));
+    // dbg!(t_ptr_right.sub_ptr(src_ptr));
+
+    // dbg!(ptr_data.sub_ptr(dest_ptr));
+    // dbg!(t_ptr_data.sub_ptr(dest_ptr));
+
+    // let buf_as_i32 = mem::transmute::<&[T], &[i32]>(&*ptr::slice_from_raw_parts(dest_ptr, len));
+    // println!("b: {buf_as_i32:?}");
+
+    // let rest_loop_len = if rest_len_even != rest_len {
+    //     rest_len_even.saturating_sub(1) / 2
+    // } else {
+    //     rest_len / 2
+    // };
+
+    // dbg!(rest_len, rest_len_even);
+
+    // for _ in 0..rest_loop_len {
+    //     (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+    //     (t_ptr_left, t_ptr_right, t_ptr_data) =
+    //         merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    // }
+
+    // let ptr_left_i32 = mem::transmute::<*const T, *const i32>(ptr_left);
+    // let ptr_right_i32 = mem::transmute::<*const T, *const i32>(ptr_right);
+    // let t_ptr_left_i32 = mem::transmute::<*const T, *const i32>(t_ptr_left);
+    // let t_ptr_right_i32 = mem::transmute::<*const T, *const i32>(t_ptr_right);
+
+    // // println!(
+    // //     "ptr_left_i32: {} ptr_right_i32: {} t_ptr_left_i32: {} t_ptr_right_i32: {}",
+    // //     *ptr_left_i32, *ptr_right_i32, *t_ptr_left_i32, *t_ptr_right_i32
+    // // );
+
+    // let left_diff_x = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
+    // let right_diff_x = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
+
+    // type DebugT = i32;
+    // if true {
+    //     println!(
+    //         "\nlen: {len} mid: {mid} left_diff: {} right_diff: {}",
+    //         left_diff_x / mem::size_of::<T>(),
+    //         right_diff_x / mem::size_of::<T>()
+    //     );
+    //     let ptr_left = mem::transmute::<*const T, *const DebugT>(ptr_left);
+    //     let ptr_right = mem::transmute::<*const T, *const DebugT>(ptr_right);
+    //     let t_ptr_left = mem::transmute::<*const T, *const DebugT>(t_ptr_left);
+    //     let t_ptr_right = mem::transmute::<*const T, *const DebugT>(t_ptr_right);
+    //     println!(
+    //         "ptr_left: {} ptr_right: {} t_ptr_left: {} t_ptr_right: {}",
+    //         *ptr_left, *ptr_right, *t_ptr_left, *t_ptr_right
+    //     );
+    //     let v_as = mem::transmute::<&[T], &[DebugT]>(v);
+    //     println!("v: {v_as:?}");
+
+    //     let buf_as = mem::transmute::<&[T], &[DebugT]>(&*ptr::slice_from_raw_parts(dest_ptr, len));
+    //     println!("b: {buf_as:?}");
+    // }
+
+    // if left_diff_x > mem::size_of::<T>() || right_diff_x > mem::size_of::<T>() {
+    //     // This sometimes happens and I'm not sure how to recover from that, while ensuring Ord
+    //     // violation detection is correct. Eg. [0, 1, 1, 4, 9, 9, 9, 10, 12, 13, 14, 16, 17, 17, 18,
+    //     // 18, 19, 19, 19, 19, 21, 23, 24, 24, 24, 25, 25, 25, 26, 27, 27, 27, 1, 1, 2, 2, 3, 5, 5,
+    //     // 6, 7, 12].
+    //     // TODO detect early or fix implementation.
+    //     return false;
+    // }
+
+    // if rest_len_even != rest_len {
+    //     // let last_elem_ptr = if left_side_shorter {
+    //     //     t_ptr_right
+    //     // } else {
+    //     //     ptr_left
+    //     // };
+
+    //     let last_elem_ptr = if left_diff_x == 0 {
+    //         let ptr = ptr_left;
+    //         ptr_left = ptr_left.wrapping_add(1);
+    //         ptr
+    //     } else if right_diff_x == 0 {
+    //         let ptr = t_ptr_right;
+    //         t_ptr_right = t_ptr_right.wrapping_sub(1);
+    //         ptr
+    //     } else {
+    //         unreachable!();
+    //     };
+    //     ptr::copy_nonoverlapping(last_elem_ptr, ptr_data, 1);
+
+    //     // let left_diff = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
+    //     // let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
+
+    //     // if left_diff != mem::size_of::<T>() {
+
+    //     // }
+
+    //     // TODO branchless?
+    //     // if ptr_right == t_ptr_right
+
+    //     // (t_ptr_left, t_ptr_right, t_ptr_data) =
+    //     //     merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    //     // (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+    // }
+
+    // if left_side_shorter {
+    //     (t_ptr_left, t_ptr_right, t_ptr_data) =
+    //         merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    // } else {
+    //     (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+    // }
+
+    // TODO branchless?
+    // if left_side_shorter {
+    //     dbg!(rest_len);
+    //     for _ in 0..rest_len {
+    //         (t_ptr_left, t_ptr_right, t_ptr_data) =
+    //             merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    //     }
+    //     // (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+    // } else {
+    //     for _ in 0..rest_len {
+    //         (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+    //     }
+    //     // (t_ptr_left, t_ptr_right, t_ptr_data) =
+    //     //     merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+    // }
+
+    // let v_as_x = mem::transmute::<&[T], &[DebugT]>(v);
+    // let buf_as_x = mem::transmute::<&[T], &[DebugT]>(&*ptr::slice_from_raw_parts(dest_ptr, len));
+
+    // let mut expected_merged = v_as_x.to_vec();
+    // expected_merged.sort();
+
+    // if expected_merged != buf_as_x {
+    //     dbg!(ptr_right.sub_ptr(src_ptr));
+    //     dbg!(t_ptr_left.sub_ptr(src_ptr));
+
+    //     dbg!(ptr_right.sub_ptr(src_ptr));
+    //     dbg!(t_ptr_right.sub_ptr(src_ptr));
+
+    //     dbg!(ptr_data.sub_ptr(dest_ptr));
+    //     dbg!(t_ptr_data.sub_ptr(dest_ptr));
+
+    //     println!("v: {v_as_x:?}");
+    //     println!("b: {buf_as_x:?}");
+    //     println!("e: {expected_merged:?}");
+    // }
 }
 
 // --- Branchless sorting (less branches not zero) ---
@@ -1151,8 +1570,6 @@ where
     let mut swap = mem::MaybeUninit::<[T; 32]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    let arr_ptr = v.as_mut_ptr();
-
     // SAFETY: We checked the len for sort8 and that T is Copy and thus observation safe.
     // Should is_less panic v was not modified in parity_merge and retains it's original input.
     // swap and v must not alias and swap has v.len() space.
@@ -1165,6 +1582,7 @@ where
         sort8_stable(&mut v[24..32], is_less);
         parity_merge(&v[16..32], swap_ptr.add(16), is_less);
 
+        let arr_ptr = v.as_mut_ptr();
         ptr::copy_nonoverlapping(swap_ptr, arr_ptr, 32);
 
         parity_merge(v, swap_ptr, is_less);
