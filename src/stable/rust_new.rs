@@ -611,41 +611,99 @@ where
         // It's important that we use i_ptr here. If this check is positive and we continue,
         // We want to make sure that no other copy of the value was seen by is_less.
         // Otherwise we would have to copy it back.
-        if !is_less(&*i_ptr, &*i_ptr.sub(1)) {
-            return;
-        }
+        if is_less(&*i_ptr, &*i_ptr.sub(1)) {
+            // It's important, that we use tmp for comparison from now on. As it is the value that
+            // will be copied back. And notionally we could have created a divergence if we copy
+            // back the wrong value.
+            let tmp = mem::ManuallyDrop::new(ptr::read(i_ptr));
+            // Intermediate state of the insertion process is always tracked by `hole`, which
+            // serves two purposes:
+            // 1. Protects integrity of `v` from panics in `is_less`.
+            // 2. Fills the remaining hole in `v` in the end.
+            //
+            // Panic safety:
+            //
+            // If `is_less` panics at any point during the process, `hole` will get dropped and
+            // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
+            // initially held exactly once.
+            let mut hole = InsertionHole {
+                src: &*tmp,
+                dest: i_ptr.sub(1),
+            };
+            ptr::copy_nonoverlapping(hole.dest, i_ptr, 1);
 
-        // It's important, that we use tmp for comparison from now on. As it is the value that
-        // will be copied back. And notionally we could have created a divergence if we copy
-        // back the wrong value.
-        let tmp = mem::ManuallyDrop::new(ptr::read(i_ptr));
-        // Intermediate state of the insertion process is always tracked by `hole`, which
-        // serves two purposes:
-        // 1. Protects integrity of `v` from panics in `is_less`.
-        // 2. Fills the remaining hole in `v` in the end.
-        //
-        // Panic safety:
-        //
-        // If `is_less` panics at any point during the process, `hole` will get dropped and
-        // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
-        // initially held exactly once.
-        let mut hole = InsertionHole {
-            src: &*tmp,
-            dest: i_ptr.sub(1),
-        };
-        ptr::copy_nonoverlapping(hole.dest, i_ptr, 1);
+            // SAFETY: We know i is at least 1.
+            for j in (0..(i - 1)).rev() {
+                let j_ptr = arr_ptr.add(j);
+                if !is_less(&*tmp, &*j_ptr) {
+                    break;
+                }
 
-        // SAFETY: We know i is at least 1.
-        for j in (0..(i - 1)).rev() {
-            let j_ptr = arr_ptr.add(j);
-            if !is_less(&*tmp, &*j_ptr) {
-                break;
+                ptr::copy_nonoverlapping(j_ptr, hole.dest, 1);
+                hole.dest = j_ptr;
             }
-
-            ptr::copy_nonoverlapping(j_ptr, hole.dest, 1);
-            hole.dest = j_ptr;
+            // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
         }
-        // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
+    }
+}
+
+/// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
+///
+/// This is the integral subroutine of insertion sort.
+unsafe fn insert_head<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    debug_assert!(v.len() >= 2);
+
+    unsafe {
+        if is_less(v.get_unchecked(1), v.get_unchecked(0)) {
+            let arr_ptr = v.as_mut_ptr();
+
+            // There are three ways to implement insertion here:
+            //
+            // 1. Swap adjacent elements until the first one gets to its final destination.
+            //    However, this way we copy data around more than is necessary. If elements are big
+            //    structures (costly to copy), this method will be slow.
+            //
+            // 2. Iterate until the right place for the first element is found. Then shift the
+            //    elements succeeding it to make room for it and finally place it into the
+            //    remaining hole. This is a good method.
+            //
+            // 3. Copy the first element into a temporary variable. Iterate until the right place
+            //    for it is found. As we go along, copy every traversed element into the slot
+            //    preceding it. Finally, copy data from the temporary variable into the remaining
+            //    hole. This method is very good. Benchmarks demonstrated slightly better
+            //    performance than with the 2nd method.
+            //
+            // All methods were benchmarked, and the 3rd showed best results. So we chose that one.
+            let tmp = mem::ManuallyDrop::new(ptr::read(arr_ptr));
+
+            // Intermediate state of the insertion process is always tracked by `hole`, which
+            // serves two purposes:
+            // 1. Protects integrity of `v` from panics in `is_less`.
+            // 2. Fills the remaining hole in `v` in the end.
+            //
+            // Panic safety:
+            //
+            // If `is_less` panics at any point during the process, `hole` will get dropped and
+            // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
+            // initially held exactly once.
+            let mut hole = InsertionHole {
+                src: &*tmp,
+                dest: arr_ptr.add(1),
+            };
+            ptr::copy_nonoverlapping(arr_ptr.add(1), arr_ptr.add(0), 1);
+
+            for i in 2..v.len() {
+                if !is_less(&v.get_unchecked(i), &*tmp) {
+                    break;
+                }
+                ptr::copy_nonoverlapping(arr_ptr.add(i), arr_ptr.add(i - 1), 1);
+                hole.dest = arr_ptr.add(i);
+            }
+            // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
+        }
     }
 }
 
@@ -660,12 +718,9 @@ where
 {
     let len = v.len();
 
-    // This is a logic but not a safety bug.
-    debug_assert!(offset != 0 && offset <= len);
-
-    if ((len < 2) as u8 + (offset == 0) as u8) != 0 {
-        return;
-    }
+    // This would be a logic bug.
+    // Using assert here improves performance.
+    assert!(offset != 0 && offset <= len);
 
     // Shift each element of the unsorted region v[i..] as far left as is needed to make v sorted.
     for i in offset..len {
@@ -688,12 +743,9 @@ where
 {
     let len = v.len();
 
-    // This is a logic but not a safety bug.
-    debug_assert!(offset != 0 && offset <= len);
-
-    if ((len < 2) as u8 + (offset == 0) as u8) != 0 {
-        return;
-    }
+    // This would be a logic bug.
+    // Using assert here improves performance.
+    assert!(offset != 0 && offset <= len);
 
     // Shift each element of the unsorted region v[..i] as far left as is needed to make v sorted.
     for i in (0..offset).rev() {
@@ -702,65 +754,6 @@ where
         // and the range is exclusive. Which gives us i always <= (end - 2).
         unsafe {
             insert_head(&mut v[i..len], is_less);
-        }
-    }
-}
-
-/// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
-///
-/// This is the integral subroutine of insertion sort.
-unsafe fn insert_head<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    debug_assert!(v.len() >= 2);
-
-    if is_less(&v[1], &v[0]) {
-        // SAFETY: caller must ensure v is at least len 2.
-        unsafe {
-            // There are three ways to implement insertion here:
-            //
-            // 1. Swap adjacent elements until the first one gets to its final destination.
-            //    However, this way we copy data around more than is necessary. If elements are big
-            //    structures (costly to copy), this method will be slow.
-            //
-            // 2. Iterate until the right place for the first element is found. Then shift the
-            //    elements succeeding it to make room for it and finally place it into the
-            //    remaining hole. This is a good method.
-            //
-            // 3. Copy the first element into a temporary variable. Iterate until the right place
-            //    for it is found. As we go along, copy every traversed element into the slot
-            //    preceding it. Finally, copy data from the temporary variable into the remaining
-            //    hole. This method is very good. Benchmarks demonstrated slightly better
-            //    performance than with the 2nd method.
-            //
-            // All methods were benchmarked, and the 3rd showed best results. So we chose that one.
-            let tmp = mem::ManuallyDrop::new(ptr::read(&v[0]));
-
-            // Intermediate state of the insertion process is always tracked by `hole`, which
-            // serves two purposes:
-            // 1. Protects integrity of `v` from panics in `is_less`.
-            // 2. Fills the remaining hole in `v` in the end.
-            //
-            // Panic safety:
-            //
-            // If `is_less` panics at any point during the process, `hole` will get dropped and
-            // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
-            // initially held exactly once.
-            let mut hole = InsertionHole {
-                src: &*tmp,
-                dest: &mut v[1],
-            };
-            ptr::copy_nonoverlapping(&v[1], &mut v[0], 1);
-
-            for i in 2..v.len() {
-                if !is_less(&v[i], &*tmp) {
-                    break;
-                }
-                ptr::copy_nonoverlapping(&v[i], &mut v[i - 1], 1);
-                hole.dest = &mut v[i];
-            }
-            // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
         }
     }
 }
