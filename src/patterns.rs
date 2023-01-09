@@ -99,6 +99,31 @@ pub fn descending_saw(size: usize, saw_count: usize) -> Vec<i32> {
     vals
 }
 
+pub fn saw_mixed(size: usize, saw_count: usize) -> Vec<i32> {
+    // :.  :.    .::.    .:
+    // :::.:::..::::::..:::
+
+    if size == 0 {
+        return Vec::new();
+    }
+
+    let mut vals = random_vec(size);
+    let chunks_size = size / saw_count.max(1);
+    let saw_directions = random_uniform((size / chunks_size) + 1, 0..1);
+
+    for (i, chunk) in vals.chunks_mut(chunks_size).enumerate() {
+        if saw_directions[i] == 0 {
+            chunk.sort();
+        } else if saw_directions[i] == 1 {
+            chunk.sort_by_key(|&e| std::cmp::Reverse(e));
+        } else {
+            unreachable!();
+        }
+    }
+
+    vals
+}
+
 pub fn pipe_organ(size: usize) -> Vec<i32> {
     //   .:.
     // .:::::.

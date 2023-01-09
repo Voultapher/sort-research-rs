@@ -257,6 +257,13 @@ fn descending_saw() {
 }
 
 #[test]
+fn saw_mixed() {
+    test_impl(|test_size| {
+        patterns::saw_mixed(test_size, ((test_size as f64).log2().round()) as usize)
+    });
+}
+
+#[test]
 fn pipe_organ() {
     test_impl(patterns::pipe_organ);
 }

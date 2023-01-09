@@ -198,15 +198,23 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_binary", |size| {
             patterns::random_uniform(size, 0..1 as i32)
         }),
+        ("random_5p", |size| {
+            let (len_95p, len_5p) = split_len(size, 95.0);
+            let v: Vec<i32> = std::iter::repeat(0)
+                .take(len_95p)
+                .chain(patterns::random(len_5p))
+                .collect();
+
+            shuffle_vec(v)
+        }),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
         ("ascending_saw", |size| {
             patterns::ascending_saw(size, ((size as f64).log2().round()) as usize)
         }),
-        ("descending_saw", |size| {
-            patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
+        ("saw_mixed", |size| {
+            patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
         }),
-        ("pipe_organ", patterns::pipe_organ),
     ];
 
     // Custom patterns designed to find worst case performance.
@@ -286,6 +294,10 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
+        ("descending_saw", |size| {
+            patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
+        }),
+        ("pipe_organ", patterns::pipe_organ),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {
