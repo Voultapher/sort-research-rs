@@ -1,6 +1,5 @@
 #![allow(unused)]
 
-use core::arch::x86_64;
 use core::cmp;
 use core::intrinsics;
 use core::mem::{self, MaybeUninit};
