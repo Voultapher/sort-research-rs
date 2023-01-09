@@ -132,7 +132,8 @@ def format_time(time_val):
 
 def plot_single_size(ty, prediction_state, test_size, values):
     sort_names = sorted(list(list(values.values())[0].keys()))
-    palette = Colorblind[len(sort_names)]
+    pallet_len = max(3, len(sort_names))
+    palette = Colorblind[pallet_len]
 
     def map_sort_to_color(sort_name):
         return palette[sort_names.index(sort_name)]
@@ -144,7 +145,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
     y = []
     bench_times = []
     colors = []
-    for pattern, val in sorted(values.items()):
+    for pattern, val in reversed(sorted(values.items())):
         for sort_name, bench_times_ns in sorted(
             val.items(), key=lambda x: x[1], reverse=True
         ):
