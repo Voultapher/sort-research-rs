@@ -1,5 +1,5 @@
 // Enable this line for fair benchmark comparison to C++ and Rust sorts.
-#define cmp(a, b) (*(a) > *(b))
+// #define cmp(a, b) (*(a) > *(b))
 
 #include "thirdparty/crumsort/fluxsort.h"
 
@@ -64,6 +64,7 @@ uint32_t fluxsort_stable_u64_by(uint64_t* data,
 // --- ffi_string ---
 
 void fluxsort_stable_ffi_string(FFIString* data, size_t len) {
+  // Value would have to be sorted by indirection.
   printf("Not supported\n");
 }
 
@@ -90,6 +91,23 @@ uint32_t fluxsort_stable_f128_by(F128* data,
                                                       const F128&,
                                                       uint8_t*),
                                  uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
+}
+
+// --- 1k ---
+
+void fluxsort_stable_1k(F128* data, size_t len) {
+  // Value would have to be sorted by indirection.
+  printf("Not supported\n");
+}
+
+uint32_t fluxsort_stable_1k_by(F128* data,
+                               size_t len,
+                               CompResult (*cmp_fn)(const F128&,
+                                                    const F128&,
+                                                    uint8_t*),
+                               uint8_t* ctx) {
   printf("Not supported\n");
   return 1;
 }

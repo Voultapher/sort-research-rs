@@ -170,4 +170,36 @@ uint32_t MAKE_FUNC_NAME(sort_unstable, f128_by)(
   printf("Not supported\n");
   return 1;
 }
+
+// --- 1k ---
+
+void MAKE_FUNC_NAME(sort_stable, 1k)(FFIOneKiloByte* data, size_t len) {
+  printf("Not supported\n");
+}
+
+uint32_t MAKE_FUNC_NAME(sort_stable,
+                        1k_by)(FFIOneKiloByte* data,
+                               size_t len,
+                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                                                    const FFIOneKiloByte&,
+                                                    uint8_t*),
+                               uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
+}
+
+void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKiloByte* data, size_t len) {
+  printf("Not supported\n");
+}
+
+uint32_t MAKE_FUNC_NAME(sort_unstable,
+                        1k_by)(FFIOneKiloByte* data,
+                               size_t len,
+                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                                                    const FFIOneKiloByte&,
+                                                    uint8_t*),
+                               uint8_t* ctx) {
+  printf("Not supported\n");
+  return 1;
+}
 }  // extern "C"

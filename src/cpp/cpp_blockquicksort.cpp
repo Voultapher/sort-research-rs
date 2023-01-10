@@ -93,4 +93,23 @@ uint32_t blockquicksort_unstable_f128_by(F128* data,
                                          uint8_t* ctx) {
   return sort_by_impl(data, len, cmp_fn, ctx);
 }
+
+// --- 1k ---
+
+void blockquicksort_unstable_1k(FFIOneKiloByte* data, size_t len) {
+  blocked_double_pivot_check_mosqrt::sort(
+      reinterpret_cast<FFIOneKiloByteCpp*>(data),
+      reinterpret_cast<FFIOneKiloByteCpp*>(data) + len,
+      std::less<FFIOneKiloByteCpp>{});
+}
+
+uint32_t blockquicksort_unstable_1k_by(
+    FFIOneKiloByte* data,
+    size_t len,
+    CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                         const FFIOneKiloByte&,
+                         uint8_t*),
+    uint8_t* ctx) {
+  return sort_by_impl(data, len, cmp_fn, ctx);
+}
 }  // extern "C"

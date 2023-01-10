@@ -150,4 +150,36 @@ uint32_t MAKE_FUNC_NAME(sort_unstable, f128_by)(
     uint8_t* ctx) {
   return sort_unstable_by_impl(data, len, cmp_fn, ctx);
 }
+
+// --- 1k ---
+
+void MAKE_FUNC_NAME(sort_stable, 1k)(FFIOneKiloByte* data, size_t len) {
+  std::stable_sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
+                   reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
+}
+
+uint32_t MAKE_FUNC_NAME(sort_stable,
+                        1k_by)(FFIOneKiloByte* data,
+                               size_t len,
+                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                                                    const FFIOneKiloByte&,
+                                                    uint8_t*),
+                               uint8_t* ctx) {
+  return sort_stable_by_impl(data, len, cmp_fn, ctx);
+}
+
+void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKiloByte* data, size_t len) {
+  std::sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
+            reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
+}
+
+uint32_t MAKE_FUNC_NAME(sort_unstable,
+                        1k_by)(FFIOneKiloByte* data,
+                               size_t len,
+                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                                                    const FFIOneKiloByte&,
+                                                    uint8_t*),
+                               uint8_t* ctx) {
+  return sort_unstable_by_impl(data, len, cmp_fn, ctx);
+}
 }  // extern "C"

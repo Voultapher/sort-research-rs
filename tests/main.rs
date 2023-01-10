@@ -8,7 +8,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use sort_comp::ffi_util::{FFIString, F128};
+use sort_comp::ffi_util::{FFIOneKiloByte, FFIString, F128};
 use sort_comp::patterns;
 
 use sort_comp::unstable::rust_new as test_sort;
@@ -94,26 +94,6 @@ where
             }
 
             panic!("Test assertion failed!")
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct LargeStackVal {
-    vals: [i128; 4],
-}
-
-impl LargeStackVal {
-    fn new(val: i32) -> Self {
-        let val_abs = val.saturating_abs() as i128;
-
-        Self {
-            vals: [
-                val_abs.wrapping_add(123),
-                val_abs.wrapping_mul(7),
-                val_abs.wrapping_sub(6),
-                val_abs,
-            ],
         }
     }
 }
@@ -377,9 +357,14 @@ fn random_str() {
 #[test]
 fn random_large_val() {
     test_impl(|test_size| {
+        if test_size == TEST_SIZES[TEST_SIZES.len() - 1] {
+            // That takes too long skip.
+            return vec![];
+        }
+
         patterns::random(test_size)
             .into_iter()
-            .map(|val| LargeStackVal::new(val))
+            .map(|val| FFIOneKiloByte::new(val))
             .collect::<Vec<_>>()
     });
 }

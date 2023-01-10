@@ -5,7 +5,9 @@ use std::rc::Rc;
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 #[allow(unused_imports)]
-use sort_comp::{ffi_util::FFIString, ffi_util::F128, patterns, stable, unstable};
+use sort_comp::{
+    ffi_util::FFIOneKiloByte, ffi_util::FFIString, ffi_util::F128, patterns, stable, unstable,
+};
 
 mod trash_prediction;
 use trash_prediction::trash_prediction_state;
@@ -114,9 +116,7 @@ fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_comp::Sort>(
 
     if env::var("MEASURE_COMP").is_ok() {
         // Configure this to filter results. For now the only real difference is copy types.
-        if transform_name == "i32"
-        // && $test_size <= 100000
-        {
+        if transform_name == "i32" && bench_name.contains("unstable") && test_size <= 100000 {
             // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
             let name = format!(
                 "{}-comp-{}-{}-{}",
@@ -544,37 +544,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
     }
 }
 
-// Very large stack value.
-#[derive(PartialEq, Eq, Debug, Clone)]
-struct OneKiloByte {
-    values: [i32; 256],
-}
-
-impl OneKiloByte {
-    fn new(val: i32) -> Self {
-        let mut values = [val; 256];
-        values[54] = 6i32.wrapping_mul(val);
-        values[100] = 18i32.wrapping_sub(val);
-        Self { values }
-    }
-
-    fn as_i32(&self) -> i32 {
-        self.values[55]
-    }
-}
-
-impl PartialOrd for OneKiloByte {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.as_i32().partial_cmp(&other.as_i32())
-    }
-}
-
-impl Ord for OneKiloByte {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
 fn ensure_true_random() {
     // Ensure that random vecs are actually different.
     let random_vec_a = patterns::random(5);
@@ -587,8 +556,9 @@ fn ensure_true_random() {
 
 fn criterion_benchmark(c: &mut Criterion) {
     let test_sizes = [
-        0, 1, 2, 3, 4, 5, 7, 8, 9, 11, 13, 15, 16, 17, 19, 20, 24, 31, 36, 50, 101, 200, 500,
-        1_000, 2_048, 10_000, 100_000, 1_000_000,
+        // 0, 1, 2, 3, 4, 5, 7, 8, 9, 11, 13, 15, 16, 17, 19, 20, 24, 31, 36, 50, 101, 200, 500,
+        // 1_000, 2_048, 10_000, 100_000, 1_000_000,
+        10_000,
     ];
 
     patterns::disable_fixed_seed();
@@ -633,7 +603,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         // Very large stack value.
         bench_patterns(c, test_size, "1k", |values| {
-            values.iter().map(|val| OneKiloByte::new(*val)).collect()
+            values.iter().map(|val| FFIOneKiloByte::new(*val)).collect()
         });
 
         // 16 byte stack value that is Copy but has a relatively expensive cmp implementation.

@@ -77,6 +77,42 @@ impl Drop for FFIString {
     }
 }
 
+// Very large stack value.
+#[repr(C)]
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct FFIOneKiloByte {
+    values: [i64; 128],
+}
+
+impl FFIOneKiloByte {
+    pub fn new(val: i32) -> Self {
+        let mut values = [0i64; 128];
+        let mut val_i64 = val as i64;
+
+        for elem in &mut values {
+            *elem = val_i64;
+            val_i64 = std::hint::black_box(val_i64 + 1);
+        }
+        Self { values }
+    }
+
+    fn as_i64(&self) -> i64 {
+        self.values[11] + self.values[55] + self.values[77]
+    }
+}
+
+impl PartialOrd for FFIOneKiloByte {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_i64().partial_cmp(&other.as_i64())
+    }
+}
+
+impl Ord for FFIOneKiloByte {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 // 16 byte stack value, with more expensive comparison.
 #[repr(C)]
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -180,7 +216,7 @@ macro_rules! ffi_sort_impl {
     ) => {
         use std::cmp::Ordering;
 
-        use crate::ffi_util::{rust_fn_cmp, CompResult, FFIString, F128};
+        use crate::ffi_util::{rust_fn_cmp, CompResult, FFIOneKiloByte, FFIString, F128};
 
         sort_impl!($name);
 
@@ -212,6 +248,13 @@ macro_rules! ffi_sort_impl {
                     data: *mut F128,
                     len: usize,
                     cmp_fn: unsafe extern "C" fn(&F128, &F128, *mut u8) -> CompResult,
+                    cmp_fn_ctx: *mut u8,
+                ) -> u32;
+                fn [<$sort_name_prefix _1k>](data: *mut FFIOneKiloByte, len: usize);
+                fn [<$sort_name_prefix _1k_by>](
+                    data: *mut FFIOneKiloByte,
+                    len: usize,
+                    cmp_fn: unsafe extern "C" fn(&FFIOneKiloByte, &FFIOneKiloByte, *mut u8) -> CompResult,
                     cmp_fn_ctx: *mut u8,
                 ) -> u32;
             }
@@ -276,6 +319,18 @@ macro_rules! ffi_sort_impl {
 
                 fn sort_by<F: FnMut(&Self, &Self) -> Ordering>(data: &mut [Self], compare: F) {
                     make_cpp_sort_by!([<$sort_name_prefix _f128_by>], data, compare, Self);
+                }
+            }
+
+            impl CppSort for FFIOneKiloByte {
+                fn sort(data: &mut [Self]) {
+                    unsafe {
+                        [<$sort_name_prefix _1k>](data.as_mut_ptr(), data.len());
+                    }
+                }
+
+                fn sort_by<F: FnMut(&Self, &Self) -> Ordering>(data: &mut [Self], compare: F) {
+                    make_cpp_sort_by!([<$sort_name_prefix _1k_by>], data, compare, Self);
                 }
             }
 

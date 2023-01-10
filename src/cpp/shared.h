@@ -19,6 +19,10 @@ struct F128 {
   double x;
   double y;
 };
+
+struct FFIOneKiloByte {
+  int64_t values[128];
+};
 }
 
 #if __cplusplus >= 201703L
@@ -65,6 +69,28 @@ struct F128Cpp : public F128 {
   }
   bool operator==(const F128Cpp& other) const noexcept {
     return as_div_val() == other.as_div_val();
+  }
+};
+
+struct FFIOneKiloByteCpp : public FFIOneKiloByte {
+  int64_t as_i64() const noexcept {
+    return values[11] + values[55] + values[77];
+  }
+
+  bool operator<(const FFIOneKiloByteCpp& other) const noexcept {
+    return as_i64() < other.as_i64();
+  }
+  bool operator<=(const FFIOneKiloByteCpp& other) const noexcept {
+    return as_i64() <= other.as_i64();
+  }
+  bool operator>(const FFIOneKiloByteCpp& other) const noexcept {
+    return as_i64() > other.as_i64();
+  }
+  bool operator>=(const FFIOneKiloByteCpp& other) const noexcept {
+    return as_i64() >= other.as_i64();
+  }
+  bool operator==(const FFIOneKiloByteCpp& other) const noexcept {
+    return as_i64() == other.as_i64();
   }
 };
 

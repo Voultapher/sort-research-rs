@@ -129,6 +129,24 @@ uint32_t powersort_stable_f128_by(F128* data,
   return sort_by_impl<F128, powersort>(data, len, cmp_fn, ctx);
 }
 
+// --- 1k ---
+
+void powersort_stable_1k(FFIOneKiloByte* data, size_t len) {
+  using iter_t = vec_iter<FFIOneKiloByteCpp>;
+  powersort<iter_t>{}.sort(
+      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data)},
+      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data) + len});
+}
+
+uint32_t powersort_stable_1k_by(FFIOneKiloByte* data,
+                                size_t len,
+                                CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                                                     const FFIOneKiloByte&,
+                                                     uint8_t*),
+                                uint8_t* ctx) {
+  return sort_by_impl<FFIOneKiloByte, powersort>(data, len, cmp_fn, ctx);
+}
+
 // --- 4 way merging ---
 
 // --- i32 ---
@@ -197,5 +215,23 @@ uint32_t powersort_4way_stable_f128_by(F128* data,
                                                             uint8_t*),
                                        uint8_t* ctx) {
   return sort_by_impl<F128, powersort_4way>(data, len, cmp_fn, ctx);
+}
+
+// --- 1k ---
+
+void powersort_4way_stable_1k(FFIOneKiloByte* data, size_t len) {
+  using iter_t = vec_iter<FFIOneKiloByteCpp>;
+  powersort_4way<iter_t>{}.sort(
+      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data)},
+      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data) + len});
+}
+
+uint32_t powersort_4way_stable_1k_by(FFIOneKiloByte* data,
+                                     size_t len,
+                                     CompResult (*cmp_fn)(const FFIOneKiloByte&,
+                                                          const FFIOneKiloByte&,
+                                                          uint8_t*),
+                                     uint8_t* ctx) {
+  return sort_by_impl<FFIOneKiloByte, powersort_4way>(data, len, cmp_fn, ctx);
 }
 }  // extern "C"
