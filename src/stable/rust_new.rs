@@ -167,8 +167,9 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     let buf_len = buf.capacity;
 
     let mut runs = RunVec::new(run_alloc_fn, run_dealloc_fn);
-
     let mut first_run = true;
+
+    // Maybe do some sampling and stable partition here.
 
     let mut end = len;
 
@@ -1304,7 +1305,28 @@ where
         let arr_ptr = v.as_mut_ptr();
         ptr::copy_nonoverlapping(swap_ptr, arr_ptr, 32);
 
-        parity_merge(v, swap_ptr, is_less);
-        ptr::copy_nonoverlapping(swap_ptr, arr_ptr, 32);
+        // It's slightly faster to merge directly into v and copy over the 'safe' elements of swap
+        // into v only if there was a panic.
+        let drop_guard = DropGuard {
+            src: swap_ptr,
+            dest: arr_ptr,
+        };
+        parity_merge(&*ptr::slice_from_raw_parts(swap_ptr, 32), arr_ptr, is_less);
+        mem::forget(drop_guard);
+    }
+
+    struct DropGuard<T> {
+        src: *const T,
+        dest: *mut T,
+    }
+
+    impl<T> Drop for DropGuard<T> {
+        fn drop(&mut self) {
+            // SAFETY: `T` is not a zero-sized type, src must hold the original 32 elements of v in
+            // any order. And dest must be valid to write 32 elements.
+            unsafe {
+                ptr::copy_nonoverlapping(self.src, self.dest, 32);
+            }
+        }
     }
 }
