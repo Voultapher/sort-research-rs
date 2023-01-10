@@ -81,6 +81,38 @@ auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
   };
 }
 
+template <typename T>
+struct CompWrapper {
+  // Not a big fan of this approach, but it works.
+  thread_local static inline CompResult (*cmp_fn_local)(const T&,
+                                                        const T&,
+                                                        uint8_t*);
+  thread_local static inline uint8_t* ctx_local;
+
+  std::strong_ordering operator<=>(const CompWrapper& other) const {
+    const auto comp_result = cmp_fn_local(_value, other._value, ctx_local);
+
+    if (comp_result.is_panic) {
+      throw std::runtime_error{"panic in Rust comparison function"};
+    }
+
+    switch (comp_result.cmp_result) {
+      case -1:
+        return std::strong_ordering::less;
+      case 0:
+        return std::strong_ordering::equal;
+      case 1:
+        return std::strong_ordering::greater;
+      default:
+        throw std::runtime_error{"Unknown cmp_result value"};
+    }
+  }
+
+  T _value;  // Let's just pray it has the same layout as T.
+};
+
+// --- C ---
+
 typedef int CMPFUNC(const void* a, const void* b);
 
 template <typename T>

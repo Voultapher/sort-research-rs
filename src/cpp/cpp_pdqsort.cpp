@@ -53,7 +53,7 @@ uint32_t pdqsort_unstable_u64_by(uint64_t* data,
 
 // --- ffi_string ---
 
-void pdqsort_unstable_ffi_string(F128* data, size_t len) {
+void pdqsort_unstable_ffi_string(FFIString* data, size_t len) {
   pdqsort(reinterpret_cast<FFIStringCpp*>(data),
           reinterpret_cast<FFIStringCpp*>(data) + len);
 }

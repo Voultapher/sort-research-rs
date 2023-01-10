@@ -1,5 +1,5 @@
 // Enable this line for fair benchmark comparison to C++ and Rust sorts.
-// #define cmp(a, b) (*(a) > *(b))
+#define cmp(a, b) (*(a) > *(b))
 
 #include "thirdparty/crumsort/fluxsort.h"
 

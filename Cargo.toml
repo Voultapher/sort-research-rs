@@ -44,6 +44,7 @@ default = [
     # "cpp_powersort",
     # "cpp_simdsort",
     # "cpp_ips4o",
+    # "cpp_blockquicksort",
     # "c_crumsort",
     # "c_fluxsort",
     # "rust_wpwoodjr",
@@ -75,6 +76,11 @@ cpp_simdsort = []
 # Enable ips4o from Engineering In-place (Shared-memory) Sorting Algorithms (2020) paper.
 # Uses system C++ standard lib.
 cpp_ips4o = []
+
+# Enable BlockQuicksort blocked_double_pivot_check_mosqrt.h from the "BlockQuicksort: Avoiding
+# Branch Mispredictions in Quicksort" (2016) paper.
+# Uses system C++ standard lib.
+cpp_blockquicksort = []
 
 # Enable support for c_crumsort.
 # Uses system C++ standard lib.

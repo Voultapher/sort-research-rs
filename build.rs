@@ -86,6 +86,14 @@ fn build_and_link_cpp_ips4o() {
 #[cfg(not(feature = "cpp_ips4o"))]
 fn build_and_link_cpp_ips4o() {}
 
+#[cfg(feature = "cpp_blockquicksort")]
+fn build_and_link_cpp_blockquicksort() {
+    link_simple_cpp_sort("cpp_blockquicksort", None);
+}
+
+#[cfg(not(feature = "cpp_blockquicksort"))]
+fn build_and_link_cpp_blockquicksort() {}
+
 #[cfg(feature = "c_crumsort")]
 fn build_and_link_c_crumsort() {
     link_simple_cpp_sort("c_crumsort", None);
@@ -201,6 +209,7 @@ fn main() {
     build_and_link_cpp_powersort();
     build_and_link_cpp_simdsort();
     build_and_link_cpp_ips4o();
+    build_and_link_cpp_blockquicksort();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
     build_and_link_cpp_std_sys();

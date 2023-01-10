@@ -452,6 +452,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             unstable::cpp_ips4o::SortImpl,
         );
 
+        #[cfg(feature = "cpp_blockquicksort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            unstable::cpp_blockquicksort::SortImpl,
+        );
+
         #[cfg(feature = "cpp_simdsort")]
         bench_impl(
             c,

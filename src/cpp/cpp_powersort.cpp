@@ -41,42 +41,15 @@ uint32_t sort_by_impl(T* data,
                       CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
                       uint8_t* ctx) noexcept {
   try {
-    thread_local static CompResult (*cmp_fn_local)(const T&, const T&,
-                                                   uint8_t*) = nullptr;
-    thread_local static uint8_t* ctx_local = nullptr;
-
-    cmp_fn_local = cmp_fn;
-    ctx_local = ctx;
-
     // Powersort does not provide a way to specify a custom comparator function,
     // so we have to wrap it inside a type with custom comparison function.
-    struct CompWrapper {
-      std::strong_ordering operator<=>(const CompWrapper& other) {
-        const auto comp_result = cmp_fn_local(_value, other._value, ctx_local);
+    CompWrapper<T>::cmp_fn_local = cmp_fn;
+    CompWrapper<T>::ctx_local = ctx;
 
-        if (comp_result.is_panic) {
-          throw std::runtime_error{"panic in Rust comparison function"};
-        }
-
-        switch (comp_result.cmp_result) {
-          case -1:
-            return std::strong_ordering::less;
-          case 0:
-            return std::strong_ordering::equal;
-          case 1:
-            return std::strong_ordering::greater;
-          default:
-            throw std::runtime_error{"Unknown cmp_result value"};
-        }
-      }
-
-      T _value;
-    };
-
-    using iter_t = vec_iter<CompWrapper>;
+    using iter_t = vec_iter<CompWrapper<T>>;
     // Let's just pray they are layout equivalent.
-    SortT<iter_t>{}.sort(iter_t{reinterpret_cast<CompWrapper*>(data)},
-                         iter_t{reinterpret_cast<CompWrapper*>(data + len)});
+    SortT<iter_t>{}.sort(iter_t{reinterpret_cast<CompWrapper<T>*>(data)},
+                         iter_t{reinterpret_cast<CompWrapper<T>*>(data + len)});
   } catch (const std::exception& exc) {
     // fprintf(stderr, "[ERROR]: %s\n", exc.what());
     return 1;
