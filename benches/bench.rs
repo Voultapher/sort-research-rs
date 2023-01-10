@@ -209,9 +209,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         }),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
-        ("ascending_saw", |size| {
-            patterns::ascending_saw(size, ((size as f64).log2().round()) as usize)
-        }),
         ("saw_mixed", |size| {
             patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
         }),
@@ -293,6 +290,9 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
                 .collect();
 
             shuffle_vec(v)
+        }),
+        ("ascending_saw", |size| {
+            patterns::ascending_saw(size, ((size as f64).log2().round()) as usize)
         }),
         ("descending_saw", |size| {
             patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
