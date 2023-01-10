@@ -16,6 +16,10 @@ pub mod cpp_simdsort;
 #[cfg(feature = "cpp_ips4o")]
 pub mod cpp_ips4o;
 
+// Call blockquicksort sort via FFI.
+#[cfg(feature = "cpp_blockquicksort")]
+pub mod cpp_blockquicksort;
+
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
 pub mod c_crumsort;
@@ -27,3 +31,7 @@ pub mod cpp_std_sys;
 // Call stdlib std::sort sort via FFI.
 #[cfg(feature = "cpp_std_libcxx")]
 pub mod cpp_std_libcxx;
+
+// Call stdlib std::sort sort via FFI.
+#[cfg(feature = "cpp_std_gcc4_3")]
+pub mod cpp_std_gcc4_3;

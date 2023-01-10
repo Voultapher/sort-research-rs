@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
 
 extern "C" {
 struct CompResult {
@@ -20,7 +21,7 @@ struct F128 {
 };
 }
 
-#ifdef __cplusplus
+#if __cplusplus >= 201703L
 #include <string_view>
 
 // This should have the same layout as FFIString so that it can be
@@ -68,20 +69,6 @@ struct F128Cpp : public F128 {
 };
 
 template <typename T>
-auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                     uint8_t* ctx) {
-  return [cmp_fn, ctx](const T& a, const T& b) mutable -> bool {
-    const auto comp_result = cmp_fn(a, b, ctx);
-
-    if (comp_result.is_panic) {
-      throw std::runtime_error{"panic in Rust comparison function"};
-    }
-
-    return comp_result.cmp_result == -1;
-  };
-}
-
-template <typename T>
 struct CompWrapper {
   // Not a big fan of this approach, but it works.
   thread_local static inline CompResult (*cmp_fn_local)(const T&,
@@ -110,6 +97,20 @@ struct CompWrapper {
 
   T _value;  // Let's just pray it has the same layout as T.
 };
+
+template <typename T>
+auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
+                     uint8_t* ctx) {
+  return [cmp_fn, ctx](const T& a, const T& b) mutable -> bool {
+    const auto comp_result = cmp_fn(a, b, ctx);
+
+    if (comp_result.is_panic) {
+      throw std::runtime_error{"panic in Rust comparison function"};
+    }
+
+    return comp_result.cmp_result == -1;
+  };
+}
 
 // --- C ---
 

@@ -12,6 +12,10 @@ pub mod cpp_std_sys;
 #[cfg(feature = "cpp_std_libcxx")]
 pub mod cpp_std_libcxx;
 
+// Call stdlib std::sort_stable sort via FFI.
+#[cfg(feature = "cpp_std_gcc4_3")]
+pub mod cpp_std_gcc4_3;
+
 // Call powersort sort via FFI.
 #[cfg(feature = "cpp_powersort")]
 pub mod cpp_powersort;

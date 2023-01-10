@@ -161,9 +161,8 @@ fn build_and_link_cpp_std_libcxx() {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let libcxx_build_dir = PathBuf::from(
-        env::var("LIBCXX_CUSTOM_BUILD_DIR").expect("LIBCXX_CUSTOM_BUILD_DIR env var not set"),
-    );
+    let libcxx_build_dir =
+        PathBuf::from(env::var("LIBCXX_BUILD_DIR").expect("LIBCXX_BUILD_DIR env var not set"));
 
     let libcxx_include_dir = libcxx_build_dir.join("include").join("c++").join("v1");
     let libcxx_lib_path = libcxx_build_dir.join("lib");
@@ -198,6 +197,29 @@ fn build_and_link_cpp_std_libcxx() {
 #[cfg(not(feature = "cpp_std_libcxx"))]
 fn build_and_link_cpp_std_libcxx() {}
 
+#[cfg(feature = "cpp_std_gcc4_3")]
+fn build_and_link_cpp_std_gcc4_3() {
+    use std::path::Path;
+
+    link_simple_cpp_sort(
+        "cpp_std_gcc4_3_sort",
+        Some(|builder| {
+            let gcc4_3_build_dir =
+                env::var("GCC4_3_BUILD_DIR").expect("GCC4_3_BUILD_DIR env var not set");
+
+            let compiler_path = Path::new(&gcc4_3_build_dir)
+                .join("usr")
+                .join("bin")
+                .join("g++-4.3");
+
+            builder.compiler(compiler_path).flag("-std=gnu++0x");
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_std_gcc4_3"))]
+fn build_and_link_cpp_std_gcc4_3() {}
+
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let build_rs_path = manifest_dir.join("build.rs").canonicalize().unwrap();
@@ -214,4 +236,5 @@ fn main() {
     build_and_link_c_fluxsort();
     build_and_link_cpp_std_sys();
     build_and_link_cpp_std_libcxx();
+    build_and_link_cpp_std_gcc4_3();
 }

@@ -40,6 +40,7 @@ harness = false
 default = [
     # "cpp_std_sys",
     # "cpp_std_libcxx",
+    # "cpp_std_gcc4_3",
     # "cpp_pdqsort",
     # "cpp_powersort",
     # "cpp_simdsort",
@@ -60,6 +61,9 @@ cpp_std_sys = []
 # Set the enviroment variable LIBCXX_CUSTOM_BUILD_DIR=<...>
 # This creates a new cpp_std_libcxx.
 cpp_std_libcxx = []
+
+# Enable support for C++ std::sort and std::sort_stable, using gcc 4.3 (2008).
+cpp_std_gcc4_3 = []
 
 # Enable support for cpp_pdqsort.
 # Uses system C++ standard lib.

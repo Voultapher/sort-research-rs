@@ -353,6 +353,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             stable::cpp_std_libcxx::SortImpl,
         );
 
+        #[cfg(feature = "cpp_std_gcc4_3")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            stable::cpp_std_gcc4_3::SortImpl,
+        );
+
         #[cfg(feature = "cpp_powersort")]
         bench_impl(
             c,
@@ -505,6 +516,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             pattern_name,
             pattern_provider,
             unstable::cpp_std_libcxx::SortImpl,
+        );
+
+        #[cfg(feature = "cpp_std_gcc4_3")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            unstable::cpp_std_gcc4_3::SortImpl,
         );
 
         // --- Other sorts ---
