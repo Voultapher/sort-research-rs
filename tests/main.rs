@@ -274,7 +274,7 @@ fn stability() {
         (a, b)
     }
 
-    let large_range = if cfg!(miri) { 100..110 } else { 500..510 };
+    let large_range = if cfg!(miri) { 100..110 } else { 3000..3010 };
     let rounds = if cfg!(miri) { 1 } else { 10 };
 
     let rand_vals = patterns::random_uniform(5_000, 0..9);
