@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use std::alloc;
+use std::cmp;
 use std::cmp::Ordering;
 use std::mem::{self, SizedTypeProperties};
 use std::ptr;
@@ -87,37 +88,43 @@ where
     );
 }
 
-/// Finds a streak of presorted elements starting at the end of the slice.
+/// Finds a streak of presorted elements starting at the beginning of the slice.
 /// Returns the first value that is not part of said streak.
 /// Streaks can be increasing or decreasing.
 /// Decreasing streaks will be reversed.
-/// After this call `v[start..len]` will be sorted.
-fn find_streak_rev<T, F>(v: &mut [T], is_less: &mut F) -> usize
+/// After this call `v[..end]` will be sorted.
+fn find_streak<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
 
-    let mut start = len - 1;
-    if start > 0 {
-        start -= 1;
-        unsafe {
-            if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
-                while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
-                    start -= 1;
-                }
-                v[start..len].reverse();
-            } else {
-                while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
-                    start -= 1;
-                }
+    if len < 2 {
+        return len;
+    }
+
+    let mut end = 2;
+
+    // SAFETY: See below specific.
+    unsafe {
+        // SAFETY: We checked that len >= 2, so 0 and 1 are valid indices.
+        let assume_reverse = is_less(v.get_unchecked(1), v.get_unchecked(0));
+
+        // SAFETY: We know end >= 2 and check end < len.
+        // From that follows that accessing v at end and end - 1 is safe.
+        if assume_reverse {
+            while end < len && is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
+                end += 1;
+            }
+            v[..end].reverse()
+        } else {
+            while end < len && !is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
+                end += 1;
             }
         }
     }
 
-    debug_assert!(start < len);
-
-    start
+    end
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
@@ -145,12 +152,12 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    let mut start = find_streak_rev(v, is_less);
-    if start == 0 {
+    let mut end = find_streak(v, is_less);
+    if end == len {
         // The input was either fully ascending or descending. It is now sorted and we can
         // return without allocating.
         return;
-    } else if sort_small_stable(v, start, is_less) {
+    } else if sort_small_stable(v, end, is_less) {
         return;
     }
 
@@ -171,35 +178,34 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
 
     // Maybe do some sampling and stable partition here.
 
-    let mut end = len;
+    let mut start = 0;
 
-    // In order to identify natural runs in `v`, we traverse it backwards. That might seem like a
-    // strange decision, but consider the fact that merges more often go in the opposite direction
-    // (forwards). According to benchmarks, merging forwards is slightly faster than merging
-    // backwards. To conclude, identifying runs by traversing backwards improves performance.
-    while end > 0 {
+    // Scan forward. Memory pre-fetching prefers forward scanning vs backwards scanning, and the
+    // code-gen is usually better. For the most sensitive types such as integers, these are merged
+    // bidirectionally at once. So there is no benefit in scanning backwards.
+    while end < len {
         if first_run {
             first_run = false;
         } else {
             // Find the next natural run, and reverse it if it's strictly descending.
-            start = find_streak_rev(&mut v[..end], is_less);
+            end += find_streak(&mut v[end..], is_less);
         }
 
         // Insert some more elements into the run if it's too short. Insertion sort is faster than
         // merge sort on short sequences, so this significantly improves performance.
-        start = provide_sorted_batch(v, start, end, is_less);
+        end = provide_sorted_batch(v, start, end, is_less);
 
         // Push this run onto the stack.
         runs.push(TimSortRun {
             start,
             len: end - start,
         });
-        end = start;
+        start = end;
 
         // Merge some pairs of adjacent runs to satisfy the invariants.
-        while let Some(r) = collapse(runs.as_slice()) {
-            let left = runs[r + 1];
-            let right = runs[r];
+        while let Some(r) = collapse(runs.as_slice(), len) {
+            let left = runs[r];
+            let right = runs[r + 1];
             let merge_slice = &mut v[left.start..right.start + right.len];
             unsafe {
                 if qualifies_for_parity_merge::<T>() && merge_slice.len() <= buf_len {
@@ -209,11 +215,11 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
                     merge(merge_slice, left.len, buf_ptr, is_less);
                 }
             }
-            runs[r] = TimSortRun {
+            runs[r + 1] = TimSortRun {
                 start: left.start,
                 len: left.len + right.len,
             };
-            runs.remove(r + 1);
+            runs.remove(r);
         }
     }
 
@@ -232,13 +238,13 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     // hold for *all* runs in the stack.
     //
     // This function correctly checks invariants for the top four runs. Additionally, if the top
-    // run starts at index 0, it will always demand a merge operation until the stack is fully
+    // run ends at stop, it will always demand a merge operation until the stack is fully
     // collapsed, in order to complete the sort.
     #[inline]
-    fn collapse(runs: &[TimSortRun]) -> Option<usize> {
+    fn collapse(runs: &[TimSortRun], stop: usize) -> Option<usize> {
         let n = runs.len();
         if n >= 2
-            && (runs[n - 1].start == 0
+            && (runs[n - 1].start + runs[n - 1].len == stop
                 || runs[n - 2].len <= runs[n - 1].len
                 || (n >= 3 && runs[n - 3].len <= runs[n - 2].len + runs[n - 1].len)
                 || (n >= 4 && runs[n - 4].len <= runs[n - 3].len + runs[n - 2].len))
@@ -447,9 +453,9 @@ pub struct TimSortRun {
 }
 
 /// Check whether `v` applies for small sort optimization.
-/// `v[start..]` is assumed already sorted.
+/// `v[..end]` is assumed already sorted.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort_small_stable<T, F>(v: &mut [T], start: usize, is_less: &mut F) -> bool
+fn sort_small_stable<T, F>(v: &mut [T], end: usize, is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -463,7 +469,7 @@ where
         const MAX_NO_ALLOC_SIZE: usize = 32;
         if len <= MAX_NO_ALLOC_SIZE {
             if len < 8 {
-                insertion_sort_shift_right(v, start, is_less);
+                insertion_sort_shift_left(v, end, is_less);
                 return true;
             } else if len < 16 {
                 sort8_stable(&mut v[0..8], is_less);
@@ -504,7 +510,7 @@ where
     } else {
         const MAX_NO_ALLOC_SIZE: usize = 20;
         if len <= MAX_NO_ALLOC_SIZE {
-            insertion_sort_shift_right(v, start, is_less);
+            insertion_sort_shift_left(v, end, is_less);
             return true;
         }
     }
@@ -512,71 +518,57 @@ where
     false
 }
 
-/// Takes a range as denoted by start and end, that is already sorted and extends it if necessary
-/// with sorts optimized for smaller ranges such as insertion sort.
+/// Takes a range as denoted by start and end, that is already sorted and extends it to the right if
+/// necessary with sorts optimized for smaller ranges such as insertion sort.
 #[cfg(not(no_global_oom_handling))]
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn provide_sorted_batch<T, F>(v: &mut [T], mut start: usize, end: usize, is_less: &mut F) -> usize
+fn provide_sorted_batch<T, F>(v: &mut [T], start: usize, mut end: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    debug_assert!(end > start);
+    let len = v.len();
+    debug_assert!(end > start && end <= len);
 
     // This value is a balance between least comparisons and best performance, as
     // influenced by for example cache locality.
     const MIN_INSERTION_RUN: usize = 10;
+    const MAX_IGNORE_PRE_SORTED: usize = 6;
 
     // Insert some more elements into the run if it's too short. Insertion sort is faster than
     // merge sort on short sequences, so this significantly improves performance.
-    let start_found = start;
     let start_end_diff = end - start;
 
     const FAST_SORT_SIZE: usize = 32;
 
-    if qualifies_for_parity_merge::<T>() && end >= (FAST_SORT_SIZE + 3) && start_end_diff <= 6 {
+    if qualifies_for_parity_merge::<T>()
+        && (start + FAST_SORT_SIZE) <= len
+        && start_end_diff <= MAX_IGNORE_PRE_SORTED
+    {
         // For random inputs on average how many elements are naturally already sorted
         // (start_end_diff) will be relatively small. And it's faster to avoid a merge operation
-        // between the newly sorted elements on the left by the sort network and the already sorted
-        // elements. Instead if there are 3 or fewer already sorted elements they get merged by
-        // participating in the sort network. This wastes the information that they are already
-        // sorted, but extra branching is not worth it.
+        // between the newly sorted elements by the sort network and the already sorted
+        // elements. Instead just run the sort network and ignore the already sorted streak.
         //
         // Note, this optimization significantly reduces comparison count, versus just always using
         // insertion_sort_shift_left. Insertion sort is faster than calling merge here, and this is
         // yet faster starting at FAST_SORT_SIZE 20.
-        let is_small_pre_sorted = start_end_diff <= 3;
-
-        start = if is_small_pre_sorted {
-            end - FAST_SORT_SIZE
-        } else {
-            start_found - (FAST_SORT_SIZE - 3)
-        };
+        end = start + FAST_SORT_SIZE;
 
         // Use a straight-line sorting network here instead of some hybrid network with early
         // exit. If the input is already sorted the previous adaptive analysis path of TimSort
         // ought to have found it. So we prefer minimizing the total amount of comparisons,
         // which are user provided and may be of arbitrary cost.
         sort32_stable(&mut v[start..(start + FAST_SORT_SIZE)], is_less);
-
-        // For most patterns this branch should have good prediction accuracy.
-        if !is_small_pre_sorted {
-            insertion_sort_shift_left(&mut v[start..end], FAST_SORT_SIZE, is_less);
-        }
-    } else if start_end_diff < MIN_INSERTION_RUN && start != 0 {
+    } else if start_end_diff < MIN_INSERTION_RUN && end < len {
         // v[start_found..end] are elements that are already sorted in the input. We want to extend
         // the sorted region to the left, so we push up MIN_INSERTION_RUN - 1 to the right. Which is
         // more efficient that trying to push those already sorted elements to the left.
+        end = cmp::min(start + MIN_INSERTION_RUN, len);
 
-        start = if end >= MIN_INSERTION_RUN {
-            end - MIN_INSERTION_RUN
-        } else {
-            0
-        };
-
-        insertion_sort_shift_right(&mut v[start..end], start_found - start, is_less);
+        insertion_sort_shift_left(&mut v[start..end], start_end_diff, is_less);
     }
 
-    start
+    end
 }
 
 // When dropped, copies from `src` into `dest`.
