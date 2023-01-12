@@ -34,6 +34,7 @@ fn build_and_link_cpp_sort(
         .cpp(true)
         .warnings(false) // The thirdparties just have too many.
         .flag_if_supported("/EHsc")
+        .flag_if_supported("/Zc:__cplusplus")
         .flag_if_supported("/std:c++20")
         .flag_if_supported("-std=c++20")
         .flag_if_supported("-fdiagnostics-color=always")
