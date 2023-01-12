@@ -1,3 +1,5 @@
+#![feature(local_key_cell_methods)]
+
 use std::cell::RefCell;
 use std::env;
 use std::rc::Rc;
@@ -15,6 +17,25 @@ use trash_prediction::trash_prediction_state;
 mod bench_custom;
 use bench_custom::bench_custom;
 
+fn pin_thread_to_core() {
+    use std::cell::Cell;
+    let pin_core_id: usize = 2;
+
+    thread_local! {static AFFINITY_ALREADY_SET: Cell<bool> = Cell::new(false); }
+
+    // Set affinity only once per thread.
+    if !AFFINITY_ALREADY_SET.get() {
+        if let Some(core_id_2) = core_affinity::get_core_ids()
+            .as_ref()
+            .and_then(|ids| ids.get(pin_core_id))
+        {
+            core_affinity::set_for_current(*core_id_2);
+        }
+
+        AFFINITY_ALREADY_SET.set(true);
+    }
+}
+
 #[inline(never)]
 fn bench_sort<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
@@ -26,6 +47,11 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
     bench_name: &str,
     sort_func: impl Fn(&mut [T]),
 ) {
+    // Pin the benchmark to the same core to improve repeatability. Doing it this way allows
+    // criterion to do other stuff with other threads, which greatly impacts overall benchmark
+    // throughput.
+    pin_thread_to_core();
+
     let batch_size = if test_size > 30 {
         BatchSize::LargeInput
     } else {

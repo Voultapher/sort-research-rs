@@ -76,6 +76,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "core_affinity"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479fdfb5e75b80b678a34a8231b4415481b06b706e486bf5b3ba72378710caaf"
+dependencies = [
+ "libc",
+ "num_cpus",
+ "winapi",
+]
+
+[[package]]
 name = "criterion"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -530,6 +541,7 @@ name = "sort_comp"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "core_affinity",
  "criterion",
  "dmsort",
  "once_cell",
