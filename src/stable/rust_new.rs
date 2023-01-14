@@ -166,26 +166,16 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             // println!("start: {start} next_probe_spot: {next_probe_spot}");
             let probe_for_common = start >= next_probe_spot && (len - start) <= buf_len;
 
-            // if probe_for_common {
-            //     dbg!(start, next_probe_spot);
-            // }
-
             // SAFETY: We checked that buf_ptr can hold `v[start..]` if probe_for_common is true.
             (end, all_equal) =
                 unsafe { natural_sort(&mut v[start..], buf_ptr, probe_for_common, compare) };
 
             // Avoid re-probing the same area again and again if probing failed.
-            // TODO branchless.
-            if probe_for_common {
-                if !all_equal {
-                    next_probe_spot = start + MIN_REPROBE_DISTANCE;
-                }
-            }
-            // next_probe_spot = if all_equal {
-            //     next_probe_spot
-            // } else {
-            //     start + MIN_REPROBE_DISTANCE
-            // };
+            next_probe_spot = if !probe_for_common || all_equal {
+                next_probe_spot
+            } else {
+                start + MIN_REPROBE_DISTANCE
+            };
 
             end += start;
         }
@@ -482,7 +472,7 @@ pub struct TimSortRun {
 /// Analyzes region at the start of `v` and will leverage natural patterns contained in the input.
 /// Returns offset until where `v[..end]` will be sorted after the call, and bool denoting wether
 /// that area contains only equal elements.
-// #[inline(never)] // TODO check
+#[inline(never)]
 unsafe fn natural_sort<T, F>(
     v: &mut [T],
     buf: *mut T,
@@ -625,24 +615,24 @@ where
         return None;
     }
 
-    let mut inital_match_counts = [0u8; INITAL_PROBE_SET_SIZE];
+    let mut inital_match_counts = mem::MaybeUninit::<[u8; INITAL_PROBE_SET_SIZE]>::uninit();
+    let mut inital_match_counts_ptr = inital_match_counts.as_mut_ptr() as *mut u8;
 
     // Ideally the optimizer will unroll this.
     for i in 0..INITAL_PROBE_SET_SIZE {
         // SAFETY: TODO
         unsafe {
-            inital_match_counts[i] += is_equal(
+            *inital_match_counts_ptr.add(i) = is_equal(
                 v.get_unchecked(i),
                 v.get_unchecked(INITIAL_PROBE_OFFSET + i),
             ) as u8;
         }
     }
 
-    // Is that legal?
-    // SAFETY: TODO
-    let is_all_zeros = unsafe { mem::transmute::<[u8; 8], u64>(inital_match_counts) == 0 };
+    // SAFETY: We initialized all the values in the loop above.
+    let mut inital_match_counts = unsafe { inital_match_counts.assume_init() };
 
-    if is_all_zeros {
+    if u64::from_ne_bytes(inital_match_counts) == 0 {
         return None;
     }
 
