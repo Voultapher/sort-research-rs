@@ -546,8 +546,6 @@ where
     F: FnMut(&T, &T) -> Ordering,
 {
     let min_valid_streak = min_valid_streak::<T>();
-    const MIN_HIT_COUNT: usize = 2; // TODO two-stage probing.
-    const PROBE_REGION_SIZE: usize = 256;
 
     let (streak_end, was_reversed) = find_streak(v, &mut |a, b| compare(a, b) == Ordering::Less);
     if streak_end >= min_valid_streak {
@@ -558,14 +556,11 @@ where
         };
     }
 
-    if probe_for_common && v.len() >= PROBE_REGION_SIZE {
-        let (count, idx) = probe_for_common_val(v, PROBE_REGION_SIZE, &mut |a, b| {
-            compare(a, b) == Ordering::Equal
-        });
+    if probe_for_common {
+        let probe_common_result =
+            probe_for_common_val(v, &mut |a, b| compare(a, b) == Ordering::Equal);
 
-        // dbg!(count);
-
-        if count >= MIN_HIT_COUNT {
+        if let Some(idx) = probe_common_result {
             return ProbeResult::CommonValue(idx);
         }
     }
@@ -613,46 +608,76 @@ where
 /// Probe `v` and try to find a recurring value. Starting at `v[start..]`.
 /// Returns the index of said element if it has a high confidence that it is recurring.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn probe_for_common_val<T, F>(v: &[T], probe_region_size: usize, is_equal: &mut F) -> (usize, usize)
+fn probe_for_common_val<T, F>(v: &[T], is_equal: &mut F) -> Option<usize>
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // TODO Two-stage probing to improve accuracy. Both reducing false positives and false negatives.
-
-    const PROBE_SPOTS: usize = 8;
+    // Two-stage probing to improve accuracy. Reducing false positives and false negatives.
+    const PROBE_REGION_SIZE: usize = 256;
+    const INITAL_PROBE_SET_SIZE: usize = 8;
+    const VERIFY_PROBE_STEPS: usize = 32;
+    const INITIAL_PROBE_OFFSET: usize = PROBE_REGION_SIZE / 2;
+    const MIN_HIT_COUNT: u8 = 2;
 
     let len = v.len();
-    assert!(len >= probe_region_size && probe_region_size >= PROBE_SPOTS * 2);
 
-    let elem_a_idx = (probe_region_size / (PROBE_SPOTS + 1)) * (PROBE_SPOTS / 3);
-    let elem_b_idx = (probe_region_size / (PROBE_SPOTS + 1)) * PROBE_SPOTS;
-
-    let elem_a = &v[elem_a_idx];
-    let elem_b = &v[elem_b_idx];
-
-    let mut count_a = 0;
-    let mut count_b = 0;
-
-    let probe_step_size: usize = probe_region_size / PROBE_SPOTS;
-    // For larger types the additional pressure of pulling in the cache lines is not worth it.
-    // const MAX_PROBE_TYPE_SIZE: usize = mem::size_of<usize>() * 16; TODO test with 1k
-
-    let mut i = 0;
-    while i < probe_region_size {
-        // The optimizer should be able to figure out that these accesses are always in bounds as we
-        // checked len >= PROBE_REGION_SIZE.
-        let elem = &v[i];
-
-        count_a += is_equal(elem_a, elem) as usize;
-        count_b += is_equal(elem_b, elem) as usize;
-
-        i += probe_step_size;
+    if len < PROBE_REGION_SIZE {
+        return None;
     }
 
-    if count_a >= count_b {
-        (count_a, elem_a_idx)
+    let mut inital_match_counts = [0u8; INITAL_PROBE_SET_SIZE];
+
+    // Ideally the optimizer will unroll this.
+    for i in 0..INITAL_PROBE_SET_SIZE {
+        // SAFETY: TODO
+        unsafe {
+            inital_match_counts[i] += is_equal(
+                v.get_unchecked(i),
+                v.get_unchecked(INITIAL_PROBE_OFFSET + i),
+            ) as u8;
+        }
+    }
+
+    // Is that legal?
+    // SAFETY: TODO
+    let is_all_zeros = unsafe { mem::transmute::<[u8; 8], u64>(inital_match_counts) == 0 };
+
+    if is_all_zeros {
+        return None;
+    }
+
+    // At least one element was found again, do deeper probing to find out if is common.
+
+    let mut best_idx = 0;
+    let mut best_count = inital_match_counts[0];
+    for i in 1..INITAL_PROBE_SET_SIZE {
+        let is_best = inital_match_counts[i] > best_count;
+        best_count = if is_best {
+            inital_match_counts[i]
+        } else {
+            best_count
+        };
+        best_idx = if is_best { i } else { best_idx };
+    }
+
+    let candidate = &v[best_idx];
+    // Check it against locations that have not yet been checked.
+    // Already checked:
+    // v[<0..8> <IPO..IPO+8>]
+
+    best_count = 0;
+
+    let initial_probe_end = INITIAL_PROBE_OFFSET + INITAL_PROBE_SET_SIZE;
+    for i in initial_probe_end..(initial_probe_end + VERIFY_PROBE_STEPS) {
+        // SAFETY: Access happens inside checked PROBE_REGION_SIZE.
+        let elem = unsafe { v.get_unchecked(i) };
+        best_count += is_equal(candidate, elem) as u8;
+    }
+
+    if best_count >= MIN_HIT_COUNT {
+        return Some(best_idx);
     } else {
-        (count_b, elem_b_idx)
+        None
     }
 }
 
