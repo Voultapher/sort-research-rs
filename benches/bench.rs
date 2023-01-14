@@ -235,8 +235,11 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         }),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
-        ("saw_mixed", |size| {
+        ("saws_long", |size| {
             patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
+        }),
+        ("saws_short", |size| {
+            patterns::saw_mixed(size, (size as f64 / 22.0).round() as usize)
         }),
     ];
 
@@ -324,6 +327,15 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
         }),
         ("pipe_organ", patterns::pipe_organ),
+        ("random_div3", |size| {
+            patterns::random_uniform(size, 0..(((size as f64 / 3.0).round()) as i32))
+        }),
+        ("random_div5", |size| {
+            patterns::random_uniform(size, 0..(((size as f64 / 3.0).round()) as i32))
+        }),
+        ("random_div8", |size| {
+            patterns::random_uniform(size, 0..(((size as f64 / 3.0).round()) as i32))
+        }),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {
