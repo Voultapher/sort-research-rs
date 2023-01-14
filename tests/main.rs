@@ -250,6 +250,8 @@ fn pipe_organ() {
 
 #[test]
 fn stability() {
+    let _seed = get_or_init_random_seed();
+
     // Ensure that the test is stable.
 
     if <test_sort::SortImpl as sort_comp::Sort>::name().contains("unstable") {
