@@ -904,4 +904,10 @@ fn int_edge() {
         7,
         10,
     ]);
+
+    let mut large = patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]);
+    large.push(i32::MAX);
+    large.push(i32::MIN);
+    large.push(i32::MAX);
+    sort_comp(&mut large);
 }
