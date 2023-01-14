@@ -183,7 +183,7 @@ fn random() {
 fn random_dense() {
     test_impl(|size| {
         if size > 3 {
-            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32))
+            patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32))
         } else {
             Vec::new()
         }
@@ -195,7 +195,7 @@ fn random_narrow() {
     // Great for debugging.
     test_impl(|size| {
         if size > 3 {
-            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) * 100)
+            patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32) * 100)
         } else {
             Vec::new()
         }
@@ -204,7 +204,7 @@ fn random_narrow() {
 
 #[test]
 fn random_binary() {
-    test_impl(|size| patterns::random_uniform(size, 0..1 as i32));
+    test_impl(|size| patterns::random_uniform(size, 0..=1 as i32));
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn stability() {
     let large_range = if cfg!(miri) { 100..110 } else { 3000..3010 };
     let rounds = if cfg!(miri) { 1 } else { 10 };
 
-    let rand_vals = patterns::random_uniform(5_000, 0..9);
+    let rand_vals = patterns::random_uniform(5_000, 0..=9);
     let mut rand_idx = 0;
 
     for len in (2..55).chain(large_range) {
@@ -672,7 +672,8 @@ fn panic_retain_original_set() {
         // Calculate a specific comparison that should panic.
         // Ensure that it can be any of the possible comparisons and that it always panics.
         let required_comps = calc_comps_required(&test_data);
-        let panic_threshold = patterns::random_uniform(1, 1..required_comps as i32)[0] as usize - 1;
+        let panic_threshold =
+            patterns::random_uniform(1, 1..=required_comps as i32)[0] as usize - 1;
 
         let mut comp_counter = 0;
 

@@ -17,15 +17,15 @@ pub fn random(size: usize) -> Vec<i32> {
     random_vec(size)
 }
 
-pub fn random_uniform(size: usize, mut range: std::ops::Range<i32>) -> Vec<i32> {
+pub fn random_uniform<R>(size: usize, range: R) -> Vec<i32>
+where
+    R: Into<rand::distributions::Uniform<i32>>,
+{
     // :.:.:.::
     let mut rng = rand::rngs::StdRng::from(new_seed());
 
-    if range.end >= range.start {
-        range.end += 1;
-    }
-
-    let dist = rand::distributions::Uniform::from(range);
+    // Abstracting over ranges in Rust :(
+    let dist: rand::distributions::Uniform<i32> = range.into();
 
     (0..size).map(|_| dist.sample(&mut rng)).collect()
 }
@@ -36,7 +36,7 @@ pub fn random_random_size(max_size: usize) -> Vec<i32> {
     // :.:::.::
     // < size > is random from call to call, with max_size as maximum size.
 
-    let random_size = random_uniform(1, 0..(max_size as i32));
+    let random_size = random_uniform(1, 0..=(max_size as i32));
     random(random_size[0] as usize)
 }
 
@@ -109,7 +109,7 @@ pub fn saw_mixed(size: usize, saw_count: usize) -> Vec<i32> {
 
     let mut vals = random_vec(size);
     let chunks_size = size / saw_count.max(1);
-    let saw_directions = random_uniform((size / chunks_size) + 1, 0..1);
+    let saw_directions = random_uniform((size / chunks_size) + 1, 0..=1);
 
     for (i, chunk) in vals.chunks_mut(chunks_size).enumerate() {
         if saw_directions[i] == 0 {

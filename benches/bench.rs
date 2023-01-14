@@ -219,10 +219,10 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
     let mut pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
         ("random", patterns::random),
         ("random_dense", |size| {
-            patterns::random_uniform(size, 0..(((size as f64).log2().round()) as i32) as i32)
+            patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32) as i32)
         }),
         ("random_binary", |size| {
-            patterns::random_uniform(size, 0..1 as i32)
+            patterns::random_uniform(size, 0..=1 as i32)
         }),
         ("random_5p", |size| {
             let (len_95p, len_5p) = split_len(size, 95.0);
@@ -279,7 +279,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             let (len_90p, len_10p) = split_len(size, 90.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_90p)
-                .chain(patterns::random_uniform(len_10p, -10..10))
+                .chain(patterns::random_uniform(len_10p, -10..=10))
                 .collect();
 
             shuffle_vec(v)
@@ -288,7 +288,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             let (len_90p, len_10p) = split_len(size, 90.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_90p)
-                .chain(patterns::random_uniform(len_10p, 0..10))
+                .chain(patterns::random_uniform(len_10p, 0..=10))
                 .collect();
 
             shuffle_vec(v)
@@ -328,13 +328,13 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         }),
         ("pipe_organ", patterns::pipe_organ),
         ("random_div3", |size| {
-            patterns::random_uniform(size, 0..(((size as f64 / 3.0).round()) as i32))
+            patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
         ("random_div5", |size| {
-            patterns::random_uniform(size, 0..(((size as f64 / 3.0).round()) as i32))
+            patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
         ("random_div8", |size| {
-            patterns::random_uniform(size, 0..(((size as f64 / 3.0).round()) as i32))
+            patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
     ];
 
