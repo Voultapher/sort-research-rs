@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use sort_comp::ffi_util::{FFIOneKiloByte, FFIString, F128};
 use sort_comp::patterns;
 
-use sort_comp::unstable::rust_new as test_sort;
+use sort_comp::stable::rust_new as test_sort;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 24] = [
@@ -102,6 +102,37 @@ fn test_impl<T: Ord + Clone + Debug>(pattern_fn: impl Fn(usize) -> Vec<T>) {
     for test_size in TEST_SIZES {
         let mut test_data = pattern_fn(test_size);
         sort_comp(test_data.as_mut_slice());
+    }
+}
+
+fn test_impl_custom(mut test_fn: impl FnMut(usize, fn(usize) -> Vec<i32>)) {
+    let test_pattern_fns: Vec<fn(usize) -> Vec<i32>> = vec![
+        patterns::random,
+        |size| patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32) as i32),
+        |size| patterns::random_uniform(size, 0..=1 as i32),
+        // |size| {
+        //     let (len_95p, len_5p) = split_len(size, 95.0);
+        //     let v: Vec<i32> = std::iter::repeat(0)
+        //         .take(len_95p)
+        //         .chain(patterns::random(len_5p))
+        //         .collect();
+
+        //     shuffle_vec(v)
+        // },
+        patterns::ascending,
+        patterns::descending,
+        |size| patterns::saw_mixed(size, ((size as f64).log2().round()) as usize),
+        |size| patterns::saw_mixed(size, (size as f64 / 22.0).round() as usize),
+    ];
+
+    for test_pattern_fn in test_pattern_fns {
+        for test_size in &TEST_SIZES[..TEST_SIZES.len() - 2] {
+            if *test_size < 2 {
+                continue;
+            }
+
+            test_fn(*test_size, test_pattern_fn);
+        }
     }
 }
 
@@ -252,8 +283,6 @@ fn pipe_organ() {
 fn stability() {
     let _seed = get_or_init_random_seed();
 
-    // Ensure that the test is stable.
-
     if <test_sort::SortImpl as sort_comp::Sort>::name().contains("unstable") {
         // It would be great to mark the test as skipped, but that isn't possible as of now.
         return;
@@ -327,6 +356,74 @@ fn stability() {
 }
 
 #[test]
+fn stability_with_patterns() {
+    let _seed = get_or_init_random_seed();
+
+    if <test_sort::SortImpl as sort_comp::Sort>::name().contains("unstable") {
+        // It would be great to mark the test as skipped, but that isn't possible as of now.
+        return;
+    }
+
+    // For cpp_sorts that only support u64 we can pack the two i32 inside a u64.
+    fn i32_tup_as_u64(val: (i32, i32)) -> u64 {
+        let a_bytes = val.0.to_le_bytes();
+        let b_bytes = val.1.to_le_bytes();
+
+        u64::from_le_bytes([a_bytes, b_bytes].concat().try_into().unwrap())
+    }
+
+    fn i32_tup_from_u64(val: u64) -> (i32, i32) {
+        let bytes = val.to_le_bytes();
+
+        let a = i32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let b = i32::from_le_bytes(bytes[4..8].try_into().unwrap());
+
+        (a, b)
+    }
+
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_size);
+
+        let mut counts = [0i32; 128];
+
+        // create a vector like [(6, 1), (5, 1), (6, 2), ...],
+        // where the first item of each tuple is random, but
+        // the second item represents which occurrence of that
+        // number this element is, i.e., the second elements
+        // will occur in sorted order.
+        let orig: Vec<_> = pattern
+            .iter()
+            .map(|val| {
+                let n = val.saturating_abs() % counts.len() as i32;
+                counts[n as usize] += 1;
+                i32_tup_as_u64((n, counts[n as usize]))
+            })
+            .collect();
+
+        let mut v = orig.clone();
+        // Only sort on the first element, so an unstable sort
+        // may mix up the counts.
+        test_sort::sort_by(&mut v, |a_packed, b_packed| {
+            let a = i32_tup_from_u64(*a_packed).0;
+            let b = i32_tup_from_u64(*b_packed).0;
+
+            a.cmp(&b)
+        });
+
+        // This comparison includes the count (the second item
+        // of the tuple), so elements with equal first items
+        // will need to be ordered with increasing
+        // counts... i.e., exactly asserting that this sort is
+        // stable.
+        assert!(v
+            .windows(2)
+            .all(|w| i32_tup_from_u64(w[0]) <= i32_tup_from_u64(w[1])));
+    };
+
+    test_impl_custom(test_fn);
+}
+
+#[test]
 fn random_ffi_str() {
     test_impl(|test_size| {
         patterns::random(test_size)
@@ -396,15 +493,15 @@ fn comp_panic() {
 
     let seed = get_or_init_random_seed();
 
-    for test_size in TEST_SIZES {
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
         // Needs to be non trivial dtor.
-        let mut values = patterns::random(test_size)
+        let mut pattern = pattern_fn(test_size)
             .into_iter()
             .map(|val| vec![val, val, val])
             .collect::<Vec<Vec<i32>>>();
 
-        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
-            test_sort::sort_by(&mut values, |a, b| {
+        let val = panic::catch_unwind(AssertUnwindSafe(|| {
+            test_sort::sort_by(&mut pattern, |a, b| {
                 if a[0].abs() < (i32::MAX / test_size as i32) {
                     panic!(
                         "Explicit panic. Seed: {}. test_size: {}. a: {} b: {}",
@@ -415,12 +512,18 @@ fn comp_panic() {
                 a[0].cmp(&b[0])
             });
 
-            values
-                .get(values.len().saturating_sub(1))
+            pattern
+                .get(pattern.len().saturating_sub(1))
                 .map(|val| val[0])
                 .unwrap_or(66)
         }));
-    }
+        if let Err(err) = val {
+            // Side effect.
+            println!("{:?}", err);
+        }
+    };
+
+    test_impl_custom(test_fn);
 }
 
 #[cfg(not(miri))]
@@ -486,7 +589,8 @@ fn observable_is_less_u64() {
         }
     }
 
-    let test_fn = |pattern: Vec<i32>| {
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_size);
         let mut test_input = pattern
             .into_iter()
             .map(|val| CompCount::new(val).to_u64())
@@ -513,19 +617,7 @@ fn observable_is_less_u64() {
         assert_eq!(total_inner, comp_count_gloabl * 2);
     };
 
-    test_fn(patterns::ascending(10));
-    test_fn(patterns::ascending(19));
-    test_fn(patterns::ascending(200));
-    test_fn(patterns::random(12));
-    test_fn(patterns::random(20));
-    test_fn(patterns::random(200));
-    test_fn(patterns::ascending_saw(10, 3));
-    test_fn(patterns::ascending_saw(200, 4));
-    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
-    test_fn(patterns::random_uniform(
-        TEST_SIZES[TEST_SIZES.len() - 2],
-        0..=10,
-    ));
+    test_impl_custom(test_fn);
 }
 
 #[test]
@@ -555,7 +647,8 @@ fn observable_is_less() {
         }
     }
 
-    let test_fn = |pattern: Vec<i32>| {
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_size);
         let mut test_input = pattern
             .into_iter()
             .map(|val| CompCount::new(val))
@@ -576,19 +669,7 @@ fn observable_is_less() {
         assert_eq!(total_inner, comp_count_gloabl * 2);
     };
 
-    test_fn(patterns::ascending(10));
-    test_fn(patterns::ascending(19));
-    test_fn(patterns::ascending(200));
-    test_fn(patterns::random(12));
-    test_fn(patterns::random(20));
-    test_fn(patterns::random(200));
-    test_fn(patterns::ascending_saw(10, 3));
-    test_fn(patterns::ascending_saw(200, 4));
-    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
-    test_fn(patterns::random_uniform(
-        TEST_SIZES[TEST_SIZES.len() - 2],
-        0..=10,
-    ));
+    test_impl_custom(test_fn);
 }
 
 #[test]
@@ -610,7 +691,9 @@ fn observable_is_less_mut_ptr() {
     // This test, tests the same as observable_is_less but instead of mutating a Cell like object it
     // mutates *mut pointers.
 
-    let test_fn = |pattern: Vec<i32>| {
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_size);
+
         // The sort type T is Copy, yet it still allows mutable access during comparison.
         let mut test_input: Vec<*mut CompCount> = pattern
             .into_iter()
@@ -645,19 +728,7 @@ fn observable_is_less_mut_ptr() {
         assert_eq!(total_inner, comp_count_gloabl * 2);
     };
 
-    test_fn(patterns::ascending(10));
-    test_fn(patterns::ascending(19));
-    test_fn(patterns::ascending(200));
-    test_fn(patterns::random(12));
-    test_fn(patterns::random(20));
-    test_fn(patterns::random(200));
-    test_fn(patterns::ascending_saw(10, 3));
-    test_fn(patterns::ascending_saw(200, 4));
-    test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
-    test_fn(patterns::random_uniform(
-        TEST_SIZES[TEST_SIZES.len() - 2],
-        0..=10,
-    ));
+    test_impl_custom(test_fn);
 }
 
 fn calc_comps_required(test_data: &[i32]) -> u32 {
@@ -677,8 +748,9 @@ fn calc_comps_required(test_data: &[i32]) -> u32 {
 fn panic_retain_original_set() {
     let _seed = get_or_init_random_seed();
 
-    for test_size in TEST_SIZES.iter().filter(|x| **x >= 2) {
-        let mut test_data = patterns::random(*test_size);
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let mut test_data = pattern_fn(test_size);
+
         let sum_before: i64 = test_data.iter().map(|x| *x as i64).sum();
 
         // Calculate a specific comparison that should panic.
@@ -709,7 +781,9 @@ fn panic_retain_original_set() {
         // same.
         let sum_after: i64 = test_data.iter().map(|x| *x as i64).sum();
         assert_eq!(sum_before, sum_after);
-    }
+    };
+
+    test_impl_custom(test_fn);
 }
 
 #[test]
@@ -851,9 +925,8 @@ fn violate_ord_retain_original_set() {
     ];
 
     for comp_func in &mut invalid_ord_comp_functions {
-        // Larger sizes may take very long so filter them out here.
-        for test_size in &TEST_SIZES[0..TEST_SIZES.len() - 2] {
-            let mut test_data = patterns::random(*test_size);
+        let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+            let mut test_data = pattern_fn(test_size);
             let sum_before: i64 = test_data.iter().map(|x| *x as i64).sum();
 
             // It's ok to panic on Ord violation or to complete.
@@ -866,7 +939,9 @@ fn violate_ord_retain_original_set() {
             // same.
             let sum_after: i64 = test_data.iter().map(|x| *x as i64).sum();
             assert_eq!(sum_before, sum_after);
-        }
+        };
+
+        test_impl_custom(test_fn);
     }
 }
 
