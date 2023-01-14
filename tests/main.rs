@@ -522,6 +522,10 @@ fn observable_is_less_u64() {
     test_fn(patterns::ascending_saw(10, 3));
     test_fn(patterns::ascending_saw(200, 4));
     test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
+    test_fn(patterns::random_uniform(
+        TEST_SIZES[TEST_SIZES.len() - 2],
+        0..=10,
+    ));
 }
 
 #[test]
@@ -581,6 +585,10 @@ fn observable_is_less() {
     test_fn(patterns::ascending_saw(10, 3));
     test_fn(patterns::ascending_saw(200, 4));
     test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
+    test_fn(patterns::random_uniform(
+        TEST_SIZES[TEST_SIZES.len() - 2],
+        0..=10,
+    ));
 }
 
 #[test]
@@ -646,6 +654,10 @@ fn observable_is_less_mut_ptr() {
     test_fn(patterns::ascending_saw(10, 3));
     test_fn(patterns::ascending_saw(200, 4));
     test_fn(patterns::random(TEST_SIZES[TEST_SIZES.len() - 2]));
+    test_fn(patterns::random_uniform(
+        TEST_SIZES[TEST_SIZES.len() - 2],
+        0..=10,
+    ));
 }
 
 fn calc_comps_required(test_data: &[i32]) -> u32 {

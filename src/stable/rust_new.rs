@@ -163,7 +163,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     // bidirectionally at once. So there is no benefit in scanning backwards.
     while end < len {
         if start != 0 {
-            // println!("start: {start} next_probe_spot: {next_probe_spot}");
             let probe_for_common = start >= next_probe_spot && (len - start) <= buf_len;
 
             // SAFETY: We checked that buf_ptr can hold `v[start..]` if probe_for_common is true.
@@ -198,9 +197,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         });
         start = end;
 
-        // type DebugT = i32;
-        // let mut saved_vec_fixme = Vec::new();
-
         // Merge some pairs of adjacent runs to satisfy the invariants.
         while let Some(r) = collapse(runs.as_slice(), len) {
             let left = runs[r];
@@ -208,8 +204,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             let merge_slice = &mut v[left.start..right.start + right.len];
             unsafe {
                 if (left.all_equal || right.all_equal) && merge_slice.len() <= buf_len {
-                    // saved_vec_fixme = mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec();
-
                     merge_run_with_equal(merge_slice, buf_ptr, &left, &right, compare);
                 } else if qualifies_for_parity_merge::<T>() && merge_slice.len() <= buf_len {
                     parity_merge_plus(merge_slice, left.len, buf_ptr, &mut |a, b| {
@@ -228,14 +222,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
                 all_equal: false,
             };
             runs.remove(r);
-
-            // if (left.all_equal || right.all_equal) {
-            //     unsafe {
-            //         let v_after_i32 = mem::transmute::<&[T], &[DebugT]>(merge_slice);
-            //         saved_vec_fixme.sort();
-            //         assert_eq!(v_after_i32, saved_vec_fixme);
-            //     }
-            // }
         }
     }
 
@@ -472,6 +458,9 @@ pub struct TimSortRun {
 /// Analyzes region at the start of `v` and will leverage natural patterns contained in the input.
 /// Returns offset until where `v[..end]` will be sorted after the call, and bool denoting wether
 /// that area contains only equal elements.
+///
+/// SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for `v.len()`
+/// writes.
 #[inline(never)]
 unsafe fn natural_sort<T, F>(
     v: &mut [T],
@@ -482,8 +471,6 @@ unsafe fn natural_sort<T, F>(
 where
     F: FnMut(&T, &T) -> Ordering,
 {
-    // TODO explain SAFETY of buf if probe_for_common is set.
-
     // Starting at this streak size the one additional comparison is not too expensive.
     const MIN_ASCENDING_ALL_EQUAL_CHECK: usize = 12;
 
@@ -508,7 +495,8 @@ where
             (end, false)
         }
         ProbeResult::CommonValue(idx) => {
-            // SAFETY: TODO
+            // SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for
+            // `v.len()` writes.
             let end = unsafe {
                 partition_equal_stable(v, idx, buf, &mut |a, b| compare(a, b) == Ordering::Equal)
             };
@@ -620,7 +608,8 @@ where
 
     // Ideally the optimizer will unroll this.
     for i in 0..INITAL_PROBE_SET_SIZE {
-        // SAFETY: TODO
+        // SAFETY: INITAL_PROBE_SET_SIZE is used as array size and INITIAL_PROBE_OFFSET + i is
+        // withing the checked bounds of `v`.
         unsafe {
             *inital_match_counts_ptr.add(i) = is_equal(
                 v.get_unchecked(i),
@@ -689,22 +678,35 @@ where
 
     type DebugT = i32;
 
-    // SAFETY: TODO
+    // SAFETY: The caller must ensure `buf` is valid for `v.len()` writes.
+    // See specific comments below.
     unsafe {
-        // let v_as_i32 = mem::transmute::<&[T], &[DebugT]>(v);
-        // println!("INPUT: {:?}", v_as_i32);
-
-        // TODO this violates observable is_less. Write back into correct location.
         let pivot_val = mem::ManuallyDrop::new(ptr::read(&v[pivot_pos]));
 
         let mut swap_ptr_l = buf;
         let mut swap_ptr_r = buf.add(len.saturating_sub(1));
+        let mut pivot_partioned_ptr = ptr::null_mut();
 
         for i in 0..len {
+            // This should only happen once and be branch that can be predicted very well.
+            if i == pivot_pos {
+                // Technically we are leaving a hole in buf here, but we don't overwrite `v` until
+                // all comparisons have been done. So this should be fine. We patch it up later to
+                // make sure that a unique observation path happened for `pivot_val`. If we just
+                // write the value as pointed to by `elem_ptr` into `buf` as it was in the input
+                // slice `v` we would risk that the call to `is_equal` modifies the value pointed to
+                // by `elem_ptr`. This could be UB for types such as `Mutex<Option<Box<String>>>`
+                // where during the comparison it replaces the box with None, leading to double
+                // free. As the value written back into `v` from `buf` did not observe that
+                // modification.
+                pivot_partioned_ptr = swap_ptr_r;
+                swap_ptr_r = swap_ptr_r.sub(1);
+                continue;
+            }
+
             let elem_ptr = arr_ptr.add(i);
 
             let is_eq = is_equal(&*elem_ptr, &pivot_val);
-            // println!("is_eq: {is_eq} elem: {}", &*(elem_ptr as *const i32));
 
             ptr::copy_nonoverlapping(elem_ptr, swap_ptr_l, 1);
             ptr::copy_nonoverlapping(elem_ptr, swap_ptr_r, 1);
@@ -721,11 +723,12 @@ where
         let l_count = swap_ptr_l.sub_ptr(buf);
         let r_count = len - l_count;
 
-        // dbg!(l_count, r_count);
-        // println!(
-        //     "BUF:\n{:?}\n",
-        //     &*ptr::slice_from_raw_parts(buf as *const DebugT, len)
-        // );
+        // Copy pivot_val into it's correct position.
+        ptr::copy_nonoverlapping(
+            &pivot_val as *const mem::ManuallyDrop<T> as *const T,
+            pivot_partioned_ptr,
+            1,
+        );
 
         // Now that swap has the correct order overwrite arr_ptr.
         let arr_ptr = v.as_mut_ptr();
@@ -733,9 +736,6 @@ where
         v[..r_count].reverse();
 
         ptr::copy_nonoverlapping(buf, arr_ptr.add(r_count), l_count);
-
-        // println!("ELEM: {}", mem::transmute::<_, &DebugT>(&pivot_val));
-        // println!("{:?}", &v_as_i32[..r_count]);
 
         r_count
     }
@@ -755,17 +755,6 @@ unsafe fn merge_run_with_equal<T, F>(
     F: FnMut(&T, &T) -> Ordering,
 {
     assert!(left.len >= 1 && right.len >= 1 && v.len() == left.len + right.len);
-
-    // type DebugT = (i32, i32);
-    // let v_as_i32 = mem::transmute::<&[T], &[DebugT]>(v);
-    // println!(
-    //     "\nLEFT:\n{:?}\nRight:\n{:?}",
-    //     &v_as_i32[..left.len],
-    //     &v_as_i32[left.len..]
-    // );
-    // dbg!(left, right);
-    // use std::io::{self, Write};
-    // std::io::stdout().flush().unwrap();
 
     let comp_l0_r0 = compare(&v[0], &v[left.len]);
     let comp_l0_r_end = compare(&v[0], &v[v.len() - 1]);
@@ -815,7 +804,6 @@ unsafe fn merge_run_with_equal<T, F>(
                         }
                     }
 
-                    // dbg!(adjusted_pos);
                     adjusted_pos
                 }
                 Err(pos) => pos,
@@ -846,15 +834,6 @@ unsafe fn merge_run_with_equal<T, F>(
 
         let insert_pos = match v[..left.len].binary_search_by(|elem| compare(elem, r_elem)) {
             Ok(val) => {
-                // let v_as_i32 = mem::transmute::<&[T], &[i32]>(v);
-                // dbg!(v_as_i32[51], left.len);
-                // println!("left side: {:?}", &v_as_i32[..left.len]);
-                // println!(
-                //     "up to pos: {:?} from pos {:?}",
-                //     &v_as_i32[..val],
-                //     &v_as_i32[val..left.len]
-                // );
-
                 // This is necessary to make this stable.
                 let mut adjusted_pos = val;
 
@@ -867,9 +846,6 @@ unsafe fn merge_run_with_equal<T, F>(
                     }
                 }
 
-                // println!("from adjusted_pos {:?}", &v_as_i32[adjusted_pos..left.len]);
-
-                // dbg!(adjusted_pos);
                 adjusted_pos
             }
             Err(pos) => pos,
