@@ -146,15 +146,23 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     let mut start = 0;
     let mut all_equal = false;
 
+    let max_probe_begin_len: usize = cmp::max(len / MIN_REPROBE_DISTANCE, 20);
+
     // Now that we know it's not fully sorted already or a small input.
     // And we allocated buf, try to detect a common value.
-    if buf_len == len && end < (min_valid_streak::<T>() * 2) {
-        // SAFETY: We checked that buf_ptr can hold `v`.
-        (end, all_equal) = unsafe { natural_sort(v, buf_ptr, true, compare) };
-        next_probe_spot = if all_equal {
-            next_probe_spot
-        } else {
-            start + MIN_REPROBE_DISTANCE
+    if buf_len == len && end < max_probe_begin_len {
+        let probe_common_result =
+            probe_for_common_val(v, &mut |a, b| compare(a, b) == Ordering::Equal);
+
+        if let Some(idx) = probe_common_result {
+            // SAFETY: We checked that buf_ptr can hold `v`.
+            end = unsafe {
+                partition_equal_stable(v, idx, buf_ptr, &mut |a, b| {
+                    compare(a, b) == Ordering::Equal
+                })
+            };
+
+            all_equal = true;
         };
     }
 
@@ -472,7 +480,6 @@ pub struct TimSortRun {
 ///
 /// SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for `v.len()`
 /// writes.
-#[inline(never)]
 unsafe fn natural_sort<T, F>(
     v: &mut [T],
     buf: *mut T,
@@ -536,17 +543,7 @@ fn probe_region<T, F>(v: &[T], probe_for_common: bool, compare: &mut F) -> Probe
 where
     F: FnMut(&T, &T) -> Ordering,
 {
-    let min_valid_streak = min_valid_streak::<T>();
-
-    let (streak_end, was_reversed) = find_streak(v, &mut |a, b| compare(a, b) == Ordering::Less);
-    if streak_end >= min_valid_streak {
-        return if was_reversed {
-            ProbeResult::Descending(streak_end)
-        } else {
-            ProbeResult::Ascending(streak_end)
-        };
-    }
-
+    // Probe for common value with priority over streak analysis.
     if probe_for_common {
         let probe_common_result =
             probe_for_common_val(v, &mut |a, b| compare(a, b) == Ordering::Equal);
@@ -555,6 +552,13 @@ where
             return ProbeResult::CommonValue(idx);
         }
     }
+
+    let (streak_end, was_reversed) = find_streak(v, &mut |a, b| compare(a, b) == Ordering::Less);
+    return if was_reversed {
+        ProbeResult::Descending(streak_end)
+    } else {
+        ProbeResult::Ascending(streak_end)
+    };
 
     ProbeResult::None
 }
@@ -664,13 +668,17 @@ where
         // SAFETY: Access happens inside checked PROBE_REGION_SIZE.
         let elem = unsafe { v.get_unchecked(i) };
         best_count += is_equal(candidate, elem) as u8;
+
+        if i == (VERIFY_PROBE_STEPS / 2) && best_count == 0 {
+            break;
+        }
+
+        if best_count >= MIN_HIT_COUNT {
+            return Some(best_idx);
+        }
     }
 
-    if best_count >= MIN_HIT_COUNT {
-        return Some(best_idx);
-    } else {
-        None
-    }
+    None
 }
 
 /// Partition `v` into elements that are equal to `v[pivot_pos]` followed by elements not equal to
@@ -1385,17 +1393,6 @@ fn qualifies_for_parity_merge<T>() -> bool {
     let is_copy = T::is_copy();
 
     return is_small && is_copy;
-}
-
-#[inline]
-fn min_valid_streak<T>() -> usize {
-    // If the type qualifies_for_parity_merge it will ignore streaks up to that length anyway.
-    // Setting this too low lowers the chance of finding common values.
-    if qualifies_for_parity_merge::<T>() {
-        7
-    } else {
-        3
-    }
 }
 
 #[inline]
