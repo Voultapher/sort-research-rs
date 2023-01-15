@@ -735,6 +735,7 @@ where
         ptr::copy_nonoverlapping(buf.add(l_count), arr_ptr, r_count);
         v[..r_count].reverse();
 
+        let arr_ptr = v.as_mut_ptr();
         ptr::copy_nonoverlapping(buf, arr_ptr.add(r_count), l_count);
 
         r_count
