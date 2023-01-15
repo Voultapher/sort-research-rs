@@ -197,6 +197,9 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         });
         start = end;
 
+        // type DebugT = (i32, i32);
+        // let mut check_vec = Vec::new();
+
         // Merge some pairs of adjacent runs to satisfy the invariants.
         while let Some(r) = collapse(runs.as_slice(), len) {
             let left = runs[r];
@@ -204,6 +207,8 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             let merge_slice = &mut v[left.start..right.start + right.len];
             unsafe {
                 if (left.all_equal || right.all_equal) && merge_slice.len() <= buf_len {
+                    // check_vec = mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec();
+
                     merge_run_with_equal(merge_slice, buf_ptr, &left, &right, compare);
                 } else if qualifies_for_parity_merge::<T>() && merge_slice.len() <= buf_len {
                     parity_merge_plus(merge_slice, left.len, buf_ptr, &mut |a, b| {
@@ -222,6 +227,12 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
                 all_equal: false,
             };
             runs.remove(r);
+
+            // if (left.all_equal || right.all_equal) {
+            //     check_vec.sort();
+            //     let x = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice) };
+            //     assert_eq!(x, check_vec);
+            // }
         }
     }
 
@@ -483,7 +494,9 @@ where
     match probe_result {
         ProbeResult::Ascending(end) => {
             let all_equal = if end >= MIN_ASCENDING_ALL_EQUAL_CHECK {
-                compare(&v[0], &v[end - 1]) == Ordering::Equal
+                // compare(&v[0], &v[end - 1]) == Ordering::Equal
+                // TODO enable this but it makes merge_run_with_equal more complicated.
+                false
             } else {
                 false
             };
@@ -676,8 +689,6 @@ where
 
     let arr_ptr = v.as_ptr();
 
-    type DebugT = i32;
-
     // SAFETY: The caller must ensure `buf` is valid for `v.len()` writes.
     // See specific comments below.
     unsafe {
@@ -769,11 +780,31 @@ unsafe fn merge_run_with_equal<T, F>(
     // found by probe_for_common_val. These must have been found before the call to
     // partition_equal_stable. As consequence in both cases we have to find the last element that is
     // equal or its according spot and insert the all_equal run there.
+    //
+    // However there is another way to create a run that is all equal, and that's ascending with
+    // first and last element being the same. This does not guarantee that the run will hold all the
+    // remaining elements that are equal. Yet we know that both types of runs are contiguous and we
+    // know their start position. By comparing their start positions we can know in what order they
+    // must appear. They cannot interleave, one must come before the other.
 
-    if (left.all_equal && right.all_equal) || (left.all_equal && comp_l0_r_end == Ordering::Equal) {
+    // type DebugT = (i32, i32);
+    // let v_as_x = mem::transmute::<&[T], &[DebugT]>(v);
+    // println!(
+    //     "\n\nLEFT:\n{:?}\nRight:\n{:?}",
+    //     &v_as_x[..left.len],
+    //     &v_as_x[left.len..]
+    // );
+    // dbg!(left, right);
+
+    if (left.all_equal && right.all_equal)
+        || (left.all_equal && comp_l0_r_end == Ordering::Equal && left.start > right.start)
+    {
         debug_assert!(compare(&v[0], &v[left.len]) != Ordering::Equal);
 
-        if comp_l0_r0 != Ordering::Less {
+        let run_comes_after = comp_l0_r0 == Ordering::Greater
+            || (comp_l0_r0 == Ordering::Equal && left.start > right.start);
+
+        if run_comes_after {
             // SAFETY: TODO
             unsafe {
                 // Swap left and right side.
@@ -791,21 +822,36 @@ unsafe fn merge_run_with_equal<T, F>(
 
             let insert_pos = match v[left.len..].binary_search_by(|elem| compare(elem, l_elem)) {
                 Ok(val) => {
-                    // This is necessary to make this stable.
-                    let mut adjusted_pos = val;
+                    let run_comes_after = left.start > right.start;
+                    assert!(run_comes_after);
 
-                    // SAFETY: TODO
-                    while compare(unsafe { v.get_unchecked(left.len + adjusted_pos) }, l_elem)
-                        == Ordering::Equal
-                    {
-                        adjusted_pos += 1;
+                    let offset = left.len + val;
 
-                        if adjusted_pos == right.len {
-                            panic!("Ord violation");
-                        }
-                    }
+                    let rel_pos = v[offset..]
+                        .iter()
+                        .position(|elem| compare(elem, l_elem) != Ordering::Equal)
+                        .unwrap(); // TODO explain unwrap Ord violation.
 
-                    adjusted_pos
+                    offset + rel_pos
+
+                    // // This is necessary to make this stable.
+                    // let run_comes_after = left.start > right.start;
+                    // if run_comes_after {
+                    //     let rel_pos = v[offset..]
+                    //         .iter()
+                    //         .position(|elem| compare(elem, l_elem) != Ordering::Equal)
+                    //         .unwrap(); // TODO explain unwrap Ord violation.
+
+                    //     offset + rel_pos
+                    // } else {
+                    //     let rel_pos = v[..offset]
+                    //         .iter()
+                    //         .rev()
+                    //         .position(|elem| compare(elem, l_elem) != Ordering::Equal)
+                    //         .unwrap(); // TODO explain unwrap Ord violation.
+
+                    //     offset - (rel_pos + 1)
+                    // }
                 }
                 Err(pos) => pos,
             };
@@ -835,19 +881,15 @@ unsafe fn merge_run_with_equal<T, F>(
 
         let insert_pos = match v[..left.len].binary_search_by(|elem| compare(elem, r_elem)) {
             Ok(val) => {
-                // This is necessary to make this stable.
-                let mut adjusted_pos = val;
+                let run_comes_after = right.start > left.start;
+                assert!(run_comes_after); // TODO why is this always true?
 
-                // SAFETY: TODO
-                while compare(unsafe { v.get_unchecked(adjusted_pos) }, r_elem) == Ordering::Equal {
-                    adjusted_pos += 1;
+                let rel_pos = v[val..]
+                    .iter()
+                    .position(|elem| compare(elem, r_elem) != Ordering::Equal)
+                    .unwrap(); // TODO explain unwrap Ord violation.
 
-                    if adjusted_pos == left.len {
-                        panic!("Ord violation");
-                    }
-                }
-
-                adjusted_pos
+                val + rel_pos
             }
             Err(pos) => pos,
         };
