@@ -802,15 +802,11 @@ where
             if !is_less(p, &v[pivot]) {
                 let mid = partition_equal(v, pivot, is_less);
 
-                if mid == 0 {
-                    // At least pivot itself would have to count as equal to itself. Not doing this
-                    // check, would mean it could get stuck not decreasing the size of v. Looping
-                    // forever.
-                    panic_on_ord_violation();
-                }
-
-                // Continue sorting elements greater than the pivot.
-                v = &mut v[mid..];
+                // Continue sorting elements greater than the pivot. We know that mid contains the
+                // pivot. So we can continue after mid. It's important that this shrinks the
+                // remaining to-be-sorted slice `v`. Otherwise Ord violations could get this stuck
+                // loop forever.
+                v = &mut v[(mid + 1)..];
                 continue;
             }
         }
