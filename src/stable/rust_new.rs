@@ -636,44 +636,36 @@ where
     }
 
     // SAFETY: We initialized all the values in the loop above.
-    let mut inital_match_counts = unsafe { inital_match_counts.assume_init() };
+    let inital_match_counts = unsafe { inital_match_counts.assume_init() };
+    let inital_match_counts_u64 = u64::from_ne_bytes(inital_match_counts);
 
-    if u64::from_ne_bytes(inital_match_counts) == 0 {
+    if inital_match_counts_u64 == 0 {
         return None;
     }
 
     // At least one element was found again, do deeper probing to find out if is common.
-
-    let mut best_idx = 0;
-    let mut best_count = inital_match_counts[0];
-    for i in 1..INITAL_PROBE_SET_SIZE {
-        let is_best = inital_match_counts[i] > best_count;
-        best_count = if is_best {
-            inital_match_counts[i]
-        } else {
-            best_count
-        };
-        best_idx = if is_best { i } else { best_idx };
-    }
+    let best_idx = if cfg!(target_endian = "little") {
+        ((inital_match_counts_u64.trailing_zeros() + 1) / 8) as usize
+    } else {
+        ((inital_match_counts_u64.leading_zeros() + 1) / 8) as usize
+    };
 
     let candidate = &v[best_idx];
     // Check it against locations that have not yet been checked.
     // Already checked:
     // v[<0..8> <IPO..IPO+8>]
 
-    best_count = 0;
-
-    let initial_probe_end = INITIAL_PROBE_OFFSET + INITAL_PROBE_SET_SIZE;
-    for i in initial_probe_end..(initial_probe_end + VERIFY_PROBE_STEPS) {
+    let mut count = 0;
+    for i in (PROBE_REGION_SIZE - VERIFY_PROBE_STEPS)..PROBE_REGION_SIZE {
         // SAFETY: Access happens inside checked PROBE_REGION_SIZE.
         let elem = unsafe { v.get_unchecked(i) };
-        best_count += is_equal(candidate, elem) as u8;
+        count += is_equal(candidate, elem) as u8;
 
-        if i == (VERIFY_PROBE_STEPS / 2) && best_count == 0 {
+        if i == (VERIFY_PROBE_STEPS / 2) && count == 0 {
             break;
         }
 
-        if best_count >= MIN_HIT_COUNT {
+        if count >= MIN_HIT_COUNT {
             return Some(best_idx);
         }
     }
