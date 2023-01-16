@@ -579,6 +579,61 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             pattern_provider,
             sort_comp::other::rust_radsort::SortImpl,
         );
+
+        #[cfg(feature = "evolution")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::sort_evolution::stable::timsort_evo0::SortImpl,
+        );
+
+        #[cfg(feature = "evolution")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::sort_evolution::stable::timsort_evo1::SortImpl,
+        );
+
+        #[cfg(feature = "evolution")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::sort_evolution::stable::timsort_evo2::SortImpl,
+        );
+
+        #[cfg(feature = "evolution")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::sort_evolution::stable::timsort_evo3::SortImpl,
+        );
+
+        #[cfg(feature = "evolution")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::sort_evolution::stable::timsort_evo4::SortImpl,
+        );
     }
 }
 

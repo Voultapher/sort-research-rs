@@ -142,7 +142,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     let mut runs = RunVec::new(&run_alloc_fn, &run_dealloc_fn);
 
     const MIN_REPROBE_DISTANCE: usize = 256;
-    const MIN_GOOD_PARTITION_LEN: usize = 64;
     let mut next_probe_spot = 0;
     let mut start = 0;
     let mut all_equal = false;

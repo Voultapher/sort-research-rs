@@ -107,6 +107,10 @@ rust_radsort = ["radsort"]
 # No additional requirements, but disabled by default to keep things lean.
 rust_dmsort = ["dmsort"]
 
+# Enable the sort evolution code.
+# Demonstrates various stages and optimizations of stable and unstable sorts.
+evolution = []
+
 # --- Other ---
 
 # Add the inline(never) attribute to implementation functions of (un)stable::rust_new.
