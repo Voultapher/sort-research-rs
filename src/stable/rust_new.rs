@@ -142,11 +142,14 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     let mut runs = RunVec::new(&run_alloc_fn, &run_dealloc_fn);
 
     const MIN_REPROBE_DISTANCE: usize = 256;
+    const MIN_GOOD_PARTITION_LEN: usize = 64;
     let mut next_probe_spot = 0;
     let mut start = 0;
     let mut all_equal = false;
 
     let max_probe_begin_len: usize = cmp::max(len / MIN_REPROBE_DISTANCE, 20);
+    // Limit the possibility of doing consecutive ineffective partitions.
+    let min_good_partiton_len: usize = ((len as f64).log2() * 2.0).round() as usize;
 
     // Now that we know it's not fully sorted already or a small input.
     // And we allocated buf, try to detect a common value.
@@ -163,7 +166,12 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             };
 
             all_equal = true;
-        };
+            if end < min_good_partiton_len {
+                next_probe_spot = MIN_REPROBE_DISTANCE;
+            }
+        } else {
+            next_probe_spot = MIN_REPROBE_DISTANCE;
+        }
     }
 
     // Scan forward. Memory pre-fetching prefers forward scanning vs backwards scanning, and the
@@ -177,8 +185,9 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             (end, all_equal) =
                 unsafe { natural_sort(&mut v[start..], buf_ptr, probe_for_common, compare) };
 
-            // Avoid re-probing the same area again and again if probing failed.
-            next_probe_spot = if !probe_for_common || all_equal {
+            // Avoid re-probing the same area again and again if probing failed or was of low
+            // quality.
+            next_probe_spot = if !probe_for_common || (all_equal && end >= min_good_partiton_len) {
                 next_probe_spot
             } else {
                 start + MIN_REPROBE_DISTANCE
