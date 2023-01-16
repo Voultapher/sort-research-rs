@@ -752,6 +752,13 @@ where
             if !is_less(p, &v[pivot]) {
                 let mid = partition_equal(v, pivot, is_less);
 
+                if mid == 0 {
+                    // At least pivot itself would have to count as equal to itself. Not doing this
+                    // check, would mean it could get stuck not decreasing the size of v. Looping
+                    // forever.
+                    panic!("Ord violation");
+                }
+
                 // Continue sorting elements greater than the pivot.
                 v = &mut v[mid..];
                 continue;
