@@ -523,7 +523,6 @@ where
 
             (end, true)
         }
-        ProbeResult::None => (1, false),
     }
 }
 
@@ -532,7 +531,6 @@ enum ProbeResult {
     Ascending(usize),   // Offset until where it is sorted.
     Descending(usize),  // Offset until where it is sorted descending.
     CommonValue(usize), // Offset of element that is common.
-    None,
 }
 
 /// Analyzes region at the start of `v` at tries to find these types of patterns:
@@ -559,8 +557,6 @@ where
     } else {
         ProbeResult::Ascending(streak_end)
     };
-
-    ProbeResult::None
 }
 
 /// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
@@ -621,7 +617,7 @@ where
     }
 
     let mut inital_match_counts = mem::MaybeUninit::<[u8; INITAL_PROBE_SET_SIZE]>::uninit();
-    let mut inital_match_counts_ptr = inital_match_counts.as_mut_ptr() as *mut u8;
+    let inital_match_counts_ptr = inital_match_counts.as_mut_ptr() as *mut u8;
 
     // Ideally the optimizer will unroll this.
     for i in 0..INITAL_PROBE_SET_SIZE {
@@ -1100,66 +1096,6 @@ where
     }
 }
 
-/// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
-///
-/// This is the integral subroutine of insertion sort.
-unsafe fn insert_head<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    debug_assert!(v.len() >= 2);
-
-    unsafe {
-        if is_less(v.get_unchecked(1), v.get_unchecked(0)) {
-            let arr_ptr = v.as_mut_ptr();
-
-            // There are three ways to implement insertion here:
-            //
-            // 1. Swap adjacent elements until the first one gets to its final destination.
-            //    However, this way we copy data around more than is necessary. If elements are big
-            //    structures (costly to copy), this method will be slow.
-            //
-            // 2. Iterate until the right place for the first element is found. Then shift the
-            //    elements succeeding it to make room for it and finally place it into the
-            //    remaining hole. This is a good method.
-            //
-            // 3. Copy the first element into a temporary variable. Iterate until the right place
-            //    for it is found. As we go along, copy every traversed element into the slot
-            //    preceding it. Finally, copy data from the temporary variable into the remaining
-            //    hole. This method is very good. Benchmarks demonstrated slightly better
-            //    performance than with the 2nd method.
-            //
-            // All methods were benchmarked, and the 3rd showed best results. So we chose that one.
-            let tmp = mem::ManuallyDrop::new(ptr::read(arr_ptr));
-
-            // Intermediate state of the insertion process is always tracked by `hole`, which
-            // serves two purposes:
-            // 1. Protects integrity of `v` from panics in `is_less`.
-            // 2. Fills the remaining hole in `v` in the end.
-            //
-            // Panic safety:
-            //
-            // If `is_less` panics at any point during the process, `hole` will get dropped and
-            // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
-            // initially held exactly once.
-            let mut hole = InsertionHole {
-                src: &*tmp,
-                dest: arr_ptr.add(1),
-            };
-            ptr::copy_nonoverlapping(arr_ptr.add(1), arr_ptr.add(0), 1);
-
-            for i in 2..v.len() {
-                if !is_less(&v.get_unchecked(i), &*tmp) {
-                    break;
-                }
-                ptr::copy_nonoverlapping(arr_ptr.add(i), arr_ptr.add(i - 1), 1);
-                hole.dest = arr_ptr.add(i);
-            }
-            // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
-        }
-    }
-}
-
 /// Sort `v` assuming `v[..offset]` is already sorted.
 ///
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
@@ -1181,32 +1117,6 @@ where
         unsafe {
             // Maybe use insert_head here and avoid additional code.
             insert_tail(&mut v[..=i], is_less);
-        }
-    }
-}
-
-/// Sort `v` assuming `v[offset..]` is already sorted.
-///
-/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-/// performance impact. Even improving performance in some cases.
-#[inline(never)]
-fn insertion_sort_shift_right<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    // This would be a logic bug.
-    // Using assert here improves performance.
-    assert!(offset != 0 && offset <= len);
-
-    // Shift each element of the unsorted region v[..i] as far left as is needed to make v sorted.
-    for i in (0..offset).rev() {
-        // We ensured that the slice length is always at least 2 long.
-        // We know that start_found will be at least one less than end,
-        // and the range is exclusive. Which gives us i always <= (end - 2).
-        unsafe {
-            insert_head(&mut v[i..len], is_less);
         }
     }
 }
