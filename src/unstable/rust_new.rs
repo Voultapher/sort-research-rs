@@ -536,7 +536,7 @@ where
         if l >= r {
             (l, true) // was partitioned
         } else {
-            // let is_less_count = <crate::other::partition::new_block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
+            // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
 
             let is_less_count = partition_in_blocks(&mut v[l..r], pivot, is_less);
 
@@ -782,38 +782,41 @@ where
     }
 }
 
-/// Finds a streak of presorted elements starting at the end of the slice.
-/// Returns the first value that is not part of said streak.
+/// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
+/// value that is not part of said streak, and a bool denoting wether the streak was reversed.
 /// Streaks can be increasing or decreasing.
-/// Decreasing streaks will be reversed.
-/// After this call `v[start..len]` will be sorted.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn find_streak_rev<T, F>(v: &mut [T], is_less: &mut F) -> usize
+fn find_streak<T, F>(v: &[T], is_less: &mut F) -> (usize, bool)
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
 
-    let mut start = len - 1;
-    if start > 0 {
-        start -= 1;
-        unsafe {
-            if is_less(v.get_unchecked(start + 1), v.get_unchecked(start)) {
-                while start > 0 && is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
-                    start -= 1;
-                }
-                v[start..len].reverse();
-            } else {
-                while start > 0 && !is_less(v.get_unchecked(start), v.get_unchecked(start - 1)) {
-                    start -= 1;
-                }
-            }
-        }
+    if len < 2 {
+        return (len, false);
     }
 
-    debug_assert!(start < len);
+    let mut end = 2;
 
-    start
+    // SAFETY: See below specific.
+    unsafe {
+        // SAFETY: We checked that len >= 2, so 0 and 1 are valid indices.
+        let assume_reverse = is_less(v.get_unchecked(1), v.get_unchecked(0));
+
+        // SAFETY: We know end >= 2 and check end < len.
+        // From that follows that accessing v at end and end - 1 is safe.
+        if assume_reverse {
+            while end < len && is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
+                end += 1;
+            }
+
+            (end, true)
+        } else {
+            while end < len && !is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
+                end += 1;
+            }
+            (end, false)
+        }
+    }
 }
 
 /// Sorts `v` using strategies optimized for small sizes.
@@ -863,13 +866,14 @@ where
     }
 
     // Handles both ascending and descending inputs in N-1 comparisons.
-    let start = find_streak_rev(v, is_less);
-    if start == 0 {
-        return true;
-    }
+    let (streak_end, was_reversed) = find_streak(v, is_less);
 
-    if !is_cheap_to_move::<T>() || start < cmp::min(len / 2, 8) {
-        insertion_sort_shift_right(v, start, is_less);
+    if !is_cheap_to_move::<T>() || (len - streak_end) <= cmp::max(len / 2, 8) {
+        if was_reversed {
+            v[..streak_end].reverse();
+        }
+
+        insertion_sort_shift_left(v, streak_end, is_less);
         return true;
     }
 
@@ -1057,32 +1061,6 @@ where
         unsafe {
             // Maybe use insert_head here and avoid additional code.
             insert_tail(&mut v[..=i], is_less);
-        }
-    }
-}
-
-/// Sort `v` assuming `v[offset..]` is already sorted.
-///
-/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-/// performance impact. Even improving performance in some cases.
-#[inline(never)]
-fn insertion_sort_shift_right<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    // This would be a logic bug.
-    // Using assert here improves performance.
-    assert!(offset != 0 && offset <= len);
-
-    // Shift each element of the unsorted region v[..i] as far left as is needed to make v sorted.
-    for i in (0..offset).rev() {
-        // We ensured that the slice length is always at least 2 long.
-        // We know that start_found will be at least one less than end,
-        // and the range is exclusive. Which gives us i always <= (end - 2).
-        unsafe {
-            insert_head(&mut v[i..len], is_less);
         }
     }
 }
