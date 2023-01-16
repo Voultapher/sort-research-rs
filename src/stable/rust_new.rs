@@ -1404,7 +1404,7 @@ where
     let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
 
     if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
-        panic!("Ord violation");
+        panic_on_ord_violation();
     }
 }
 
@@ -1485,14 +1485,14 @@ where
         let right_ptr_done = calc_ptr_diff(ptr_right, t_ptr_right) == mem::size_of::<T>();
 
         if !left_ptr_done && !right_ptr_done {
-            panic!("Ord violation");
+            panic_on_ord_violation();
         }
 
         if !left_ptr_done {
             // Be vigilant and check everything that could go wrong.
             // t_ptr_left must be within the left side and larger or equal to ptr_left.
             if !(t_ptr_data >= ptr_data && t_ptr_left < mid_ptr && t_ptr_left >= ptr_left) {
-                panic!("Ord violation");
+                panic_on_ord_violation();
             }
 
             let buf_rest_len = t_ptr_data.sub_ptr(ptr_data) + 1;
@@ -1503,7 +1503,7 @@ where
         } else if !right_ptr_done {
             // t_ptr_right must be within the right side and larger or equal to ptr_right.
             if !(t_ptr_data >= ptr_data && t_ptr_right < end_ptr && t_ptr_right >= ptr_right) {
-                panic!("Ord violation");
+                panic_on_ord_violation();
             }
 
             let buf_rest_len = t_ptr_data.sub_ptr(ptr_data) + 1;
@@ -1518,7 +1518,7 @@ where
     let right_diff = calc_ptr_diff(ptr_right, t_ptr_right);
 
     if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
-        panic!("Ord violation");
+        panic_on_ord_violation();
     }
 }
 
@@ -1699,4 +1699,9 @@ where
             }
         }
     }
+}
+
+#[inline(never)]
+fn panic_on_ord_violation() -> ! {
+    panic!("Ord violation");
 }

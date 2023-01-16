@@ -756,7 +756,7 @@ where
                     // At least pivot itself would have to count as equal to itself. Not doing this
                     // check, would mean it could get stuck not decreasing the size of v. Looping
                     // forever.
-                    panic!("Ord violation");
+                    panic_on_ord_violation();
                 }
 
                 // Continue sorting elements greater than the pivot.
@@ -1295,7 +1295,7 @@ where
     let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
 
     if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
-        panic!("Ord violation");
+        panic_on_ord_violation();
     }
 }
 
@@ -1769,4 +1769,9 @@ where
         // Minimize the amount of comparisons.
         sort16_plus_min_cmp(v, is_less);
     }
+}
+
+#[inline(never)]
+fn panic_on_ord_violation() -> ! {
+    panic!("Ord violation");
 }
