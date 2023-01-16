@@ -8,7 +8,7 @@ use std::ptr;
 
 sort_impl!("rust_new_stable");
 
-#[inline]
+#[inline(always)]
 pub fn sort<T>(v: &mut [T])
 where
     T: Ord,
@@ -16,7 +16,7 @@ where
     stable_sort(v, |a, b| a.cmp(b));
 }
 
-#[inline]
+#[inline(always)]
 pub fn sort_by<T, F>(v: &mut [T], compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
@@ -28,7 +28,7 @@ where
 // Sorting
 ////////////////////////////////////////////////////////////////////////////////
 
-#[inline]
+#[inline(always)]
 #[cfg(not(no_global_oom_handling))]
 fn stable_sort<T, F>(v: &mut [T], mut compare: F)
 where
@@ -269,7 +269,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     // This function correctly checks invariants for the top four runs. Additionally, if the top
     // run ends at stop, it will always demand a merge operation until the stack is fully
     // collapsed, in order to complete the sort.
-    #[inline]
+    #[inline(always)]
     fn collapse(runs: &[TimSortRun], stop: usize) -> Option<usize> {
         let n = runs.len();
         if n >= 2
@@ -1288,7 +1288,7 @@ impl<T: IsCopyMarker> IsCopy for T {
 }
 
 // I would like to make this a const fn.
-#[inline]
+#[inline(always)]
 fn qualifies_for_parity_merge<T>() -> bool {
     // This checks two things:
     //
@@ -1305,7 +1305,7 @@ fn qualifies_for_parity_merge<T>() -> bool {
     return is_small && is_copy;
 }
 
-#[inline]
+#[inline(always)]
 pub unsafe fn merge_up<T, F>(
     mut src_left: *const T,
     mut src_right: *const T,
@@ -1337,7 +1337,7 @@ where
     (src_left, src_right, dest_ptr)
 }
 
-#[inline]
+#[inline(always)]
 pub unsafe fn merge_down<T, F>(
     mut src_left: *const T,
     mut src_right: *const T,
@@ -1525,7 +1525,7 @@ where
 // --- Branchless sorting (less branches not zero) ---
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
-#[inline]
+#[inline(always)]
 unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
     // This is a branchless version of swap if.
     // The equivalent code with a branch would be:
@@ -1552,7 +1552,7 @@ unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
 }
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
-#[inline]
+#[inline(always)]
 unsafe fn swap_if_less<T, F>(arr_ptr: *mut T, a: usize, b: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1579,7 +1579,7 @@ where
 
 /// Comparing and swapping anything but adjacent elements will yield a non stable sort.
 /// So this must be fundamental building block for stable sorting networks.
-#[inline]
+#[inline(always)]
 unsafe fn swap_next_if_less<T, F>(arr_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,

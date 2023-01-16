@@ -41,7 +41,7 @@ sort_impl!("rust_new_unstable");
 /// ```
 ///
 /// [pdqsort]: https://github.com/orlp/pdqsort
-#[inline]
+#[inline(always)]
 pub fn sort<T>(arr: &mut [T])
 where
     T: Ord,
@@ -95,7 +95,7 @@ where
 /// ```
 ///
 /// [pdqsort]: https://github.com/orlp/pdqsort
-#[inline]
+#[inline(always)]
 pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
@@ -215,6 +215,79 @@ where
         v.swap(0, i);
         sift_down(&mut v[..i], 0);
     }
+}
+
+/// TODO explain
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+#[inline(always)]
+unsafe fn swap_elements_between_blocks<T>(
+    l_ptr: *mut T,
+    r_ptr: *mut T,
+    mut l_offsets_ptr: *const u8,
+    mut r_offsets_ptr: *const u8,
+    count: usize,
+) -> (*const u8, *const u8) {
+    macro_rules! left {
+        () => {
+            l_ptr.add(*l_offsets_ptr as usize)
+        };
+    }
+    macro_rules! right {
+        () => {
+            r_ptr.sub(*r_offsets_ptr as usize + 1)
+        };
+    }
+
+    if count <= 1 {
+        if count == 1 {
+            // SAFETY: TODO
+            unsafe {
+                ptr::swap_nonoverlapping(left!(), right!(), 1);
+                l_offsets_ptr = l_offsets_ptr.add(1);
+                r_offsets_ptr = r_offsets_ptr.add(1);
+            }
+        }
+
+        return (l_offsets_ptr, r_offsets_ptr);
+    }
+
+    // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
+    // permutation. This is not strictly equivalent to swapping, but produces a similar
+    // result using fewer memory operations.
+
+    // SAFETY: The use of `ptr::read` is valid because there is at least one element in
+    // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
+    //
+    // The uses of `left!` involve calls to `offset` on `l`, which points to the
+    // beginning of `v`. All the offsets pointed-to by `l_offsets_ptr` are at most `block_l`, so
+    // these `offset` calls are safe as all reads are within the block. The same argument
+    // applies for the uses of `right!`.
+    //
+    // The calls to `l_offsets_ptr.offset` are valid because there are at most `count-1` of them,
+    // plus the final one at the end of the unsafe block, where `count` is the minimum number
+    // of collected offsets in `offsets_l` and `offsets_r`, so there is no risk of there not
+    // being enough elements. The same reasoning applies to the calls to `r_offsets_ptr.offset`.
+    //
+    // The calls to `copy_nonoverlapping` are safe because `left!` and `right!` are guaranteed
+    // not to overlap, and are valid because of the reasoning above.
+    unsafe {
+        let tmp = ptr::read(left!());
+        ptr::copy_nonoverlapping(right!(), left!(), 1);
+
+        for _ in 1..count {
+            l_offsets_ptr = l_offsets_ptr.add(1);
+            ptr::copy_nonoverlapping(left!(), right!(), 1);
+            r_offsets_ptr = r_offsets_ptr.add(1);
+            ptr::copy_nonoverlapping(right!(), left!(), 1);
+        }
+
+        ptr::copy_nonoverlapping(&tmp, right!(), 1);
+        mem::forget(tmp);
+        l_offsets_ptr = l_offsets_ptr.add(1);
+        r_offsets_ptr = r_offsets_ptr.add(1);
+    }
+
+    (l_offsets_ptr, r_offsets_ptr)
 }
 
 /// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or equal
@@ -357,53 +430,11 @@ where
         // Number of out-of-order elements to swap between the left and right side.
         let count = cmp::min(width(start_l, end_l), width(start_r, end_r));
 
-        if count > 0 {
-            macro_rules! left {
-                () => {
-                    l.add(*start_l as usize)
-                };
-            }
-            macro_rules! right {
-                () => {
-                    r.sub(*start_r as usize + 1)
-                };
-            }
-
-            // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
-            // permutation. This is not strictly equivalent to swapping, but produces a similar
-            // result using fewer memory operations.
-
-            // SAFETY: The use of `ptr::read` is valid because there is at least one element in
-            // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
-            //
-            // The uses of `left!` involve calls to `offset` on `l`, which points to the
-            // beginning of `v`. All the offsets pointed-to by `start_l` are at most `block_l`, so
-            // these `offset` calls are safe as all reads are within the block. The same argument
-            // applies for the uses of `right!`.
-            //
-            // The calls to `start_l.offset` are valid because there are at most `count-1` of them,
-            // plus the final one at the end of the unsafe block, where `count` is the minimum number
-            // of collected offsets in `offsets_l` and `offsets_r`, so there is no risk of there not
-            // being enough elements. The same reasoning applies to the calls to `start_r.offset`.
-            //
-            // The calls to `copy_nonoverlapping` are safe because `left!` and `right!` are guaranteed
-            // not to overlap, and are valid because of the reasoning above.
-            unsafe {
-                let tmp = ptr::read(left!());
-                ptr::copy_nonoverlapping(right!(), left!(), 1);
-
-                for _ in 1..count {
-                    start_l = start_l.add(1);
-                    ptr::copy_nonoverlapping(left!(), right!(), 1);
-                    start_r = start_r.add(1);
-                    ptr::copy_nonoverlapping(right!(), left!(), 1);
-                }
-
-                ptr::copy_nonoverlapping(&tmp, right!(), 1);
-                mem::forget(tmp);
-                start_l = start_l.add(1);
-                start_r = start_r.add(1);
-            }
+        // SAFETY: TODO
+        unsafe {
+            (start_l, start_r) = mem::transmute::<(*const u8, *const u8), (*mut u8, *mut u8)>(
+                swap_elements_between_blocks(l, r, start_l, start_r, count),
+            );
         }
 
         if start_l == end_l {
@@ -1199,7 +1230,7 @@ where
     }
 }
 
-#[inline]
+#[inline(always)]
 pub unsafe fn merge_up<T, F>(
     mut src_left: *const T,
     mut src_right: *const T,
@@ -1231,7 +1262,7 @@ where
     (src_left, src_right, dest_ptr)
 }
 
-#[inline]
+#[inline(always)]
 pub unsafe fn merge_down<T, F>(
     mut src_left: *const T,
     mut src_right: *const T,
@@ -1330,7 +1361,7 @@ impl<T: IsCopyMarker> IsCopy for T {
 }
 
 // I would like to make this a const fn.
-#[inline]
+#[inline(always)]
 fn qualifies_for_parity_merge<T>() -> bool {
     // This checks two things:
     //
@@ -1347,7 +1378,7 @@ fn qualifies_for_parity_merge<T>() -> bool {
     return is_small && is_copy;
 }
 
-#[inline]
+#[inline(always)]
 const fn is_cheap_to_move<T>() -> bool {
     // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
     // down:
@@ -1362,7 +1393,7 @@ const fn is_cheap_to_move<T>() -> bool {
 // --- Branchless sorting (less branches not zero) ---
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
-#[inline]
+#[inline(always)]
 pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
     // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
     // and properly aligned, and part of the same allocation, and do not alias.
@@ -1388,7 +1419,7 @@ pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool
 }
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
-#[inline]
+#[inline(always)]
 pub unsafe fn swap_if_less<T, F>(arr_ptr: *mut T, a: usize, b: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
