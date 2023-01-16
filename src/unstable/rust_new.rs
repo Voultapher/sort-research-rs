@@ -254,6 +254,25 @@ unsafe fn swap_elements_between_blocks<T>(
     // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
     // permutation. This is not strictly equivalent to swapping, but produces a similar
     // result using fewer memory operations.
+    //
+    // Example cyclic permutation to swap A,B,C,D with W,X,Y,Z
+    //
+    // A -> TMP
+    // Z -> A   | Z,B,C,D ___ W,X,Y,Z
+    //
+    // Loop iter 1
+    // B -> Z   | Z,B,C,D ___ W,X,Y,B
+    // Y -> B   | Z,Y,C,D ___ W,X,Y,B
+    //
+    // Loop iter 2
+    // C -> Y   | Z,Y,C,D ___ W,X,C,B
+    // X -> C   | Z,Y,X,D ___ W,X,C,B
+    //
+    // Loop iter 3
+    // D -> X   | Z,Y,X,D ___ W,D,C,B
+    // W -> D   | Z,Y,X,W ___ W,D,C,B
+    //
+    // TMP -> W | Z,Y,X,W ___ A,D,C,B
 
     // SAFETY: The use of `ptr::read` is valid because there is at least one element in
     // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
