@@ -2503,3 +2503,131 @@ where
 
     offset
 }
+
+fn x() {
+// Pivot selection stuff
+median9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
+
+// SAFETY: We know len >= 50, which makes (len / 2) + 9 a valid window.
+let swap_count = unsafe {
+    ptr::copy_nonoverlapping(v.as_ptr().add(len_div_2), swap_ptr, 9);
+    median9_optimal(&mut *ptr::slice_from_raw_parts_mut(swap_ptr, 9), is_less)
+};
+
+// The math works out such that out of the 19 comparisons 10 will be true in the median network
+// in median9_optimal.
+const FULL_REV_SWAPS: usize = 10;
+if swap_count != FULL_REV_SWAPS {
+    // dbg!(swap_count);
+    return (len_div_2 + 4, swap_count == 0);
+}
+
+// Chances are it is full reversed, but we are not sure. Verify that the original slice is fully
+// descending.
+// SAFETY: See above reasoning about accessing that window.
+unsafe {
+    let mut i = 1;
+    while i < 9
+        && is_less(
+            v.get_unchecked(len_div_2 + i),
+            v.get_unchecked(len_div_2 + i - 1),
+        )
+    {
+        i += 1;
+    }
+    if i == 9 {
+        v.reverse();
+    }
+
+    (len_div_2 + 4, i == 9)
+}
+
+// } else {
+//     median9_optimal(&mut v[0..9], is_less);
+//     median9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
+//     median9_optimal(&mut v[(len - 9)..len], is_less);
+
+//     // SAFETY: TODO
+//     unsafe {
+//         let arr_ptr = v.as_mut_ptr();
+//         let a = &*arr_ptr.add(4);
+//         let b = &*arr_ptr.add(len_div_2 + 4);
+//         let c = &*arr_ptr.add(len - 5);
+
+//         // ptr::swap_nonoverlapping(arr_ptr.add(0), arr_ptr.add(4), 1);
+//         // ptr::swap_nonoverlapping(arr_ptr.add(1), arr_ptr.add(len_div_2 + 4), 1);
+//         // ptr::swap_nonoverlapping(arr_ptr.add(2), arr_ptr.add(len - 5), 1);
+//     }
+
+//     // sort3_optimal(&mut v[0..3], is_less);
+
+//     (1, false)
+// }
+
+// let sample_elements = idx_gather(0, 9, len / 10);
+// let median_elem = median9_optimal(sample_elements, is_less);
+// let idx = elem_to_offset(0, 9, len / 10, median_elem).unwrap();
+// (idx, false)
+
+// if len < 128 {
+//     let sample_elements = idx_gather(0, 9, len / 10);
+//     let median_elem = median9_optimal(sample_elements, is_less);
+//     let idx = elem_to_offset(0, 9, len / 10, median_elem).unwrap();
+//     (idx, false)
+// } else if len < 512 {
+//     todo!("3 * 5");
+// } else {
+//     // TODO special care about cachelines.
+//     todo!("3 * 9");
+// }
+
+    // let arr_ptr = v.as_ptr();
+
+// const MAX_SWAP_SIZE: usize = 16;
+// // const T_SIZE: usize = mem::size_of::<T>();
+
+// let mut swap = mem::MaybeUninit::<[T; MAX_SWAP_SIZE]>::uninit();
+// let mut swap_ptr = swap.as_mut_ptr() as *mut T;
+
+// let mut idx_gather = |start: usize, steps: usize, step_size: usize| {
+//     debug_assert!(start + (steps * step_size) < len && steps <= MAX_SWAP_SIZE);
+//     for i in 0..steps {
+//         let idx = start + (i * step_size);
+//         // SAFETY: TODO
+//         unsafe {
+//             ptr::copy_nonoverlapping(arr_ptr.add(idx), swap_ptr.add(i), 1);
+//         }
+//     }
+
+//     unsafe { &mut *ptr::slice_from_raw_parts_mut(swap_ptr, steps) }
+// };
+
+// let elem_to_offset =
+//     |start: usize, steps: usize, step_size: usize, median_elem: &T| -> Option<usize> {
+//         // Keep in sync with step logic in idx_gather.
+//         for i in 0..steps {
+//             let idx = start + (i * step_size);
+//             // SAFETY: We checked in idx_gather that this element access was safe.
+//             let elem = unsafe { &*arr_ptr.add(idx) };
+
+//             // Only used to compare identical elements, that are Copy
+//             // and can thus not have changed via comparison.
+//             if to_ne_bytes(elem) == to_ne_bytes(median_elem) {
+//                 return Some(idx);
+//             }
+//         }
+
+//         None
+//     };
+
+// // if len < 50 {
+// //     let sample_elements = idx_gather(0, 3, len / 4);
+// //     sort3_optimal(&mut v[0..3], is_less);
+// //     return (1, false);
+// // }
+
+    // fn to_ne_bytes<T>(val: &T) -> &[u8] {
+//     // SAFETY: Const byte layout of T.
+//     unsafe { &*ptr::slice_from_raw_parts(val as *const T as *const u8, mem::size_of::<T>()) }
+// }
+}

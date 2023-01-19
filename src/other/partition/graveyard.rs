@@ -1176,3 +1176,156 @@ const U8_BIT_COUNT_TABLE: [u8; U8_COMBINATIONS] = [
     2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
     3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,
 ];
+
+// Fast swapping.
+/// TODO explain
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+#[inline(always)]
+unsafe fn swap_elements_between_blocks<T>(
+    l_ptr: *mut T,
+    r_ptr: *mut T,
+    mut l_offsets_ptr: *const u8,
+    mut r_offsets_ptr: *const u8,
+    count: usize,
+) -> (*const u8, *const u8) {
+    macro_rules! left {
+        ($offset_ptr:expr) => {
+            l_ptr.add(*$offset_ptr as usize)
+        };
+    }
+    macro_rules! right {
+        ($offset_ptr:expr) => {
+            r_ptr.sub(*$offset_ptr as usize)
+        };
+    }
+
+    // if count == 0 {
+    //     // if count == 1 {
+    //     //     // SAFETY: TODO
+    //     //     unsafe {
+    //     //         ptr::swap_nonoverlapping(left!(), right!(), 1);
+    //     //         l_offsets_ptr = l_offsets_ptr.add(1);
+    //     //         r_offsets_ptr = r_offsets_ptr.add(1);
+    //     //     }
+    //     // }
+
+    //     return (l_offsets_ptr, r_offsets_ptr);
+    // }
+
+    let even_count = count - (count % 2 != 0) as usize;
+
+    unsafe {
+        if even_count >= 2 {
+            // Save the first two elements from the left for later.
+            let tmp_a = ptr::read(left!(l_offsets_ptr.add(0)));
+            let tmp_b = ptr::read(left!(l_offsets_ptr.add(1)));
+
+            // Copy two elements from right onto of saved elements.
+            ptr::copy_nonoverlapping(right!(r_offsets_ptr.add(0)), left!(l_offsets_ptr.add(0)), 1);
+            ptr::copy_nonoverlapping(right!(r_offsets_ptr.add(1)), left!(l_offsets_ptr.add(1)), 1);
+
+            l_offsets_ptr = l_offsets_ptr.add(2);
+
+            let mut i = 2;
+            while i < even_count {
+                // Copy two elements from left to right.
+                ptr::copy_nonoverlapping(left!(l_offsets_ptr), right!(r_offsets_ptr), 1);
+                ptr::copy_nonoverlapping(
+                    left!(l_offsets_ptr.add(1)),
+                    right!(r_offsets_ptr.add(1)),
+                    1,
+                );
+
+                // Copy two elements from right to left.
+                ptr::copy_nonoverlapping(right!(r_offsets_ptr.add(2)), left!(l_offsets_ptr), 1);
+                ptr::copy_nonoverlapping(
+                    right!(r_offsets_ptr.add(3)),
+                    left!(l_offsets_ptr.add(1)),
+                    1,
+                );
+
+                i += 2;
+                l_offsets_ptr = l_offsets_ptr.add(2);
+                r_offsets_ptr = r_offsets_ptr.add(2);
+            }
+
+            // Copy saved elements to right side.
+            ptr::copy_nonoverlapping(&tmp_a, right!(r_offsets_ptr), 1);
+            ptr::copy_nonoverlapping(&tmp_b, right!(r_offsets_ptr.add(1)), 1);
+
+            mem::forget(tmp_a);
+            mem::forget(tmp_b);
+            // l_offsets_ptr = l_offsets_ptr.add(2);
+            r_offsets_ptr = r_offsets_ptr.add(2);
+        }
+
+        if even_count != count {
+            unsafe {
+                ptr::swap_nonoverlapping(left!(l_offsets_ptr), right!(r_offsets_ptr), 1);
+            }
+            l_offsets_ptr = l_offsets_ptr.add(1);
+            r_offsets_ptr = r_offsets_ptr.add(1);
+        }
+
+        // (l_offsets_ptr.add(count), r_offsets_ptr.add(count))
+        (l_offsets_ptr, r_offsets_ptr)
+    }
+
+    // // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
+    // // permutation. This is not strictly equivalent to swapping, but produces a similar
+    // // result using fewer memory operations.
+
+    // // SAFETY: The use of `ptr::read` is valid because there is at least one element in
+    // // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
+    // //
+    // // The uses of `left!` involve calls to `offset` on `l`, which points to the
+    // // beginning of `v`. All the offsets pointed-to by `l_offsets_ptr` are at most `block_l`, so
+    // // these `offset` calls are safe as all reads are within the block. The same argument
+    // // applies for the uses of `right!`.
+    // //
+    // // The calls to `l_offsets_ptr.offset` are valid because there are at most `count-1` of them,
+    // // plus the final one at the end of the unsafe block, where `count` is the minimum number
+    // // of collected offsets in `offsets_l` and `offsets_r`, so there is no risk of there not
+    // // being enough elements. The same reasoning applies to the calls to `r_offsets_ptr.offset`.
+    // //
+    // // The calls to `copy_nonoverlapping` are safe because `left!` and `right!` are guaranteed
+    // // not to overlap, and are valid because of the reasoning above.
+    // unsafe {
+    //     let tmp = ptr::read(left!());
+    //     ptr::copy_nonoverlapping(right!(), left!(), 1);
+
+    //     // println!("");
+    //     for _ in 1..count {
+    //         l_offsets_ptr = l_offsets_ptr.add(1);
+    //         let a = *l_offsets_ptr;
+    //         let b = *r_offsets_ptr;
+    //         ptr::copy_nonoverlapping(left!(), right!(), 1);
+    //         r_offsets_ptr = r_offsets_ptr.add(1);
+
+    //         let x = *l_offsets_ptr;
+    //         let y = *r_offsets_ptr;
+    //         ptr::copy_nonoverlapping(right!(), left!(), 1);
+
+    //         // println!("copied l {a} -> r {b} and r {y} -> l {x}");
+    //     }
+
+    //     ptr::copy_nonoverlapping(&tmp, right!(), 1);
+    //     mem::forget(tmp);
+    //     l_offsets_ptr = l_offsets_ptr.add(1);
+    //     r_offsets_ptr = r_offsets_ptr.add(1);
+    // }
+
+    // if count > 0 {
+    //     for i in 0..count {
+    //         let r_elem_ptr = ptr::swap_nonoverlapping(
+    //             l_ptr.add(*l_offsets_ptr.add(i) as usize),
+    //             r_ptr.sub(*r_offsets_ptr.add(i) as usize + 1),
+    //             1,
+    //         );
+    //     }
+    //     l_offsets_ptr = l_offsets_ptr.add(count);
+    //     r_offsets_ptr = r_offsets_ptr.add(count);
+    // }
+
+    // (l_offsets_ptr, r_offsets_ptr)
+}

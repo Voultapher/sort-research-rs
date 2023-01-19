@@ -590,6 +590,9 @@ where
 
             let is_less_count = partition_in_blocks(&mut v[l..r], pivot, is_less);
 
+            // pivot quality measurement.
+            // println!("len: {} is_less: {}", v.len(), l + is_less_count);
+
             (l + is_less_count, false)
         }
 
@@ -665,8 +668,7 @@ fn break_patterns<T>(v: &mut [T]) {
 /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
 ///
 /// Elements in `v` might be reordered in the process.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn choose_pivot<T, F>(v: &mut [T], is_less: &mut F) -> (usize, bool)
+fn choose_pivot_with_pattern<T, F>(v: &mut [T], is_less: &mut F) -> (usize, bool)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -740,6 +742,48 @@ where
         // descending, so reversing will probably help sort it faster.
         v.reverse();
         (len - 1 - b, true)
+    }
+}
+
+/// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
+///
+/// Elements in `v` might be reordered in the process.
+fn choose_pivot_network<T, F>(v: &mut [T], is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Collecting values + sorting network is cheaper than swapping via indirection, even if it does
+    // more comparisons. See https://godbolt.org/z/qqoThxEP1 and https://godbolt.org/z/bh16s3Wfh.
+    // In addition this only access 1, at most 2 cache-lines.
+
+    let len = v.len();
+
+    // It's a logic bug if this get's called on slice that would be small-sorted.
+    assert!(len > max_len_small_sort::<T>());
+
+    let len_div_2 = (len / 2);
+
+    if len < 52 {
+        median5_optimal(&mut v[len_div_2..(len_div_2 + 5)], is_less);
+        len_div_2 + 2
+    } else {
+        median9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
+        len_div_2 + 4
+    }
+}
+
+/// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
+///
+/// Elements in `v` might be reordered in the process.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn choose_pivot<T, F>(v: &mut [T], is_less: &mut F) -> (usize, bool)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    if is_cheap_to_move::<T>() {
+        (choose_pivot_network(v, is_less), false)
+    } else {
+        choose_pivot_with_pattern(v, is_less)
     }
 }
 
@@ -1820,4 +1864,74 @@ where
 #[inline(never)]
 fn panic_on_ord_violation() -> ! {
     panic!("Ord violation");
+}
+
+// --- Branchless median selection ---
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn median5_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 5.
+    assert!(v.len() == 5);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal median network see:
+    // https://bertdobbelaere.github.io/median_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 0, 2, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn median9_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 9.
+    assert!(v.len() == 9);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal median network see:
+    // https://bertdobbelaere.github.io/median_networks.html.
+
+    let mut swaps = 0;
+
+    // SAFETY: We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 7, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 4, 8, is_less);
+        swap_if_less(arr_ptr, 0, 2, is_less);
+        swap_if_less(arr_ptr, 1, 5, is_less);
+        swap_if_less(arr_ptr, 3, 8, is_less);
+        swap_if_less(arr_ptr, 4, 7, is_less);
+        swap_if_less(arr_ptr, 0, 3, is_less);
+        swap_if_less(arr_ptr, 1, 4, is_less);
+        swap_if_less(arr_ptr, 2, 8, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+    }
 }
