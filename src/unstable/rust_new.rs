@@ -145,28 +145,12 @@ where
         // Swap the found pair of elements. This puts them in correct order.
         v.swap(i - 1, i);
 
-        if i >= 2 {
-            // SAFETY: We check the that the slice len is >= 2.
-            unsafe {
-                insert_tail(&mut v[..i], is_less);
-            }
-        }
-
         // Shift the smaller element to the left.
         if i >= 2 {
-            // SAFETY: We check the that the slice len is >= 2.
-            unsafe {
-                insert_tail(&mut v[..i], is_less);
-            }
-        }
+            insertion_sort_shift_left(&mut v[..i], i - 1, is_less);
 
-        // Shift the greater element to the right.
-        if i < (len - 1) {
-            // SAFETY: We check the that the slice len is >= 2.
-            unsafe {
-                // shift_head(&mut v[i..], is_less);
-                insert_head(&mut v[i..], is_less);
-            }
+            // Shift the greater element to the right.
+            insertion_sort_shift_right(&mut v[..i], 1, is_less);
         }
     }
 
@@ -977,6 +961,7 @@ where
     if count != (streak_check_len * 3) {
         count == 0
     } else {
+        // We assume it is fully or nearly reversed.
         v.reverse();
         true
     }
@@ -999,14 +984,13 @@ where
         if sort_small_with_pattern_analysis(v, &mut is_less) {
             return;
         }
-    }
+    } else if is_likely_sorted(v, &mut is_less) {
+        // The pdqsort implementation, does partial_insertion_sort as part of every recurse call.
+        // However whatever ascending or descending input pattern there used to be, is most likely
+        // destroyed via partitioning. Even more so because partitioning changes the input order
+        // while performing it's cyclic permutation. As a consequence this check is only really
+        // useful for nearly fully ascending or descending inputs.
 
-    // In the pdqsort implementation, this is done as part of every recurse call. However whatever
-    // ascending or descending input pattern there used to be, is most likely destroyed via
-    // partitioning. Even more so because partitioning changes the input order while performing it's
-    // cyclic permutation. As a consequence this check is only really useful for nearly fully
-    // ascending or descending inputs.
-    if v.len() > max_len_small_sort::<T>() && is_likely_sorted(v, &mut is_less) {
         // Try identifying several out-of-order elements and shifting them to correct
         // positions. If the slice ends up being completely sorted, we're done.
         if partial_insertion_sort(v, &mut is_less) {
@@ -1164,16 +1148,40 @@ where
 {
     let len = v.len();
 
-    // This would be a logic bug.
     // Using assert here improves performance.
     assert!(offset != 0 && offset <= len);
 
     // Shift each element of the unsorted region v[i..] as far left as is needed to make v sorted.
     for i in offset..len {
-        // SAFETY: we tested that len >= 2.
+        // SAFETY: we tested that `offset` must be at least 1, so this loop is only entered if len
+        // >= 2.
         unsafe {
-            // Maybe use insert_head here and avoid additional code.
             insert_tail(&mut v[..=i], is_less);
+        }
+    }
+}
+
+/// Sort `v` assuming `v[offset..]` is already sorted.
+///
+/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+/// performance impact. Even improving performance in some cases.
+#[inline(never)]
+fn insertion_sort_shift_right<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    // Using assert here improves performance.
+    assert!(offset != 0 && offset <= len && len >= 2);
+
+    // Shift each element of the unsorted region v[..i] as far left as is needed to make v sorted.
+    for i in (0..offset).rev() {
+        // We ensured that the slice length is always at least 2 long.
+        // We know that start_found will be at least one less than end,
+        // and the range is exclusive. Which gives us i always <= (end - 2).
+        unsafe {
+            insert_head(&mut v[i..len], is_less);
         }
     }
 }
