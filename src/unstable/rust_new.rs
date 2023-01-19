@@ -535,11 +535,11 @@ where
 /// 1. Number of elements smaller than `v[pivot]`.
 /// 2. True if `v` was already partitioned.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> (usize, bool)
+fn partition<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    let (mid, was_partitioned) = {
+    let mid = {
         // Place the pivot at the beginning of slice.
         v.swap(0, pivot);
         let (pivot, v) = v.split_at_mut(1);
@@ -556,45 +556,14 @@ where
         };
         let pivot = &*tmp;
 
-        // Find the first pair of out-of-order elements.
-        let mut l = 0;
-        let mut r = v.len();
+        // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
 
-        // SAFETY: The unsafety below involves indexing an array.
-        // For the first one: We already do the bounds checking here with `l < r`.
-        // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
-        //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
-        unsafe {
-            // This search introduces a non-trivial amount of branch mis-prediction. And less work
-            // can be done in the faster partition_in_blocks. It is only useful for larger sizes
-            // where was_partitioned is relevant and likely. It's hard to quantify the total impact
-            // of this, across various benchmarks I saw better performance in some cases and never
-            // worse performance.
-            if v.len() > ((max_len_small_sort::<T>() * 3) / 2) {
-                // Find the first element greater than or equal to the pivot.
-                while l < r && is_less(v.get_unchecked(l), pivot) {
-                    l += 1;
-                }
+        let is_less_count = partition_in_blocks(v, pivot, is_less);
 
-                // Find the last element smaller that the pivot.
-                while l < r && !is_less(v.get_unchecked(r - 1), pivot) {
-                    r -= 1;
-                }
-            }
-        }
+        // pivot quality measurement.
+        // println!("len: {} is_less: {}", v.len(), l + is_less_count);
 
-        if l >= r {
-            (l, true) // was partitioned
-        } else {
-            // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
-
-            let is_less_count = partition_in_blocks(&mut v[l..r], pivot, is_less);
-
-            // pivot quality measurement.
-            // println!("len: {} is_less: {}", v.len(), l + is_less_count);
-
-            (l + is_less_count, false)
-        }
+        is_less_count
 
         // `_pivot_guard` goes out of scope and writes the pivot (which is a stack-allocated
         // variable) back into the slice where it originally was. This step is critical in ensuring
@@ -604,7 +573,7 @@ where
     // Place the pivot between the two partitions.
     v.swap(0, mid);
 
-    (mid, was_partitioned)
+    mid
 }
 
 /// Partitions `v` into elements equal to `v[pivot]` followed by elements greater than `v[pivot]`.
@@ -616,7 +585,7 @@ fn partition_equal<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    partition(v, pivot, &mut |a, b| !is_less(b, a)).0
+    partition(v, pivot, &mut |a, b| !is_less(b, a))
 }
 
 /// Scatters some elements around in an attempt to break patterns that might cause imbalanced
@@ -761,7 +730,7 @@ where
     // It's a logic bug if this get's called on slice that would be small-sorted.
     assert!(len > max_len_small_sort::<T>());
 
-    let len_div_2 = (len / 2);
+    let len_div_2 = len / 2;
 
     if len < 52 {
         median5_optimal(&mut v[len_div_2..(len_div_2 + 5)], is_less);
@@ -776,14 +745,14 @@ where
 ///
 /// Elements in `v` might be reordered in the process.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn choose_pivot<T, F>(v: &mut [T], is_less: &mut F) -> (usize, bool)
+fn choose_pivot<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
     if is_cheap_to_move::<T>() {
-        (choose_pivot_network(v, is_less), false)
+        choose_pivot_network(v, is_less)
     } else {
-        choose_pivot_with_pattern(v, is_less)
+        choose_pivot_with_pattern(v, is_less).0
     }
 }
 
@@ -800,8 +769,6 @@ where
 {
     // True if the last partitioning was reasonably balanced.
     let mut was_balanced = true;
-    // True if the last partitioning didn't shuffle elements (the slice was already partitioned).
-    let mut was_partitioned = true;
 
     loop {
         let len = v.len();
@@ -827,17 +794,7 @@ where
         }
 
         // Choose a pivot and try guessing whether the slice is already sorted.
-        let (pivot, likely_sorted) = choose_pivot(v, is_less);
-
-        // If the last partitioning was decently balanced and didn't shuffle elements, and if pivot
-        // selection predicts the slice is likely already sorted...
-        if was_balanced && was_partitioned && likely_sorted {
-            // Try identifying several out-of-order elements and shifting them to correct
-            // positions. If the slice ends up being completely sorted, we're done.
-            if partial_insertion_sort(v, is_less) {
-                return;
-            }
-        }
+        let pivot = choose_pivot(v, is_less);
 
         // If the chosen pivot is equal to the predecessor, then it's the smallest element in the
         // slice. Partition the slice into elements equal to and elements greater than the pivot.
@@ -856,9 +813,8 @@ where
         }
 
         // Partition the slice.
-        let (mid, was_p) = partition(v, pivot, is_less);
+        let mid = partition(v, pivot, is_less);
         was_balanced = cmp::min(mid, len - mid) >= len / 8;
-        was_partitioned = was_p;
 
         // Split the slice into `left`, `pivot`, and `right`.
         let (left, right) = v.split_at_mut(mid);
@@ -979,6 +935,53 @@ where
     false
 }
 
+/// Probes `v` to see if it is likely sorted.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn is_likely_sorted<T, F>(v: &mut [T], is_less: &mut F) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Probe beginning, mid and end.
+    let len = v.len();
+
+    debug_assert!(len > max_len_small_sort::<T>());
+
+    let streak_check_len = cmp::max(cmp::min(len / 256, 16), 4);
+
+    let mut check_streak = |start| {
+        let mut count = 0;
+        let end = start + streak_check_len + 1;
+        assert!(end <= len);
+
+        for i in (start + 1)..(start + streak_check_len + 1) {
+            // SAFETY: We just bounds checked end.
+            unsafe {
+                count += is_less(v.get_unchecked(i), v.get_unchecked(i - 1)) as usize;
+            }
+        }
+
+        count
+    };
+
+    let mut count = check_streak(0);
+    if count != 0 && count != streak_check_len {
+        return false;
+    }
+
+    count += check_streak(len / 2);
+    if count != 0 && count != (streak_check_len * 2) {
+        return false;
+    }
+
+    count += check_streak(len - streak_check_len - 1);
+    if count != (streak_check_len * 3) {
+        count == 0
+    } else {
+        v.reverse();
+        true
+    }
+}
+
 /// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 pub fn quicksort<T, F>(v: &mut [T], mut is_less: F)
@@ -994,6 +997,19 @@ where
         // This code cannot rely on external pattern analysis,
         // so add extra code for already sorted inputs.
         if sort_small_with_pattern_analysis(v, &mut is_less) {
+            return;
+        }
+    }
+
+    // In the pdqsort implementation, this is done as part of every recurse call. However whatever
+    // ascending or descending input pattern there used to be, is most likely destroyed via
+    // partitioning. Even more so because partitioning changes the input order while performing it's
+    // cyclic permutation. As a consequence this check is only really useful for nearly fully
+    // ascending or descending inputs.
+    if v.len() > max_len_small_sort::<T>() && is_likely_sorted(v, &mut is_less) {
+        // Try identifying several out-of-order elements and shifting them to correct
+        // positions. If the slice ends up being completely sorted, we're done.
+        if partial_insertion_sort(v, &mut is_less) {
             return;
         }
     }
@@ -1909,8 +1925,6 @@ where
 
     // Optimal median network see:
     // https://bertdobbelaere.github.io/median_networks.html.
-
-    let mut swaps = 0;
 
     // SAFETY: We checked the len.
     unsafe {
