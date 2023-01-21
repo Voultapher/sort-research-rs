@@ -145,8 +145,8 @@ where
         // Swap the found pair of elements. This puts them in correct order.
         v.swap(i - 1, i);
 
-        // Shift the smaller element to the left.
         if i >= 2 {
+            // Shift the smaller element to the left.
             insertion_sort_shift_left(&mut v[..i], i - 1, is_less);
 
             // Shift the greater element to the right.
@@ -624,32 +624,24 @@ fn break_patterns<T>(v: &mut [T]) {
 /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
 ///
 /// Elements in `v` might be reordered in the process.
-fn choose_pivot_with_pattern<T, F>(v: &mut [T], is_less: &mut F) -> (usize, bool)
+fn choose_pivot_indirect<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
     // Minimum length to choose the median-of-medians method.
     // Shorter slices use the simple median-of-three method.
     const SHORTEST_MEDIAN_OF_MEDIANS: usize = 50;
-    // Maximum number of swaps that can be performed in this function.
-    const MAX_SWAPS: usize = 4 * 3;
 
     let len = v.len();
 
-    if len <= max_len_small_sort::<T>() {
-        // It's a logic bug if this get's called on slice that would be small-sorted.
-        debug_assert!(false);
-        return (0, false);
-    }
+    // It's a logic bug if this get's called on slice that would be small-sorted.
+    assert!(len > max_len_small_sort::<T>());
 
     // Three indices near which we are going to choose a pivot.
     let len_div_4 = len / 4;
     let mut a = len_div_4 * 1;
     let mut b = len_div_4 * 2;
     let mut c = len_div_4 * 3;
-
-    // Counts the total number of swaps we are about to perform while sorting indices.
-    let mut swaps = 0;
 
     // Swaps indices so that `v[a] <= v[b]`.
     // SAFETY: `len > 20` so there are at least two elements in the neighborhoods of
@@ -665,7 +657,6 @@ where
         let tmp_idx = if should_swap { *a } else { *b };
         *a = if should_swap { *b } else { *a };
         *b = tmp_idx;
-        swaps += should_swap as usize;
     };
 
     // Swaps indices so that `v[a] <= v[b] <= v[c]`.
@@ -691,14 +682,7 @@ where
     // Find the median among `a`, `b`, and `c`.
     sort3_idx(&mut a, &mut b, &mut c);
 
-    if swaps < MAX_SWAPS {
-        (b, swaps == 0)
-    } else {
-        // The maximum number of swaps was performed. Chances are the slice is descending or mostly
-        // descending, so reversing will probably help sort it faster.
-        v.reverse();
-        (len - 1 - b, true)
-    }
+    b
 }
 
 /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
@@ -745,7 +729,7 @@ where
     if is_cheap_to_move::<T>() {
         choose_pivot_network(v, is_less)
     } else {
-        choose_pivot_with_pattern(v, is_less).0
+        choose_pivot_indirect(v, is_less)
     }
 }
 
