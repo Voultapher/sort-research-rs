@@ -159,7 +159,10 @@ where
 }
 
 /// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+///
+/// Never inline this, it sits the main hot-loop in `recurse` and is meant as unlikely algorithmic
+/// fallback.
+#[inline(never)]
 pub fn heapsort<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -600,7 +603,7 @@ fn break_patterns<T>(v: &mut [T]) {
         let modulus = len.next_power_of_two();
 
         // Some pivot candidates will be in the nearby of this index. Let's randomize them.
-        let pos = len / 4 * 2;
+        let pos = len / 2;
 
         for i in 0..3 {
             // Generate a random number modulo `len`. However, in order to avoid costly operations
@@ -720,6 +723,10 @@ where
         median5_optimal(&mut v[len_div_2..(len_div_2 + 5)], is_less);
         len_div_2 + 2
     } else {
+        // This only samples the middle, `break_patterns` will randomize this area if it picked a
+        // bad partition. Additionally the cyclic permutation of `partition_in_blocks` will further
+        // randomize the original pattern, avoiding even more situations where this would be a
+        // problem.
         median9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
         len_div_2 + 4
     }
@@ -752,7 +759,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // True if the last partitioning was reasonably balanced.
-    let mut was_balanced = true;
+    let mut was_good_partition = true;
 
     loop {
         let len = v.len();
@@ -772,7 +779,7 @@ where
 
         // If the last partitioning was imbalanced, try breaking patterns in the slice by shuffling
         // some elements around. Hopefully we'll choose a better pivot this time.
-        if !was_balanced {
+        if !was_good_partition {
             break_patterns(v);
             limit -= 1;
         }
@@ -798,7 +805,7 @@ where
 
         // Partition the slice.
         let mid = partition(v, pivot, is_less);
-        was_balanced = cmp::min(mid, len - mid) >= len / 8;
+        was_good_partition = cmp::min(mid, len - mid) >= len / 8;
 
         // Split the slice into `left`, `pivot`, and `right`.
         let (left, right) = v.split_at_mut(mid);
