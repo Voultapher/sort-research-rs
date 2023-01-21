@@ -720,15 +720,17 @@ where
     let len_div_2 = len / 2;
 
     if len < 52 {
-        median5_optimal(&mut v[len_div_2..(len_div_2 + 5)], is_less);
-        len_div_2 + 2
+        let start = len_div_2 - 2;
+        median5_optimal(&mut v[start..(start + 5)], is_less);
+        len_div_2
     } else {
         // This only samples the middle, `break_patterns` will randomize this area if it picked a
         // bad partition. Additionally the cyclic permutation of `partition_in_blocks` will further
         // randomize the original pattern, avoiding even more situations where this would be a
         // problem.
-        median9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
-        len_div_2 + 4
+        let start = len_div_2 - 4;
+        median9_optimal(&mut v[start..(start + 9)], is_less);
+        len_div_2
     }
 }
 
