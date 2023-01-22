@@ -1381,6 +1381,35 @@ where
     // Also `v.as_ptr` and `dest_ptr` must not alias.
     //
     // The caller must guarantee that T cannot modify itself inside is_less.
+    // merge_up and merge_down read left and right pointers and potentially modify the stack value
+    // they point to, if T has interior mutability. This may leave one or two potential writes to
+    // the stack value un-observed when dest is copied onto of src.
+
+    // It helps to visualize the merge:
+    //
+    // Initial:
+    //
+    //  |ptr_data (in dest)
+    //  |ptr_left           |ptr_right
+    //  v                   v
+    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+    //                     ^                   ^
+    //                     |t_ptr_left         |t_ptr_right
+    //                                         |t_ptr_data (in dest)
+    //
+    // After:
+    //
+    //                      |ptr_data (in dest)
+    //        |ptr_left     |           |ptr_right
+    //        v             v           v
+    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+    //       ^             ^           ^
+    //       |t_ptr_left   |           |t_ptr_right
+    //                     |t_ptr_data (in dest)
+    //
+    //
+    // Note, the pointers that have been written, are now one past where they were read and
+    // copied. written == incremented or decremented + copy to dest.
     let len = v.len();
     let src_ptr = v.as_ptr();
 
