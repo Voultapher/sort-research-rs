@@ -1,0 +1,33 @@
+[package]
+name = "sort_comp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.sort_comp]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "rust_new_stable"
+path = "fuzz_targets/rust_new_stable.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "rust_new_unstable"
+path = "fuzz_targets/rust_new_unstable.rs"
+test = false
+doc = false

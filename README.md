@@ -7,6 +7,7 @@ This repository contains:
 
 * An exhaustive test suite, including properties not commonly checked or upheld
 * An extensive benchmark suite, abstracting over types, patterns and sizes
+* A fuzzing harness
 * Novel sort implementations
 * Vendored sort implementations (Rust, C++, C), eg. cpp_pdqsort, rust_std_stable
 
@@ -33,6 +34,19 @@ cargo miri test
 ```
 
 ## Running the benchmarks
+
+```
+cargo bench
+
+cargo bench <sort_name>-<prediction_state>-<type>-<pattern>-<size>
+
+# Eg:
+cargo bench rust_std_stable-hot-u64-random-10000
+cargo bench hot-u64-random-10000
+cargo bench random
+```
+
+## Running the fuzzers
 
 ```
 cargo bench
