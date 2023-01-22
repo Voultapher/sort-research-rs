@@ -53,23 +53,6 @@ def extract_groups(bench_result):
         if is_stable_sort(sort_name):
             continue  # TODO graph all.
 
-        # TODO Data is botched:
-        # if "cpp_std_libcxx" in sort_name:
-        #     continue
-
-        if pattern == "random_random_size":
-            continue  # TODO I'm not too sure about this one.
-
-        # TODO new patterns
-        if pattern == "ascending_saw_5" or pattern == "descending_saw_5":
-            continue
-
-        if pattern == "ascending_saw_20":
-            pattern = "ascending_saw"
-
-        if pattern == "descending_saw_20":
-            pattern = "descending_saw"
-
         # if "radix" in sort_name:
         #     continue
 
