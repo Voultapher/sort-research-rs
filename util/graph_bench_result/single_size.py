@@ -50,8 +50,8 @@ def extract_groups(bench_result):
         pattern = entry_parts[2]
         test_size = int(entry_parts[3])
 
-        if is_stable_sort(sort_name):
-            continue  # TODO graph all.
+        # if is_stable_sort(sort_name):
+        #     continue  # TODO graph all.
 
         # if "radix" in sort_name:
         #     continue
@@ -189,7 +189,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
     return plot_name, plot
 
 
-def plot_sizes(groups):
+def plot_sizes(name, groups):
     # Assumes all entries were tested for the same patterns.
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
@@ -203,7 +203,7 @@ def plot_sizes(groups):
                 # show(plot)
 
                 html = file_html(plot, CDN, plot_name)
-                with open(f"{plot_name}.html", "w+") as outfile:
+                with open(f"{name}-{plot_name}.html", "w+") as outfile:
                     outfile.write(html)
 
                 # raise Exception()
@@ -214,4 +214,5 @@ if __name__ == "__main__":
 
     groups = extract_groups(combined_result)
 
-    plot_sizes(groups)
+    name = sys.argv[1].partition('.')[0]
+    plot_sizes(name, groups)
