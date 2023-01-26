@@ -836,6 +836,10 @@ unsafe fn merge_run_with_equal<T, F>(
                         .position(|elem| compare(elem, l_elem) != Ordering::Equal)
                         .unwrap(); // TODO explain unwrap Ord violation.
 
+                    if rel_pos > (v.len() - offset) {
+                        panic_on_ord_violation();
+                    }
+
                     offset + rel_pos
 
                     // // This is necessary to make this stable.
@@ -900,6 +904,10 @@ unsafe fn merge_run_with_equal<T, F>(
 
         // SAFETY: TODO
         unsafe {
+            if insert_pos > left.len {
+                panic_on_ord_violation();
+            }
+
             let overwrite_left_count = left.len - insert_pos;
             // Safe all elements from left side that would be overwritten.
             ptr::copy_nonoverlapping(arr_ptr.add(insert_pos), buf, overwrite_left_count);
