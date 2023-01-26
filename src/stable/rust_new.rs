@@ -813,7 +813,7 @@ unsafe fn merge_run_with_equal<T, F>(
             unsafe {
                 // Swap left and right side.
                 ptr::copy_nonoverlapping(arr_ptr, buf, left.len);
-                ptr::copy_nonoverlapping(arr_ptr.add(left.len), arr_ptr, right.len);
+                ptr::copy(arr_ptr.add(left.len), arr_ptr, right.len);
                 ptr::copy_nonoverlapping(buf, arr_ptr.add(right.len), left.len);
             }
         }
@@ -865,8 +865,8 @@ unsafe fn merge_run_with_equal<T, F>(
                 // Safe left side in buf.
                 ptr::copy_nonoverlapping(arr_ptr, buf, left.len);
                 // Copy everything from right side up to insert_pos over left side.
-                // TODO explain why this can't overlap.
-                ptr::copy_nonoverlapping(arr_ptr.add(left.len), arr_ptr, insert_pos);
+                // This can overlap.
+                ptr::copy(arr_ptr.add(left.len), arr_ptr, insert_pos);
                 // Now copy the left side into the hole.
                 ptr::copy_nonoverlapping(buf, arr_ptr.add(insert_pos), left.len);
             }
