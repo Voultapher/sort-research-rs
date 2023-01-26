@@ -31,6 +31,9 @@ Note, you'll need a nightly rust toolchain.
 cargo test
 
 cargo miri test
+
+# Might require disabling criterion dependency.
+RUSTFLAGS=-Zsanitizer=address cargo t --release
 ```
 
 ## Running the benchmarks

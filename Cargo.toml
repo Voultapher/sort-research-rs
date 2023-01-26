@@ -29,6 +29,7 @@ cc = { version = "1.0", features = ["parallel"] }
 # information via the headers and doesn't need this.
 [profile.release]
 lto = "thin"
+# debug = true
 
 [profile.bench]
 lto = "thin"
