@@ -46,18 +46,28 @@ cargo bench hot-u64-random-10000
 cargo bench random
 ```
 
-## Running the fuzzers
+## Fuzzing
+
+You'll need to install cargo fuzz and cargo afl respectively.
+See https://rust-fuzz.github.io/book/introduction.html.
+
+### Fuzzing with libfuzzer
 
 ```
-cargo bench
-
-cargo bench <sort_name>-<prediction_state>-<type>-<pattern>-<size>
-
-# Eg:
-cargo bench rust_std_stable-hot-u64-random-10000
-cargo bench hot-u64-random-10000
-cargo bench random
+cd fuzz
+cargo fuzz run libfuzzer_main
 ```
+
+### Fuzzing with afl
+
+```
+cd fuzz-afl
+RUSTFLAGS=-Zsanitizer=address cargo afl build --release && cargo afl fuzz -i in -o out -D target/release/afl
+```
+
+Adjust `fuzz/fuzz_targets/libfuzzer_main.rs` and
+`fuzz/fuzz_targets/libfuzzer_main.rs` respectively to change the fuzz target.
+Default `rust_new_stable`.
 
 ## Contributing
 
