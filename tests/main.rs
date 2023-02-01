@@ -787,6 +787,85 @@ fn panic_retain_original_set() {
 }
 
 #[test]
+fn panic_observable_is_less() {
+    let _seed = get_or_init_random_seed();
+
+    // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
+    // is created using temporary memory and, the whole is used as comparison but not copied back.
+    // This property must also hold if the user provided comparison panics.
+    //
+    // If this is not upheld a custom type + comparison function could yield UB in otherwise safe
+    // code. Eg T == Mutex<Option<Box<str>>> which replaces the pointer with none in the comparison
+    // function, which would not be observed in the original slice and would lead to a double free.
+
+    #[derive(PartialEq, Eq, Debug, Clone)]
+    #[repr(C)]
+    struct CompCount {
+        val: i32,
+        comp_count: Cell<u32>,
+    }
+
+    impl CompCount {
+        fn new(val: i32) -> Self {
+            Self {
+                val,
+                comp_count: Cell::new(0),
+            }
+        }
+    }
+
+    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_size);
+
+        // Calculate a specific comparison that should panic.
+        // Ensure that it can be any of the possible comparisons and that it always panics.
+        let required_comps = calc_comps_required(&pattern);
+
+        let mut test_input = pattern
+            .iter()
+            .map(|val| CompCount::new(*val))
+            .collect::<Vec<_>>();
+
+        let sum_before: i64 = pattern.iter().map(|x| *x as i64).sum();
+
+        let panic_threshold = patterns::random_uniform(1, 1..=required_comps as i32)[0] as u64 - 1;
+
+        let mut comp_count_gloabl = 0;
+
+        let res = panic::catch_unwind(AssertUnwindSafe(|| {
+            test_sort::sort_by(&mut test_input, |a, b| {
+                if comp_count_gloabl == panic_threshold {
+                    // Make the panic dependent on the test size and some random factor. We want to
+                    // make sure that panicking may also happen when comparing elements a second
+                    // time.
+                    panic!();
+                }
+
+                a.comp_count.replace(a.comp_count.get() + 1);
+                b.comp_count.replace(b.comp_count.get() + 1);
+                comp_count_gloabl += 1;
+
+                a.val.cmp(&b.val)
+            });
+        }));
+
+        dbg!(comp_count_gloabl);
+        assert!(res.is_err());
+
+        let total_inner: u64 = test_input.iter().map(|c| c.comp_count.get() as u64).sum();
+
+        assert_eq!(total_inner, comp_count_gloabl * 2);
+
+        // If the sum before and after don't match, it means the set of elements hasn't remained the
+        // same.
+        let sum_after: i64 = pattern.iter().map(|x| *x as i64).sum();
+        assert_eq!(sum_before, sum_after);
+    };
+
+    test_impl_custom(test_fn);
+}
+
+#[test]
 fn violate_ord_retain_original_set() {
     let _seed = get_or_init_random_seed();
 
