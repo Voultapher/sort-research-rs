@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use sort_comp::ffi_util::{FFIOneKiloByte, FFIString, F128};
 use sort_comp::patterns;
 
-use sort_comp::stable::rust_new as test_sort;
+use sort_comp::other::cpp_highwaysort as test_sort;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 24] = [

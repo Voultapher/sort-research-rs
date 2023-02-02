@@ -512,17 +512,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             unstable::cpp_blockquicksort::SortImpl,
         );
 
-        #[cfg(feature = "cpp_simdsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_simdsort::SortImpl,
-        );
-
         #[cfg(feature = "c_crumsort")]
         bench_impl(
             c,
@@ -579,6 +568,30 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             pattern_provider,
             sort_comp::other::rust_radsort::SortImpl,
         );
+
+        #[cfg(feature = "cpp_simdsort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::cpp_simdsort::SortImpl,
+        );
+
+        #[cfg(feature = "cpp_highwaysort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::cpp_highwaysort::SortImpl,
+        );
+
+        // --- Evolution ---
 
         #[cfg(feature = "evolution")]
         bench_impl(

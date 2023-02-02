@@ -46,6 +46,7 @@ default = [
     # "cpp_pdqsort",
     # "cpp_powersort",
     # "cpp_simdsort",
+    # "cpp_highwaysort",
     # "cpp_ips4o",
     # "cpp_blockquicksort",
     # "c_crumsort",
@@ -78,6 +79,10 @@ cpp_powersort = []
 # Enable avx2 sort from simd-sort https://github.com/WojciechMula/simd-sort.
 # Uses system C++ standard lib.
 cpp_simdsort = []
+
+# Enable avx2 sort from https://github.com/google/highway/tree/master/.
+# Uses clang and libcxx.
+cpp_highwaysort = []
 
 # Enable ips4o from Engineering In-place (Shared-memory) Sorting Algorithms (2020) paper.
 # Uses system C++ standard lib.

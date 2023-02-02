@@ -93,6 +93,24 @@ fn build_and_link_cpp_ips4o() {
     build_and_link_cpp_sort("cpp_ips4o", None);
 }
 
+#[cfg(feature = "cpp_highwaysort")]
+fn build_and_link_cpp_highwaysort() {
+    build_and_link_cpp_sort(
+        "cpp_highwaysort",
+        Some(|builder: &mut cc::Build| {
+            // Make an exception for march=native here because AVX2 will not work without it.
+            builder.flag_if_supported("-march=native");
+            builder.compiler("clang++"); // gcc yields terrible code here.
+            builder.cpp_set_stdlib("c++"); // Use libcxx
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_highwaysort"))]
+fn build_and_link_cpp_highwaysort() {}
+
 #[cfg(not(feature = "cpp_ips4o"))]
 fn build_and_link_cpp_ips4o() {}
 
@@ -186,6 +204,7 @@ fn main() {
     build_and_link_cpp_pdqsort();
     build_and_link_cpp_powersort();
     build_and_link_cpp_simdsort();
+    build_and_link_cpp_highwaysort();
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
     build_and_link_c_crumsort();
