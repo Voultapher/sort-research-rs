@@ -1,19 +1,13 @@
 #![allow(unused)]
 
-//! Slice sorting
-//!
-//! This module contains a sorting algorithm based on Orson Peters' pattern-defeating quicksort,
-//! published at: <https://github.com/orlp/pdqsort>
-//!
-//! Unstable sorting is compatible with libcore because it doesn't allocate memory, unlike our
-//! stable sorting implementation.
+//! Instruction-Parallel-Network Unstable Sort by Lukas Bergdoll
 
 use std::cmp;
 use std::cmp::Ordering;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 
-sort_impl!("rust_new_unstable");
+sort_impl!("rust_ipn_unstable");
 
 /// Sorts the slice, but might not preserve the order of equal elements.
 ///

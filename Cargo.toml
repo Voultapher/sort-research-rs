@@ -119,7 +119,7 @@ evolution = []
 
 # --- Other ---
 
-# Add the inline(never) attribute to implementation functions of (un)stable::rust_new.
+# Add the inline(never) attribute to implementation functions of (un)stable::rust_ipn.
 # This allows better tracing with tools like uftrace.
 # However this skews the results, the measured effect will vary.
 no_inline_sub_functions = []

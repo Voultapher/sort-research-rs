@@ -1,6 +1,6 @@
 // use std::ptr;
 
-use crate::unstable::rust_new::branchless_swap;
+use crate::unstable::rust_ipn::branchless_swap;
 
 partition_impl!("simple_scan_branchless");
 

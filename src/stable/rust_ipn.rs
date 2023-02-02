@@ -1,12 +1,14 @@
 #![allow(unused)]
 
+//! Instruction-Parallel-Network Stable Sort by Lukas Bergdoll
+
 use std::alloc;
 use std::cmp;
 use std::cmp::Ordering;
 use std::mem::{self, SizedTypeProperties};
 use std::ptr;
 
-sort_impl!("rust_new_stable");
+sort_impl!("rust_ipn_stable");
 
 #[inline(always)]
 pub fn sort<T>(v: &mut [T])

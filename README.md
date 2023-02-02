@@ -8,7 +8,7 @@ This repository contains:
 * An exhaustive test suite, including properties not commonly checked or upheld
 * An extensive benchmark suite, abstracting over types, patterns and sizes
 * A fuzzing harness
-* Novel sort implementations
+* Novel sort implementations ipn_stable and ipn_unstable (Instruction-Parallel-Network)
 * Vendored sort implementations (Rust, C++, C), eg. cpp_pdqsort, rust_std_stable
 
 Most tests and benchmarks can be applied to non Rust implementations.
@@ -70,7 +70,7 @@ RUSTFLAGS=-Zsanitizer=address cargo afl build --release && cargo afl fuzz -i in 
 
 Adjust `fuzz/fuzz_targets/libfuzzer_main.rs` and
 `fuzz/fuzz_targets/libfuzzer_main.rs` respectively to change the fuzz target.
-Default `rust_new_stable`.
+Default `rust_ipn_stable`.
 
 ## Contributing
 

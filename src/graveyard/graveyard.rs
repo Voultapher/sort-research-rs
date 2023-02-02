@@ -2082,7 +2082,7 @@ use core::mem;
 use core::ptr;
 use core::simd;
 
-use crate::unstable::rust_new::branchless_swap;
+use crate::unstable::rust_ipn::branchless_swap;
 
 partition_impl!("ilp_partition");
 
