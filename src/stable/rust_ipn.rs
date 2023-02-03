@@ -699,6 +699,12 @@ where
     // See specific comments below.
     unsafe {
         let pivot_val = mem::ManuallyDrop::new(ptr::read(&v[pivot_pos]));
+        // It's crucial that pivot_hole will be copied back to the input if any comparison in the
+        // loop panics. Because it could have changed due to interior mutability.
+        let pivot_hole = InsertionHole {
+            src: &*pivot_val,
+            dest: v.as_mut_ptr().add(pivot_pos),
+        };
 
         let mut swap_ptr_l = buf;
         let mut swap_ptr_r = buf.add(len.saturating_sub(1));
@@ -741,11 +747,8 @@ where
         let r_count = len - l_count;
 
         // Copy pivot_val into it's correct position.
-        ptr::copy_nonoverlapping(
-            &pivot_val as *const mem::ManuallyDrop<T> as *const T,
-            pivot_partioned_ptr,
-            1,
-        );
+        mem::forget(pivot_hole);
+        ptr::copy_nonoverlapping(&*pivot_val, pivot_partioned_ptr, 1);
 
         // Now that swap has the correct order overwrite arr_ptr.
         let arr_ptr = v.as_mut_ptr();
