@@ -731,14 +731,17 @@ fn observable_is_less_mut_ptr() {
     test_impl_custom(test_fn);
 }
 
-fn calc_comps_required(test_data: &[i32]) -> u32 {
+fn calc_comps_required<T: Clone>(
+    test_data: &[T],
+    mut cmp_fn: impl FnMut(&T, &T) -> Ordering,
+) -> u32 {
     let mut comp_counter = 0u32;
 
     let mut test_data_clone = test_data.to_vec();
     test_sort::sort_by(&mut test_data_clone, |a, b| {
         comp_counter += 1;
 
-        a.cmp(b)
+        cmp_fn(a, b)
     });
 
     comp_counter
@@ -755,7 +758,7 @@ fn panic_retain_original_set() {
 
         // Calculate a specific comparison that should panic.
         // Ensure that it can be any of the possible comparisons and that it always panics.
-        let required_comps = calc_comps_required(&test_data);
+        let required_comps = calc_comps_required(&test_data, |a, b| a.cmp(b));
         let panic_threshold =
             patterns::random_uniform(1, 1..=required_comps as i32)[0] as usize - 1;
 
@@ -817,14 +820,14 @@ fn panic_observable_is_less() {
     let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
         let pattern = pattern_fn(test_size);
 
-        // Calculate a specific comparison that should panic.
-        // Ensure that it can be any of the possible comparisons and that it always panics.
-        let required_comps = calc_comps_required(&pattern);
-
         let mut test_input = pattern
             .iter()
             .map(|val| CompCount::new(*val))
             .collect::<Vec<_>>();
+
+        // Calculate a specific comparison that should panic.
+        // Ensure that it can be any of the possible comparisons and that it always panics.
+        let required_comps = calc_comps_required(&test_input, |a, b| a.val.cmp(&b.val));
 
         let sum_before: i64 = pattern.iter().map(|x| *x as i64).sum();
 
