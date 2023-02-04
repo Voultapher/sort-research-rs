@@ -446,6 +446,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             stable::rust_wpwoodjr::SortImpl,
         );
 
+        #[cfg(feature = "rust_glidesort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            stable::rust_glidesort::SortImpl,
+        );
+
         // --- Unstable sorts ---
 
         bench_impl(
