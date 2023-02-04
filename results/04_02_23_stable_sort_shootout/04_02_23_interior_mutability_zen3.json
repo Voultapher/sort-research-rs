@@ -1,0 +1,2205 @@
+{
+  "name": "interior_mutability",
+  "benchmarks": {
+    "rust_glidesort_stable-hot-string-ascending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-ascending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-ascending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-ascending-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-ascending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 151341.4435831211,
+            "upper_bound": 152102.69453944537
+          },
+          "point_estimate": 151699.81163575078,
+          "standard_error": 195.2727629157651
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 151033.42045454544,
+            "upper_bound": 151357.46153846153
+          },
+          "point_estimate": 151189.69,
+          "standard_error": 94.187010933668
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 521.3192157447338,
+            "upper_bound": 1083.183732932025
+          },
+          "point_estimate": 773.5891012338004,
+          "standard_error": 149.29611196116156
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 151194.46109600546,
+            "upper_bound": 151604.82944062309
+          },
+          "point_estimate": 151389.8599113344,
+          "standard_error": 104.60756910272056
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1337.0308787074955,
+            "upper_bound": 2535.9374363055276
+          },
+          "point_estimate": 1955.70406953348,
+          "standard_error": 308.6691535918723
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-descending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-descending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-descending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-descending-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-descending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 161059.18077563308,
+            "upper_bound": 162421.98579193497
+          },
+          "point_estimate": 161640.70762621285,
+          "standard_error": 352.7194152300415
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 160293.02529761905,
+            "upper_bound": 161340.66666666666
+          },
+          "point_estimate": 160439.5396825397,
+          "standard_error": 272.47254691075693
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 466.6424073459597,
+            "upper_bound": 1699.3598687960855
+          },
+          "point_estimate": 841.9412588456648,
+          "standard_error": 323.735158003251
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 160703.19987318342,
+            "upper_bound": 161210.12329175475
+          },
+          "point_estimate": 160936.74326880448,
+          "standard_error": 128.84745069105546
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1447.8610385223508,
+            "upper_bound": 5527.931605500795
+          },
+          "point_estimate": 3545.4211915344576,
+          "standard_error": 1212.3169775174022
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-random-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-random-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-random-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-random-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-random-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 990298.8395375,
+            "upper_bound": 991949.3195000004
+          },
+          "point_estimate": 991129.3815000004,
+          "standard_error": 421.65337912471733
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 991300.25,
+            "upper_bound": 993191.05
+          },
+          "point_estimate": 992253.875,
+          "standard_error": 433.11091450431854
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2754.856076091355,
+            "upper_bound": 5521.202301979065
+          },
+          "point_estimate": 4061.84208288787,
+          "standard_error": 692.7016165926864
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3811.839663685168,
+            "upper_bound": 4620.062657686201
+          },
+          "point_estimate": 4258.219358900845,
+          "standard_error": 205.65071789249737
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-random_5p-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-random_5p-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-random_5p-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-random_5p-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-random_5p-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 457062.7548846153,
+            "upper_bound": 459390.7558461538
+          },
+          "point_estimate": 458222.7838461538,
+          "standard_error": 594.4785604190291
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 456804.5,
+            "upper_bound": 459928.5
+          },
+          "point_estimate": 458083.5,
+          "standard_error": 701.0671250789838
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5097.920009493828,
+            "upper_bound": 7578.195719306309
+          },
+          "point_estimate": 6161.229306000936,
+          "standard_error": 622.109648485716
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5202.0984135918525,
+            "upper_bound": 6640.27383253787
+          },
+          "point_estimate": 5961.7290617468925,
+          "standard_error": 367.2607609532251
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-random_binary-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-random_binary-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-random_binary-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-random_binary-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-random_binary-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 285647.8927009613,
+            "upper_bound": 288083.549157226
+          },
+          "point_estimate": 286839.86658112967,
+          "standard_error": 621.0409284506048
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 284863.0,
+            "upper_bound": 287224.0416666667
+          },
+          "point_estimate": 286105.1574074074,
+          "standard_error": 676.75953656451
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3336.6727516712667,
+            "upper_bound": 6023.840758055483
+          },
+          "point_estimate": 4729.669381991165,
+          "standard_error": 677.629967901185
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 284565.1111786611,
+            "upper_bound": 286375.7213042937
+          },
+          "point_estimate": 285422.2118161667,
+          "standard_error": 460.59739848691186
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4959.783071773438,
+            "upper_bound": 7446.332471268357
+          },
+          "point_estimate": 6235.038883954522,
+          "standard_error": 634.3034606356929
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-random_dense-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-random_dense-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-random_dense-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-random_dense-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-random_dense-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 494723.28312,
+            "upper_bound": 495903.54234000016
+          },
+          "point_estimate": 495308.9320000003,
+          "standard_error": 301.0629833216433
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 494107.44,
+            "upper_bound": 495660.7
+          },
+          "point_estimate": 494880.48,
+          "standard_error": 496.7250848471683
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2208.243704795841,
+            "upper_bound": 3884.2043670416538
+          },
+          "point_estimate": 2907.704720377924,
+          "standard_error": 419.58038198335754
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2612.225118836521,
+            "upper_bound": 3375.602322072298
+          },
+          "point_estimate": 3016.996941087161,
+          "standard_error": 194.96974000350664
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-saws_long-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-saws_long-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-saws_long-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-saws_long-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-saws_long-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 558489.51178,
+            "upper_bound": 559199.5489199999
+          },
+          "point_estimate": 558841.7295999998,
+          "standard_error": 181.28298951994623
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 558276.94,
+            "upper_bound": 559056.24
+          },
+          "point_estimate": 558631.88,
+          "standard_error": 181.9226793903225
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1561.2963802813863,
+            "upper_bound": 2592.8894419670173
+          },
+          "point_estimate": 2140.726101994549,
+          "standard_error": 271.19575907949024
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1589.725317970035,
+            "upper_bound": 2013.033517716034
+          },
+          "point_estimate": 1815.9288640997324,
+          "standard_error": 108.4188035493216
+        }
+      }
+    },
+    "rust_glidesort_stable-hot-string-saws_short-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_glidesort_stable-hot-string-saws_short-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_glidesort_stable-hot-string-saws_short-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_glidesort_stable-hot-string-saws_short-10000",
+        "directory_name": "rust_glidesort_stable-hot-string-saws_short-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 964309.3185125008,
+            "upper_bound": 965932.1141500004
+          },
+          "point_estimate": 965117.3780000004,
+          "standard_error": 415.3889037523584
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 963568.75,
+            "upper_bound": 966473.75
+          },
+          "point_estimate": 965257.4,
+          "standard_error": 770.767127262568
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4092.828422337702,
+            "upper_bound": 6077.066097110493
+          },
+          "point_estimate": 5386.952874362486,
+          "standard_error": 500.149225036977
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3729.9315663634775,
+            "upper_bound": 4602.06389311119
+          },
+          "point_estimate": 4186.609862975486,
+          "standard_error": 222.6918994509004
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-ascending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-ascending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-ascending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-ascending-10000",
+        "directory_name": "rust_ipn_stable-hot-string-ascending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 151615.20169327213,
+            "upper_bound": 154084.6929254183
+          },
+          "point_estimate": 152700.4637817686,
+          "standard_error": 630.8944142991149
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 150393.0,
+            "upper_bound": 153694.73529411765
+          },
+          "point_estimate": 152462.84027777778,
+          "standard_error": 732.5993640318948
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3826.39267927073,
+            "upper_bound": 6251.030820977668
+          },
+          "point_estimate": 5386.46808101881,
+          "standard_error": 580.9144403609012
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 150011.4850068075,
+            "upper_bound": 151809.42008171842
+          },
+          "point_estimate": 150835.52159302498,
+          "standard_error": 458.81877724225455
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3613.0348920938736,
+            "upper_bound": 9438.017659459005
+          },
+          "point_estimate": 6306.434704426246,
+          "standard_error": 1868.848435518368
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-descending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-descending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-descending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-descending-10000",
+        "directory_name": "rust_ipn_stable-hot-string-descending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 161271.99787396417,
+            "upper_bound": 162017.66500602604
+          },
+          "point_estimate": 161622.4425057243,
+          "standard_error": 190.21414487068927
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 160451.43956043955,
+            "upper_bound": 161667.83125
+          },
+          "point_estimate": 160729.2708333333,
+          "standard_error": 377.6650507797819
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 621.9815764576341,
+            "upper_bound": 1882.1378054630163
+          },
+          "point_estimate": 1114.5165425355874,
+          "standard_error": 371.9682479802209
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 160796.75164199746,
+            "upper_bound": 161287.99811820057
+          },
+          "point_estimate": 161021.7595891828,
+          "standard_error": 124.82601397430533
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1349.8950821996611,
+            "upper_bound": 2526.4622621839803
+          },
+          "point_estimate": 1912.4273450767428,
+          "standard_error": 314.91990092071006
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-random-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-random-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-random-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-random-10000",
+        "directory_name": "rust_ipn_stable-hot-string-random-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 809927.4312708329,
+            "upper_bound": 817893.4771249996
+          },
+          "point_estimate": 813947.7608333335,
+          "standard_error": 2036.758636382968
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 818219.7708333333,
+            "upper_bound": 825652.4166666666
+          },
+          "point_estimate": 822828.0625,
+          "standard_error": 1755.81166519797
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10512.683988362607,
+            "upper_bound": 23146.915258122648
+          },
+          "point_estimate": 15715.158183500113,
+          "standard_error": 3023.62839373658
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 18321.17890910365,
+            "upper_bound": 22028.430090378093
+          },
+          "point_estimate": 20453.055489401573,
+          "standard_error": 944.5714718238517
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-random_5p-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-random_5p-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-random_5p-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-random_5p-10000",
+        "directory_name": "rust_ipn_stable-hot-string-random_5p-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 188037.6494652187,
+            "upper_bound": 189587.11627945636
+          },
+          "point_estimate": 188782.37319502537,
+          "standard_error": 394.3476159672512
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 186753.52650727652,
+            "upper_bound": 188912.7857142857
+          },
+          "point_estimate": 187694.735,
+          "standard_error": 534.9334360516947
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2092.9996203418555,
+            "upper_bound": 4271.656133253846
+          },
+          "point_estimate": 3098.9955934818186,
+          "standard_error": 529.7974024996487
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 186924.8957014501,
+            "upper_bound": 187986.2958599754
+          },
+          "point_estimate": 187403.907681395,
+          "standard_error": 271.1338423813292
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2997.422314883812,
+            "upper_bound": 5088.575708664234
+          },
+          "point_estimate": 3949.870743088737,
+          "standard_error": 578.6518569833689
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-random_binary-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-random_binary-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-random_binary-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-random_binary-10000",
+        "directory_name": "rust_ipn_stable-hot-string-random_binary-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 228405.97797747373,
+            "upper_bound": 229582.5908231832
+          },
+          "point_estimate": 228979.1294562246,
+          "standard_error": 300.16642122416977
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 227599.16666666663,
+            "upper_bound": 228968.49020807835
+          },
+          "point_estimate": 228389.408045977,
+          "standard_error": 363.4761238230547
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1903.809269133338,
+            "upper_bound": 3369.988784387029
+          },
+          "point_estimate": 2830.8582369685887,
+          "standard_error": 392.8301055792964
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 227423.65444318217,
+            "upper_bound": 228336.5195645
+          },
+          "point_estimate": 227837.8846519876,
+          "standard_error": 232.71329904117997
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2443.9885401551724,
+            "upper_bound": 3542.128724984781
+          },
+          "point_estimate": 3015.4762121079702,
+          "standard_error": 280.2636592884002
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-random_dense-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-random_dense-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-random_dense-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-random_dense-10000",
+        "directory_name": "rust_ipn_stable-hot-string-random_dense-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 779774.0295375001,
+            "upper_bound": 785042.3249000001
+          },
+          "point_estimate": 782409.4245000002,
+          "standard_error": 1346.1993746284772
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 778556.5,
+            "upper_bound": 785342.825
+          },
+          "point_estimate": 783016.6499999999,
+          "standard_error": 1536.617477582338
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10275.566832572256,
+            "upper_bound": 16347.666219770788
+          },
+          "point_estimate": 12238.862782716924,
+          "standard_error": 1627.5398641558688
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11722.193119544814,
+            "upper_bound": 15252.01353655074
+          },
+          "point_estimate": 13590.131468779537,
+          "standard_error": 902.7013187041852
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-saws_long-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-saws_long-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-saws_long-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-saws_long-10000",
+        "directory_name": "rust_ipn_stable-hot-string-saws_long-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 419143.6307335001,
+            "upper_bound": 421472.3521537395
+          },
+          "point_estimate": 420252.25407077506,
+          "standard_error": 591.9919202462779
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 418823.3765625,
+            "upper_bound": 420697.59523809527
+          },
+          "point_estimate": 419681.4082491583,
+          "standard_error": 485.450762996619
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2764.958098190744,
+            "upper_bound": 4711.30689728144
+          },
+          "point_estimate": 3743.902771464376,
+          "standard_error": 505.1655730628227
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 418391.5889484525,
+            "upper_bound": 419595.0452298516
+          },
+          "point_estimate": 418961.5579193143,
+          "standard_error": 306.4276225573673
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4036.824384115687,
+            "upper_bound": 7956.868113304057
+          },
+          "point_estimate": 5942.56716772697,
+          "standard_error": 1036.0131433329334
+        }
+      }
+    },
+    "rust_ipn_stable-hot-string-saws_short-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_stable-hot-string-saws_short-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_stable-hot-string-saws_short-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_stable-hot-string-saws_short-10000",
+        "directory_name": "rust_ipn_stable-hot-string-saws_short-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 797756.9683749998,
+            "upper_bound": 800058.0034318188
+          },
+          "point_estimate": 798901.6218181823,
+          "standard_error": 588.3175052562076
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 796926.3409090908,
+            "upper_bound": 799599.4090909091
+          },
+          "point_estimate": 798002.2272727273,
+          "standard_error": 774.1741535325139
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4193.668807365724,
+            "upper_bound": 6974.264840727574
+          },
+          "point_estimate": 5596.848596090589,
+          "standard_error": 720.1293823910572
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5069.9033415317235,
+            "upper_bound": 6662.217069991606
+          },
+          "point_estimate": 5909.960417770522,
+          "standard_error": 407.89511018073665
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-ascending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-ascending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-ascending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-ascending-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-ascending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 152411.23902392518,
+            "upper_bound": 154316.8028002126
+          },
+          "point_estimate": 153195.2250313011,
+          "standard_error": 496.6729642608352
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 152006.65,
+            "upper_bound": 152335.19492753624
+          },
+          "point_estimate": 152183.520021645,
+          "standard_error": 83.3431533707856
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 560.7563375673215,
+            "upper_bound": 1105.0767021765002
+          },
+          "point_estimate": 764.421550494158,
+          "standard_error": 144.0516821014982
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 152082.66918262956,
+            "upper_bound": 152591.32426373026
+          },
+          "point_estimate": 152310.52549431063,
+          "standard_error": 129.7644572910523
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1555.1338486211455,
+            "upper_bound": 7977.8115239266845
+          },
+          "point_estimate": 4988.815128804595,
+          "standard_error": 1899.4742453573365
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-descending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-descending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-descending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-descending-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-descending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 165407.70775662552,
+            "upper_bound": 166144.23350097047
+          },
+          "point_estimate": 165762.54991384968,
+          "standard_error": 188.33506437080763
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 164649.1222222222,
+            "upper_bound": 165842.3
+          },
+          "point_estimate": 165019.8635023585,
+          "standard_error": 380.57191253411776
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 917.254659577546,
+            "upper_bound": 1852.4944622419528
+          },
+          "point_estimate": 1392.8859362390715,
+          "standard_error": 259.47805976159657
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 165071.5988667186,
+            "upper_bound": 165576.4375273384
+          },
+          "point_estimate": 165300.73234224916,
+          "standard_error": 128.56828821449037
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1479.6115403675144,
+            "upper_bound": 2257.22665337892
+          },
+          "point_estimate": 1890.9732721367016,
+          "standard_error": 199.36523459506233
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-random-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-random-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-random-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-random-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-random-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 732627.8367799997,
+            "upper_bound": 734013.4109000001
+          },
+          "point_estimate": 733328.2444,
+          "standard_error": 353.4264765665292
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 733401.04,
+            "upper_bound": 734816.76
+          },
+          "point_estimate": 734268.36,
+          "standard_error": 394.9605763261803
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2326.5181176960036,
+            "upper_bound": 4981.802779555311
+          },
+          "point_estimate": 3504.807033777268,
+          "standard_error": 661.8034495510962
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3131.8648221706153,
+            "upper_bound": 3901.4567447006903
+          },
+          "point_estimate": 3542.07911828042,
+          "standard_error": 196.57961285727947
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-random_5p-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-random_5p-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-random_5p-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-random_5p-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-random_5p-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 209239.06243173525,
+            "upper_bound": 210906.0141662423
+          },
+          "point_estimate": 210067.50517685685,
+          "standard_error": 426.2986282719073
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 208132.12814685315,
+            "upper_bound": 211351.0821917808
+          },
+          "point_estimate": 209765.885841364,
+          "standard_error": 1104.3427465823925
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4394.908954601936,
+            "upper_bound": 6604.916008465809
+          },
+          "point_estimate": 5881.535870581873,
+          "standard_error": 553.6165926569494
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 207873.8542021041,
+            "upper_bound": 209586.00653204383
+          },
+          "point_estimate": 208696.71842470815,
+          "standard_error": 437.5587486473858
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3858.1153619958864,
+            "upper_bound": 4633.248530944694
+          },
+          "point_estimate": 4275.7430666621285,
+          "standard_error": 197.23112998934903
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-random_binary-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-random_binary-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-random_binary-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-random_binary-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-random_binary-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 281355.59006001306,
+            "upper_bound": 284262.8241280498
+          },
+          "point_estimate": 282773.7404268601,
+          "standard_error": 740.9196279943599
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 281312.55752840906,
+            "upper_bound": 283575.15650406503
+          },
+          "point_estimate": 282829.92094017094,
+          "standard_error": 478.8490027576672
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3710.744413795032,
+            "upper_bound": 5902.426762568453
+          },
+          "point_estimate": 4609.317048870924,
+          "standard_error": 572.4613221760632
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 281377.33159296034,
+            "upper_bound": 283128.39905507345
+          },
+          "point_estimate": 282244.1057189301,
+          "standard_error": 446.20225567866737
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5156.516545552188,
+            "upper_bound": 9645.935136137188
+          },
+          "point_estimate": 7478.202722372411,
+          "standard_error": 1148.714748981264
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-random_dense-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-random_dense-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-random_dense-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-random_dense-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-random_dense-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 396508.7094999512,
+            "upper_bound": 397897.32956725114
+          },
+          "point_estimate": 397187.35945792845,
+          "standard_error": 354.9722499090504
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 395715.3736263737,
+            "upper_bound": 397244.875
+          },
+          "point_estimate": 396289.0469083155,
+          "standard_error": 371.62794608097266
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2001.78038567024,
+            "upper_bound": 3306.701043556588
+          },
+          "point_estimate": 2730.1728554907204,
+          "standard_error": 319.86179720938276
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 395441.632422905,
+            "upper_bound": 396351.1835526144
+          },
+          "point_estimate": 395865.5312398404,
+          "standard_error": 230.9256856106276
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2791.7289347573255,
+            "upper_bound": 4315.969436004535
+          },
+          "point_estimate": 3576.227942056662,
+          "standard_error": 390.0028258945575
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-saws_long-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-saws_long-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-saws_long-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-saws_long-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-saws_long-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 748574.0937840911,
+            "upper_bound": 750980.4478409094
+          },
+          "point_estimate": 749772.3577272729,
+          "standard_error": 614.7192272924699
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 747467.2954545454,
+            "upper_bound": 750541.1818181819
+          },
+          "point_estimate": 749162.8863636364,
+          "standard_error": 815.0804372627441
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5102.145419418997,
+            "upper_bound": 8315.835861455373
+          },
+          "point_estimate": 6878.151927888393,
+          "standard_error": 817.2477339938935
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5422.87302068754,
+            "upper_bound": 6834.955091907757
+          },
+          "point_estimate": 6174.6057537730885,
+          "standard_error": 360.84626386118794
+        }
+      }
+    },
+    "rust_ipn_unstable-hot-string-saws_short-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_ipn_unstable-hot-string-saws_short-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_ipn_unstable-hot-string-saws_short-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_ipn_unstable-hot-string-saws_short-10000",
+        "directory_name": "rust_ipn_unstable-hot-string-saws_short-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 728701.4112934781,
+            "upper_bound": 730157.202304348
+          },
+          "point_estimate": 729431.1608695653,
+          "standard_error": 371.2514716765048
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 728679.1956521738,
+            "upper_bound": 731031.0869565217
+          },
+          "point_estimate": 730314.6521739131,
+          "standard_error": 646.8710039757117
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2812.975606581382,
+            "upper_bound": 4872.822656968508
+          },
+          "point_estimate": 3711.302268893867,
+          "standard_error": 534.9399907994258
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3267.4083785241137,
+            "upper_bound": 4151.879428350136
+          },
+          "point_estimate": 3731.8338772915968,
+          "standard_error": 225.90777130278
+        }
+      }
+    },
+    "rust_std_stable-hot-string-ascending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-ascending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-ascending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-ascending-10000",
+        "directory_name": "rust_std_stable-hot-string-ascending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 151037.49903633774,
+            "upper_bound": 154295.3380286284
+          },
+          "point_estimate": 152398.57524750012,
+          "standard_error": 843.7902358425945
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 150105.2,
+            "upper_bound": 153872.61365853655
+          },
+          "point_estimate": 152221.09642857144,
+          "standard_error": 927.1381045631064
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3599.987828670586,
+            "upper_bound": 6534.679153386509
+          },
+          "point_estimate": 5195.500145789611,
+          "standard_error": 729.5388840025578
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 149311.5428167719,
+            "upper_bound": 151407.5296902309
+          },
+          "point_estimate": 150279.5117925225,
+          "standard_error": 535.4128455018607
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3888.707141121559,
+            "upper_bound": 13400.6529717781
+          },
+          "point_estimate": 8488.248933057102,
+          "standard_error": 3141.8475806387873
+        }
+      }
+    },
+    "rust_std_stable-hot-string-descending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-descending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-descending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-descending-10000",
+        "directory_name": "rust_std_stable-hot-string-descending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 162401.44539924286,
+            "upper_bound": 163093.02820668128
+          },
+          "point_estimate": 162737.57556652674,
+          "standard_error": 176.25645581614063
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 161545.5331027668,
+            "upper_bound": 163016.643715847
+          },
+          "point_estimate": 162494.53928571427,
+          "standard_error": 402.23270657252664
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 910.1950592755696,
+            "upper_bound": 2275.0447682451227
+          },
+          "point_estimate": 1751.4705517482855,
+          "standard_error": 366.1992219121248
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 161947.55140980033,
+            "upper_bound": 162497.3937436711
+          },
+          "point_estimate": 162199.18102556525,
+          "standard_error": 140.78590519687077
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1421.8227760931566,
+            "upper_bound": 2087.789899849991
+          },
+          "point_estimate": 1765.9502708284722,
+          "standard_error": 170.82634401347116
+        }
+      }
+    },
+    "rust_std_stable-hot-string-random-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-random-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-random-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-random-10000",
+        "directory_name": "rust_std_stable-hot-string-random-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1129366.808736842,
+            "upper_bound": 1130848.7151973683
+          },
+          "point_estimate": 1130108.4999999998,
+          "standard_error": 376.82694896235984
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1129228.6315789474,
+            "upper_bound": 1131320.0526315789
+          },
+          "point_estimate": 1130371.3947368425,
+          "standard_error": 487.7274822289626
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2853.73183880968,
+            "upper_bound": 4509.600930464859
+          },
+          "point_estimate": 3494.2150274388305,
+          "standard_error": 408.1237033304071
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3277.030345350859,
+            "upper_bound": 4247.417368610564
+          },
+          "point_estimate": 3791.3269593257314,
+          "standard_error": 247.21415342959688
+        }
+      }
+    },
+    "rust_std_stable-hot-string-random_5p-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-random_5p-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-random_5p-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-random_5p-10000",
+        "directory_name": "rust_std_stable-hot-string-random_5p-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 467661.53799038497,
+            "upper_bound": 469439.259423077
+          },
+          "point_estimate": 468551.9615384617,
+          "standard_error": 453.1523138391603
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 467632.9615384616,
+            "upper_bound": 469579.4615384616
+          },
+          "point_estimate": 468291.5192307693,
+          "standard_error": 555.4570582787483
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4517.496375567623,
+            "upper_bound": 6434.597931916917
+          },
+          "point_estimate": 5667.523514765966,
+          "standard_error": 491.02123573536846
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4044.4454153538063,
+            "upper_bound": 5000.233811493247
+          },
+          "point_estimate": 4553.344164260823,
+          "standard_error": 244.83504635847103
+        }
+      }
+    },
+    "rust_std_stable-hot-string-random_binary-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-random_binary-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-random_binary-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-random_binary-10000",
+        "directory_name": "rust_std_stable-hot-string-random_binary-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 612536.6519456521,
+            "upper_bound": 614157.9215978262
+          },
+          "point_estimate": 613342.6660869564,
+          "standard_error": 414.2878451421645
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 611317.8695652174,
+            "upper_bound": 614543.2608695652
+          },
+          "point_estimate": 612345.1086956521,
+          "standard_error": 872.3352509574562
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3602.717936038971,
+            "upper_bound": 6101.543500371698
+          },
+          "point_estimate": 4469.0720076145735,
+          "standard_error": 662.7265965216029
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3725.2835647146094,
+            "upper_bound": 4561.621926147069
+          },
+          "point_estimate": 4176.843078084614,
+          "standard_error": 212.32192405200092
+        }
+      }
+    },
+    "rust_std_stable-hot-string-random_dense-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-random_dense-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-random_dense-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-random_dense-10000",
+        "directory_name": "rust_std_stable-hot-string-random_dense-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 976038.3963611108,
+            "upper_bound": 977234.7782638886
+          },
+          "point_estimate": 976624.5916666664,
+          "standard_error": 304.7438732401852
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 975071.5833333333,
+            "upper_bound": 976784.2777777778
+          },
+          "point_estimate": 975646.6944444444,
+          "standard_error": 453.3784745079342
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1968.0608617265104,
+            "upper_bound": 3393.3830564221707
+          },
+          "point_estimate": 2780.780983964535,
+          "standard_error": 365.4185501856029
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2614.494225516494,
+            "upper_bound": 3413.6589561826154
+          },
+          "point_estimate": 3051.546588680743,
+          "standard_error": 204.1666082360921
+        }
+      }
+    },
+    "rust_std_stable-hot-string-saws_long-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-saws_long-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-saws_long-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-saws_long-10000",
+        "directory_name": "rust_std_stable-hot-string-saws_long-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 543336.70459,
+            "upper_bound": 545066.2705900001
+          },
+          "point_estimate": 544210.9395999999,
+          "standard_error": 440.7033614233903
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 543903.48,
+            "upper_bound": 545805.6
+          },
+          "point_estimate": 545011.96,
+          "standard_error": 476.3937572217658
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2824.6494698523784,
+            "upper_bound": 5141.419492721509
+          },
+          "point_estimate": 3718.390385985402,
+          "standard_error": 595.8015790643034
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3774.5930664255143,
+            "upper_bound": 5016.634317368882
+          },
+          "point_estimate": 4433.65614664132,
+          "standard_error": 317.4695130859432
+        }
+      }
+    },
+    "rust_std_stable-hot-string-saws_short-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_stable-hot-string-saws_short-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_stable-hot-string-saws_short-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_stable-hot-string-saws_short-10000",
+        "directory_name": "rust_std_stable-hot-string-saws_short-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1031806.1846447376,
+            "upper_bound": 1033542.9081315788
+          },
+          "point_estimate": 1032672.5468421052,
+          "standard_error": 442.6538645652515
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1031878.6315789474,
+            "upper_bound": 1033453.6315789474
+          },
+          "point_estimate": 1032941.605263158,
+          "standard_error": 370.96352573560745
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3434.559886392803,
+            "upper_bound": 5367.519109970799
+          },
+          "point_estimate": 4398.327900861425,
+          "standard_error": 499.222670016267
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3820.903997087579,
+            "upper_bound": 5031.774608228847
+          },
+          "point_estimate": 4458.00028891291,
+          "standard_error": 308.3639810224492
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-ascending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-ascending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-ascending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-ascending-10000",
+        "directory_name": "rust_std_unstable-hot-string-ascending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 149391.91946530776,
+            "upper_bound": 151807.25528569575
+          },
+          "point_estimate": 150570.12297202033,
+          "standard_error": 614.451625574809
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 146873.0,
+            "upper_bound": 152058.88235294115
+          },
+          "point_estimate": 149143.0280112045,
+          "standard_error": 1237.1714049451991
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3807.80531648887,
+            "upper_bound": 8651.624364572684
+          },
+          "point_estimate": 6657.639744280892,
+          "standard_error": 1247.90602133648
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 147509.8873964414,
+            "upper_bound": 149941.6874471056
+          },
+          "point_estimate": 148616.4374020984,
+          "standard_error": 622.4472461193748
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5163.723506539924,
+            "upper_bound": 7514.092366560375
+          },
+          "point_estimate": 6204.2477216301095,
+          "standard_error": 647.3136470390824
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-descending-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-descending-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-descending-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-descending-10000",
+        "directory_name": "rust_std_unstable-hot-string-descending-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 159270.51016346616,
+            "upper_bound": 160047.89049689838
+          },
+          "point_estimate": 159640.18925592932,
+          "standard_error": 198.8392087057806
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 158525.05833333335,
+            "upper_bound": 159327.05357142858
+          },
+          "point_estimate": 158626.78368121444,
+          "standard_error": 170.93781221104595
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 384.7873212108396,
+            "upper_bound": 1611.300006327143
+          },
+          "point_estimate": 956.6808477314248,
+          "standard_error": 276.9520241496622
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 158974.28486029347,
+            "upper_bound": 159511.68626115558
+          },
+          "point_estimate": 159221.29138466084,
+          "standard_error": 137.48958254174008
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1515.6703505965795,
+            "upper_bound": 2504.6311560541776
+          },
+          "point_estimate": 2002.1628068783664,
+          "standard_error": 257.3689157786154
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-random-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-random-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-random-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-random-10000",
+        "directory_name": "rust_std_unstable-hot-string-random-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 782428.1018645833,
+            "upper_bound": 784198.2984062497
+          },
+          "point_estimate": 783321.6820833333,
+          "standard_error": 450.7001650316856
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 782107.5416666666,
+            "upper_bound": 785243.0625
+          },
+          "point_estimate": 784059.3541666666,
+          "standard_error": 764.4089734555041
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3802.868932485581,
+            "upper_bound": 5753.476297855406
+          },
+          "point_estimate": 5051.619647815881,
+          "standard_error": 503.7634951578803
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3930.692698349314,
+            "upper_bound": 5077.730605474604
+          },
+          "point_estimate": 4535.115043602211,
+          "standard_error": 292.95442593163773
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-random_5p-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-random_5p-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-random_5p-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-random_5p-10000",
+        "directory_name": "rust_std_unstable-hot-string-random_5p-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 210105.7286905039,
+            "upper_bound": 211276.47973663855
+          },
+          "point_estimate": 210684.6628941264,
+          "standard_error": 300.1946594540265
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 209968.35064935064,
+            "upper_bound": 210584.625
+          },
+          "point_estimate": 210210.5574712644,
+          "standard_error": 161.37514995113924
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1628.0892453206693,
+            "upper_bound": 3776.110902629986
+          },
+          "point_estimate": 2796.2942582411697,
+          "standard_error": 584.6933422571714
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 208794.07060426177,
+            "upper_bound": 210079.0862074744
+          },
+          "point_estimate": 209431.01906605583,
+          "standard_error": 327.75497925354665
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2536.7687118769086,
+            "upper_bound": 3459.479815379613
+          },
+          "point_estimate": 3017.7480623343636,
+          "standard_error": 235.93444389308385
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-random_binary-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-random_binary-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-random_binary-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-random_binary-10000",
+        "directory_name": "rust_std_unstable-hot-string-random_binary-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 275304.8008582701,
+            "upper_bound": 277895.3523016575
+          },
+          "point_estimate": 276601.2728304965,
+          "standard_error": 659.3948193610897
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 275325.59707646177,
+            "upper_bound": 277303.0104166666
+          },
+          "point_estimate": 276503.8248272196,
+          "standard_error": 514.036243361599
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3503.4256565517653,
+            "upper_bound": 5863.387884739857
+          },
+          "point_estimate": 4694.884334321156,
+          "standard_error": 623.5173709842306
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 274853.4317331139,
+            "upper_bound": 276684.85151435266
+          },
+          "point_estimate": 275764.0161548692,
+          "standard_error": 468.2318805725247
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5123.238346078612,
+            "upper_bound": 7983.495112818214
+          },
+          "point_estimate": 6617.989340255437,
+          "standard_error": 729.8051963431219
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-random_dense-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-random_dense-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-random_dense-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-random_dense-10000",
+        "directory_name": "rust_std_unstable-hot-string-random_dense-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 393837.76961967745,
+            "upper_bound": 395433.7699224939
+          },
+          "point_estimate": 394631.7908697841,
+          "standard_error": 407.1255762300386
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 393284.8333333333,
+            "upper_bound": 395165.50714006263
+          },
+          "point_estimate": 394416.86260454,
+          "standard_error": 498.29745718504614
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2502.981198194748,
+            "upper_bound": 4064.66713083277
+          },
+          "point_estimate": 3119.279149621708,
+          "standard_error": 383.01215308823265
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 393118.5115436771,
+            "upper_bound": 394097.3571390578
+          },
+          "point_estimate": 393578.4190453672,
+          "standard_error": 249.8241361935228
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3236.8415256909293,
+            "upper_bound": 4867.876449689828
+          },
+          "point_estimate": 4084.651176848568,
+          "standard_error": 418.350801508109
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-saws_long-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-saws_long-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-saws_long-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-saws_long-10000",
+        "directory_name": "rust_std_unstable-hot-string-saws_long-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 746427.085375,
+            "upper_bound": 749113.1593068183
+          },
+          "point_estimate": 747785.6681818184,
+          "standard_error": 683.0033030863901
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 747937.6818181819,
+            "upper_bound": 749570.7727272727
+          },
+          "point_estimate": 748985.0454545454,
+          "standard_error": 448.7330209452167
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3080.809049850192,
+            "upper_bound": 7459.634376655902
+          },
+          "point_estimate": 4847.69756848165,
+          "standard_error": 1096.9669547024407
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5913.941822315795,
+            "upper_bound": 7661.441268098688
+          },
+          "point_estimate": 6857.027293396415,
+          "standard_error": 446.2120932171371
+        }
+      }
+    },
+    "rust_std_unstable-hot-string-saws_short-10000": {
+      "baseline": "interior_mutability",
+      "fullname": "interior_mutability/rust_std_unstable-hot-string-saws_short-10000",
+      "criterion_benchmark_v1": {
+        "group_id": "rust_std_unstable-hot-string-saws_short-10000",
+        "function_id": null,
+        "value_str": null,
+        "throughput": null,
+        "full_id": "rust_std_unstable-hot-string-saws_short-10000",
+        "directory_name": "rust_std_unstable-hot-string-saws_short-10000"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 772374.9968913045,
+            "upper_bound": 774352.6183152178
+          },
+          "point_estimate": 773345.1273913044,
+          "standard_error": 503.2769220212563
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 770983.2173913043,
+            "upper_bound": 773557.3043478262
+          },
+          "point_estimate": 771795.2608695652,
+          "standard_error": 603.0103384420878
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3460.3238776972407,
+            "upper_bound": 6246.646526708502
+          },
+          "point_estimate": 4191.761351668264,
+          "standard_error": 750.19154769001
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4304.196106775898,
+            "upper_bound": 5769.369887791388
+          },
+          "point_estimate": 5058.498470397992,
+          "standard_error": 375.2251498985069
+        }
+      }
+    }
+  }
+}
