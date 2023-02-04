@@ -4,6 +4,7 @@ Produce bar graph that compares N implementations for a single size.
 
 import json
 import sys
+import os
 
 from collections import defaultdict
 
@@ -214,5 +215,5 @@ if __name__ == "__main__":
 
     groups = extract_groups(combined_result)
 
-    name = sys.argv[1].partition('.')[0]
+    name = os.path.basename(sys.argv[1]).partition('.')[0]
     plot_sizes(name, groups)
