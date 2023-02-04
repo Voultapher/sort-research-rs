@@ -1,9 +1,9 @@
-# A quick performance analysis of glidesort
+# A limited performance analysis of glidesort
 
 Author: Lukas Bergdoll @Voultapher
 Date: 04.02.2023
 
-This is a quick performance analysis of the recently released novel sort implementation glidesort [1](https://github.com/orlp/glidesort).
+This is a limited performance analysis of the recently released novel sort implementation glidesort [1](https://github.com/orlp/glidesort).
 
 
 ### Benchmark setup
