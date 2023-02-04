@@ -55,7 +55,7 @@ rust_ipn_stable is in a solid state, but still work in progress. A larger writeu
 
 A good benchmark to shine light into the ability of the sort to exploit instruction-level-parallelism (ILP) is hot-u64-10000. The input are 10k u64 values, which fits into the core private L2 data cache for the used Zen3 test machine. The upper limit should be in the order of 4-5 instructions per cycle for such a dataset. 10k elements is enough to reliably exploit existing patterns in the input data.
 
-![alt text](assets/hot-u64-10000.png)
+<img src="assets/hot-u64-10000.png" width="600" />
 
 Starting with the fully ascending and descending patterns. Both rust_ipn_stable and c_fluxsort_stable can sort these by doing a forward scan, and reversing the input if necessary, without allocating. rust_std_stable will do an allocation for all inputs N > 20, and also scan them in one go, but does so starting at the end of the input. Effectively scannings backwards. A mix of code-gen and hardware prefetchers may be responsible for the 1.5x speedup for rust_ipn_stable and c_fluxsort_stable over rust_std_stable. rust_glidesort_stable handles these cases sub-optimally being better than rust_std_stable, but still leaving some room. Curiously gcc seems able to generate better code for the simple act of scanning forward, while rustc seems to catch up when adding a `slice.reverse()` operation.
 
@@ -73,13 +73,13 @@ saws_short is interesting in that, it is essentially, random pattern level perfo
 
 Looking at the scaling upwards for larger inputs, eg. input size 1m:
 
-![alt text](assets/hot-u64-1000000.png)
+<img src="assets/hot-u64-1000000.png" width=600 />
 
 Overall quite similar. With the notable exception that c_fluxsort_stable pulls ahead for random inputs, and rust_glidesort_stable catching up with rust_ipn_stable. The dataset still fits into the shared L3 data cache of the used test machine.
 
 Looking at scaling downwards, eg. input size 24:
 
-![alt text](assets/hot-u64-24.png)
+<img src="assets/hot-u64-24.png" width=600 />
 
 The specialized small-sort implementation in rust_glidesort_stable, seems unable to leverage small fully or partially sorted inputs. c_fluxsort_stable can handle ascending inputs relatively well, but performs the worst for fully descending inputs. rust_ipn_stable can handle fully ascending and descending inputs in N-1 comparisons without allocation, for every input size. rust_std_stable will always heap allocate, but can use the adaptive nature of Timsort to exploit a presorted full or partial streak.
 
@@ -87,23 +87,23 @@ The specialized small-sort implementation in rust_glidesort_stable, seems unable
 
 Signed 32-bit integers are a very common type used to benchmark sort implementations.
 
-![alt text](assets/hot-i32-24.png)
+<img src="assets/hot-i32-24.png" width=600 />
 
-![alt text](assets/hot-i32-10000.png)
+<img src="assets/hot-i32-10000.png" width=600 />
 
-![alt text](assets/hot-i32-1000000.png)
+<img src="assets/hot-i32-1000000.png" width=600 />
 
 Overall similar results to `u64`, c_fluxsort_stable and rust_glidesort_stable benefit more from the smaller type than rust_ipn_stable.
 
 ### Results `String`
 
-![alt text](assets/hot-string-24.png)
+<img src="assets/hot-string-24.png" width=600 />
 
-![alt text](assets/hot-string-10000.png)
+<img src="assets/hot-string-10000.png" width=600 />
 
 For strings `format!("{:010}", val.saturating_abs())`, not supported without source level modification or pointer indirection by c_fluxsort_stable, rust_glidesort_stable is ahead. However rust_ipn_stable is not able to apply it's fast merge and sorting networks because the `Copy` property is used as crude proxy to limit these optimizations to types that can't have interior mutability. Better language support [3](https://internals.rust-lang.org/t/pre-rfc-type-property-functions/18233) would enable these optimizations for types such as `String`. Which would yield:
 
-![alt text](assets/04_02_23_interior_mutability_zen3-hot-string-10000.png)
+<img src="assets/04_02_23_interior_mutability_zen3-hot-string-10000.png" width=600 />
 
 Giving the lead back to rust_ipn_stable for random inputs.
 
@@ -111,9 +111,9 @@ Giving the lead back to rust_ipn_stable for random inputs.
 
 An extreme case, a type that is one kilobyte in size. This type will stress test any sort implementation that performs many copies of the type.
 
-![alt text](assets/hot-1k-24.png)
+<img src="assets/hot-1k-24.png" width=600 />
 
-![alt text](assets/hot-1k-10000.png)
+<img src="assets/hot-1k-10000.png" width=600 />
 
 Overall rust_glidesort_stable is much better in such a scenario. rust_ipn_stable only improves on rust_std_stable where it can filter out common values.
 
@@ -143,9 +143,9 @@ fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 
 This benchmark rewards be mix of exploiting ILP and reducing the total amount of comparisons performed:
 
-![alt text](assets/hot-f128-24.png)
+<img src="assets/hot-f128-24.png" width=600 />
 
-![alt text](assets/hot-f128-10000.png)
+<img src="assets/hot-f128-10000.png" width=600 />
 
 rust_glidesort_stable seems better than rust_ipn_stable at completing the sort with fewer calls to the comparison function, with the exception of inputs with common values that can be filtered out. Both eclipse rust_std_stable in terms of runtime and energy efficiency.
 
