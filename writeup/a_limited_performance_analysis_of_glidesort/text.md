@@ -2,7 +2,7 @@
 
 WIP: Please do not publish.
 
-Author: Lukas Bergdoll @Voultapher
+Author: Lukas Bergdoll @Voultapher  
 Date: 04.02.2023
 
 This is a limited performance analysis of the recently released novel sort implementation glidesort [1](https://github.com/orlp/glidesort).
@@ -42,7 +42,7 @@ Modern sort implementations are adaptive, they will try to exploit existing patt
 - `ascending`, numbers `0..size`
 - `descending`, numbers `0..size` reversed
 - `saws_long`, `(size as f64).log2().round()` number of randomly selected ascending and descending streaks
-- `saws_long`, randomly selected ascending and descending streaks of length 22
+- `saws_short`, randomly selected ascending and descending streaks of length 22
 
 The contestants are:
 
@@ -65,7 +65,7 @@ Starting with the fully ascending and descending patterns. Both rust_ipn_stable 
 
 The bread and butter of sort algorithms is their performance, or viewed differently their power efficiency, when sorting random inputs. Here rust_ipn_stable and c_fluxsort_stable are very closely matched, even though they have completely different implementations. rust_glidesort_stable eclipses the current Rust standard library implementation by a factor of 2, but falls short of reaching the top, requiring ~2.3x the time and energy of c_fluxsort_stable to perform the same task.
 
-The next pattern random_5p allows rust_ipn_stable to really flex its capabilities, fundamentally it's a Timsort with faster small sort, faster merge function and an analysis that periodically looks for recurring values and filters them out with a stable partition. It finds the common value and merges the partitioned run with the remaining runs. c_fluxsort_stable is hybrid of mergesort and quicksort, switching to a merge sort if a front up analysis suggests the presence of many streaks. Here it misclassifies the input as having many streaks, and is stuck unable to filter out the common value. rust_glidesort_stable doubles the runtime of c_fluxsort_stable, still ~1.65x ahead of it's random performance, clearly it's able to exploit this property of the input somehow. rust_std_stable is ~10.5x slower than rust_ipn_stable. rust_std_stable can find existing short streaks of the common value, and spends less time in insertion sort compared to a fully random input.
+The next pattern random_5p allows rust_ipn_stable to really flex its capabilities, fundamentally it's a Timsort with faster small sort, faster merge function and an analysis that periodically looks for recurring values and filters them out with a stable partition. It finds the common value and merges the partitioned run with the remaining runs. c_fluxsort_stable is a hybrid of mergesort and quicksort, switching to a merge sort if a front up analysis suggests the presence of many streaks. Here it misclassifies the input as having many streaks, and is stuck unable to filter out the common value. rust_glidesort_stable doubles the runtime of c_fluxsort_stable, still ~1.65x ahead of it's random performance, clearly it's able to exploit this property of the input somehow. rust_std_stable is ~10.5x slower than rust_ipn_stable. rust_std_stable can find existing short streaks of the common value, and spends less time in insertion sort compared to a fully random input.
 
 The extreme case of low cardinality inputs is random_binary, rust_ipn_stable leads the charts, reliably identifying the two values as common and partitioning them out. rust_glidesort_stable takes ~1.67x the time and energy to perform the same operation. c_fluxsort_stable sits in-between the two. rust_std_stable sits at ~14.9x slower than first place rust_ipn_stable.
 
@@ -183,7 +183,7 @@ A crude measurement of code complexity is lines of code as measured with tokei. 
 - rust_glidesort_stable ~2300 LoC
 ```
 
-rust_std_stable is by far the simplest implementation. An additional source of complexity can be complex state invariants. rust_glidesort_stable introduces 20+ structs, some with very complex state invariants like `MergeStack`. In contrast rust_ipn_stable mostly introduces faster versions of the existing building blocks of rust_std_stable eg. `parity_merge_plus` which implements the same interface as the existing `merge` function, readable as straight line code.
+rust_std_stable is by far the simplest implementation. An additional source of complexity can be complex state invariants. rust_glidesort_stable introduces 20+ structs, some with complex state invariants like `MergeStack`. In contrast rust_ipn_stable mostly introduces faster versions of the existing building blocks of rust_std_stable eg. `parity_merge_plus` which implements the same interface as the existing `merge` function, readable as straight line code.
 
 ### Binary size
 
