@@ -114,14 +114,44 @@ def format_time(time_val):
     return f"{time_val:.1f}"
 
 
+def build_color_palette():
+    # Use color blind palette to increase accessibility.
+    palette = list(Colorblind[8])
+
+    # Make colors more consistent by pinning them to a specific sort
+    # regardless of the set of tested sorts.
+    # This avoids color swapping between different graphs.
+    pinned_colors = {
+        # Stable
+        "c_fluxsort_stable": palette[0],
+        "cpp_std_sys_stable": palette[1],
+        "rust_std_stable": palette[2],
+        "rust_glidesort_stable": palette[3],
+        "cpp_std_libcxx_stable": palette[4],
+        "rust_ipn_stable": palette[5],
+        "cpp_powersort_stable": palette[6],
+        "cpp_powersort_4way_stable": palette[7],
+        "rust_wpwoodjr": palette[7],
+        # Unstable
+        "c_crumsort_unstable": palette[0],
+        "cpp_std_sys_unstable": palette[1],
+        "rust_std_unstable": palette[2],
+        "cpp_pdqsort_unstable": palette[3],
+        "cpp_std_libcxx_unstable": palette[4],
+        "rust_ipn_unstable": palette[5],
+        "cpp_ips4o_unstable": palette[6],
+        "cpp_blockquicksort": palette[7],
+        # There are more sorts but they don't really fit the graph or colors at
+        # the same time
+    }
+
+    return pinned_colors
+
+
+COLOR_PALETTE = build_color_palette()
+
+
 def plot_single_size(ty, prediction_state, test_size, values):
-    sort_names = sorted(list(list(values.values())[0].keys()))
-    pallet_len = max(3, len(sort_names))
-    palette = Colorblind[pallet_len]
-
-    def map_sort_to_color(sort_name):
-        return palette[sort_names.index(sort_name)]
-
     max_time_ns = max([max(val.values()) for val in values.values()])
     time_div, time_unit = find_time_scale(max_time_ns)
     max_time = max_time_ns / time_div
@@ -135,7 +165,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
         ):
             y.append((pattern, sort_name))
             bench_times.append(bench_times_ns / time_div)
-            colors.append(map_sort_to_color(sort_name))
+            colors.append(COLOR_PALETTE[sort_name])
 
     bench_times_text = [format_time(x) for x in bench_times]
 
@@ -215,5 +245,5 @@ if __name__ == "__main__":
 
     groups = extract_groups(combined_result)
 
-    name = os.path.basename(sys.argv[1]).partition('.')[0]
+    name = os.path.basename(sys.argv[1]).partition(".")[0]
     plot_sizes(name, groups)
