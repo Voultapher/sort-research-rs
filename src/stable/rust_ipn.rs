@@ -129,8 +129,12 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    // I'd argue most system are not as memory constrained that the double
-    let buf_len_wish = len;
+    let buf_len_wish = if has_no_direct_iterior_mutability::<T>() {
+        len
+    } else {
+        len / 2
+    };
+
     let buf_len_fallback_min = len / 2;
     let buf = BufGuard::new(
         buf_len_wish,
@@ -228,7 +232,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
                     // check_vec = mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec();
 
                     merge_run_with_equal(merge_slice, buf_ptr, &left, &right, compare);
-                } else if qualifies_for_parity_merge::<T>() && merge_slice.len() <= buf_len {
+                } else if has_no_direct_iterior_mutability::<T>() && merge_slice.len() <= buf_len {
                     parity_merge_plus(merge_slice, left.len, buf_ptr, &mut |a, b| {
                         compare(a, b) == Ordering::Less
                     });
@@ -928,8 +932,6 @@ unsafe fn merge_run_with_equal<T, F>(
     }
 }
 
-/// Check whether `v` applies for small sort optimization and if so sort it.
-/// `v[..end]` is assumed already sorted.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort_small_stable<T, F>(v: &mut [T], end: usize, is_less: &mut F) -> bool
 where
@@ -937,7 +939,7 @@ where
 {
     let len = v.len();
 
-    if qualifies_for_parity_merge::<T>() {
+    if is_cheap_to_move::<T>() {
         // Testing showed that even though this incurs more comparisons, up to size 32 (4 * 8),
         // avoiding the allocation and sticking with simple code is worth it. Going further eg. 40
         // is still worth it for u64 or even types with more expensive comparisons, but risks
@@ -966,12 +968,19 @@ where
             let mut swap = mem::MaybeUninit::<[T; MAX_NO_ALLOC_SIZE]>::uninit();
             let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-            // SAFETY: We checked that T is Copy and thus observation safe.
-            // Should is_less panic v was not modified in parity_merge and retains it's original input.
-            // swap and v must not alias and swap has v.len() space.
-            unsafe {
-                parity_merge(&mut v[..even_len], swap_ptr, is_less);
-                ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
+            if has_no_direct_iterior_mutability::<T>() {
+                // SAFETY: We checked that T is Copy and thus observation safe.
+                // Should is_less panic v was not modified in parity_merge and retains it's original input.
+                // swap and v must not alias and swap has v.len() space.
+                unsafe {
+                    parity_merge(&mut v[..even_len], swap_ptr, is_less);
+                    ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
+                }
+            } else {
+                // SAFETY: swap_ptr can hold v.len() elements and both sides are at least of len 1.
+                unsafe {
+                    merge(&mut v[..even_len], len_div_2, swap_ptr, is_less);
+                }
             }
 
             if len != even_len {
@@ -1016,7 +1025,8 @@ where
 
     const FAST_SORT_SIZE: usize = 32;
 
-    if qualifies_for_parity_merge::<T>()
+    if is_cheap_to_move::<T>()
+        && has_no_direct_iterior_mutability::<T>()
         && (start + FAST_SORT_SIZE) <= len
         && start_end_diff <= MAX_IGNORE_PRE_SORTED
     {
@@ -1300,22 +1310,27 @@ impl<T: IsCopyMarker> IsCopy for T {
     }
 }
 
+#[inline(always)]
+const fn is_cheap_to_move<T>() -> bool {
+    // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
+    // down:
+    //
+    // - Type size: Large types are more expensive to move and the time won avoiding branches can be
+    //              offset by the increased cost of moving the values.
+    //
+    // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
+    mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
+}
+
 // I would like to make this a const fn.
 #[inline(always)]
-fn qualifies_for_parity_merge<T>() -> bool {
-    // This checks two things:
-    //
-    // - Type size: Is it ok to create 40 of them on the stack.
-    //
+fn has_no_direct_iterior_mutability<T>() -> bool {
     // - Can the type have interior mutability, this is checked by testing if T is Copy.
     //   If the type can have interior mutability it may alter itself during comparison in a way
     //   that must be observed after the sort operation concludes.
     //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
-
-    let is_small = mem::size_of::<T>() <= mem::size_of::<[usize; 2]>();
-    let is_copy = T::is_copy();
-
-    return is_small && is_copy;
+    //   FIXME use proper abstraction
+    T::is_copy()
 }
 
 #[inline(always)]
@@ -1423,6 +1438,9 @@ where
     //
     // Note, the pointers that have been written, are now one past where they were read and
     // copied. written == incremented or decremented + copy to dest.
+
+    assert!(has_no_direct_iterior_mutability::<T>());
+
     let len = v.len();
     let src_ptr = v.as_ptr();
 
@@ -1460,10 +1478,11 @@ where
     // Also `v.as_ptr` and `dest_ptr` must not alias.
     //
     // The caller must guarantee that T cannot modify itself inside is_less.
+
     let len = v.len();
     let src_ptr = v.as_ptr();
 
-    assert!(mid > 0 && mid < len);
+    assert!(mid > 0 && mid < len && has_no_direct_iterior_mutability::<T>());
 
     // TODO explain why this is fast.
 
@@ -1697,7 +1716,7 @@ fn sort32_stable<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    assert!(v.len() == 32 && T::is_copy());
+    assert!(v.len() == 32 && has_no_direct_iterior_mutability::<T>());
 
     let mut swap = mem::MaybeUninit::<[T; 32]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
