@@ -1,9 +1,13 @@
 # A limited performance analysis of glidesort
 
+WIP: Please do not publish.
+
 Author: Lukas Bergdoll @Voultapher
 Date: 04.02.2023
 
 This is a limited performance analysis of the recently released novel sort implementation glidesort [1](https://github.com/orlp/glidesort).
+
+Bias disclaimer. The author of this analysis is the author of the ipn family of sort implementations.
 
 
 ### Benchmark setup
@@ -168,3 +172,41 @@ rust_glidesort_stable:
 ```
 
 rust_ipn_stable sees no meaningful change over the existing standard library implementation. In contrast rust_glidesort_stable incurs a significant slowdown for debug builds.
+
+### Code complexity
+
+A crude measurement of code complexity is lines of code as measured with tokei. Non sort related code subtracted:
+
+```
+- rust_std_stable ~220 LoC
+- rust_ipn_stable ~930 LoC
+- rust_glidesort_stable ~2300 LoC
+```
+
+rust_std_stable is by far the simplest implementation. An additional source of complexity can be complex state invariants. rust_glidesort_stable introduces 20+ structs, some with very complex state invariants like `MergeStack`. In contrast rust_ipn_stable mostly introduces faster versions of the existing building blocks of rust_std_stable eg. `parity_merge_plus` which implements the same interface as the existing `merge` function, readable as straight line code.
+
+### Binary size
+
+Instantiating the sort for a selection of types (`u64`, `u32`, `i32`, `i16`, `i64`, `i128` and `String`) yields:
+
+Release build `lto = "thin"` and strip:
+
+```
+- baseline no sort 312kb
+- rust_std_stable 336kb
+- rust_ipn_stable 386kb
+- rust_glidesort_stable 551kb
+```
+
+Code size seems to scale similar to LoC.
+
+Release build `lto = "thin"`, `opt-level = "s"` and strip:
+
+```
+- baseline no sort 307kb
+- rust_std_stable 324kb
+- rust_ipn_stable 373kb
+- rust_glidesort_stable 490kb
+```
+
+Optimizing for code-size yields similar results.
