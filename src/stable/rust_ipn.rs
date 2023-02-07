@@ -115,17 +115,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    // let (mut end, mut all_equal) = natural_sort(v, ptr::null_mut(), compare);
-    let (mut end, was_reversed) = find_streak(v, &mut |a, b| compare(a, b) == Ordering::Less);
-    if was_reversed {
-        v[..end].reverse();
-    }
-
-    if end == len {
-        // The input was either fully ascending or descending. It is now sorted and we can
-        // return without allocating.
-        return;
-    } else if sort_small_stable(v, end, &mut |a, b| compare(a, b) == Ordering::Less) {
+    if sort_small_stable(v, &mut |a, b| compare(a, b) == Ordering::Less) {
         return;
     }
 
@@ -145,61 +135,116 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     let buf_ptr = buf.buf_ptr.as_ptr();
     let buf_len = buf.capacity;
 
-    let mut runs = RunVec::new(&run_alloc_fn, &run_dealloc_fn);
+    // Experiments with stack allocation for small inputs showed worse performance.
+    // May depend on the platform.
+    merge_sort_impl(v, compare, buf_ptr, buf_len, run_alloc_fn, run_dealloc_fn);
+
+    // Extremely basic versions of Vec.
+    // Their use is super limited and by having the code here, it allows reuse between the sort
+    // implementations.
+    struct BufGuard<T, ElemDeallocF>
+    where
+        ElemDeallocF: Fn(*mut T, usize),
+    {
+        buf_ptr: ptr::NonNull<T>,
+        capacity: usize,
+        elem_dealloc_fn: ElemDeallocF,
+    }
+
+    impl<T, ElemDeallocF> BufGuard<T, ElemDeallocF>
+    where
+        ElemDeallocF: Fn(*mut T, usize),
+    {
+        fn new<ElemAllocF>(
+            len_wish: usize,
+            len_fallback_min: usize,
+            elem_alloc_fn: ElemAllocF,
+            elem_dealloc_fn: ElemDeallocF,
+        ) -> Self
+        where
+            ElemAllocF: Fn(usize) -> *mut T,
+        {
+            let mut buf_ptr = elem_alloc_fn(len_wish);
+            let mut capacity = len_wish;
+
+            // There are overcommit style global allocators, but on such systems chances are half
+            // the length is gonna be a problem too.
+            if buf_ptr.is_null() {
+                buf_ptr = elem_alloc_fn(len_fallback_min);
+                capacity = len_fallback_min;
+
+                if buf_ptr.is_null() {
+                    // Maybe fall back to in-place stable sort?
+                    panic!("Unable to allocate memory for sort");
+                }
+            }
+
+            Self {
+                buf_ptr: ptr::NonNull::new(buf_ptr).unwrap(),
+                capacity,
+                elem_dealloc_fn,
+            }
+        }
+    }
+
+    impl<T, ElemDeallocF> Drop for BufGuard<T, ElemDeallocF>
+    where
+        ElemDeallocF: Fn(*mut T, usize),
+    {
+        fn drop(&mut self) {
+            (self.elem_dealloc_fn)(self.buf_ptr.as_ptr(), self.capacity);
+        }
+    }
+}
+
+pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
+    v: &mut [T],
+    compare: &mut CmpF,
+    buf_ptr: *mut T, // TODO mem::MaybeUninit<&mut [T]>,
+    buf_len: usize,
+    run_alloc_fn: RunAllocF,
+    run_dealloc_fn: RunDeallocF,
+) where
+    CmpF: FnMut(&T, &T) -> Ordering,
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
+{
+    // The caller should have already checked that.
+    debug_assert!(!T::IS_ZST);
+
+    let len = v.len();
 
     const MIN_REPROBE_DISTANCE: usize = 256;
-    let mut next_probe_spot = 0;
-    let mut start = 0;
-    let mut all_equal = false;
-
     let max_probe_begin_len: usize = cmp::max(len / MIN_REPROBE_DISTANCE, 20);
     // Limit the possibility of doing consecutive ineffective partitions.
     let min_good_partiton_len: usize = ((len as f64).log2() * 2.0).round() as usize;
 
-    // Now that we know it's not fully sorted already or a small input.
-    // And we allocated buf, try to detect a common value.
-    if buf_len == len && end < max_probe_begin_len {
-        let probe_common_result =
-            probe_for_common_val(v, &mut |a, b| compare(a, b) == Ordering::Equal);
+    let mut runs = RunVec::new(&run_alloc_fn, &run_dealloc_fn);
 
-        if let Some(idx) = probe_common_result {
-            // SAFETY: We checked that buf_ptr can hold `v`.
-            end = unsafe {
-                partition_equal_stable(v, idx, buf_ptr, &mut |a, b| {
-                    compare(a, b) == Ordering::Equal
-                })
-            };
-
-            all_equal = true;
-            if end < min_good_partiton_len {
-                next_probe_spot = MIN_REPROBE_DISTANCE;
-            }
-        } else {
-            next_probe_spot = MIN_REPROBE_DISTANCE;
-        }
-    }
+    let mut start = 0;
+    let mut end = 0;
+    let mut next_probe_spot = 0;
+    let mut all_equal = false;
 
     // Scan forward. Memory pre-fetching prefers forward scanning vs backwards scanning, and the
     // code-gen is usually better. For the most sensitive types such as integers, these are merged
     // bidirectionally at once. So there is no benefit in scanning backwards.
     while end < len {
-        if start != 0 {
-            let probe_for_common = start >= next_probe_spot && (len - start) <= buf_len;
+        let probe_for_common = start >= next_probe_spot && (len - start) <= buf_len;
 
-            // SAFETY: We checked that buf_ptr can hold `v[start..]` if probe_for_common is true.
-            (end, all_equal) =
-                unsafe { natural_sort(&mut v[start..], buf_ptr, probe_for_common, compare) };
+        // SAFETY: We checked that buf_ptr can hold `v[start..]` if probe_for_common is true.
+        (end, all_equal) =
+            unsafe { natural_sort(&mut v[start..], buf_ptr, probe_for_common, compare) };
 
-            // Avoid re-probing the same area again and again if probing failed or was of low
-            // quality.
-            next_probe_spot = if !probe_for_common || (all_equal && end >= min_good_partiton_len) {
-                next_probe_spot
-            } else {
-                start + MIN_REPROBE_DISTANCE
-            };
+        // Avoid re-probing the same area again and again if probing failed or was of low
+        // quality.
+        next_probe_spot = if !probe_for_common || (all_equal && end >= min_good_partiton_len) {
+            next_probe_spot
+        } else {
+            start + MIN_REPROBE_DISTANCE
+        };
 
-            end += start;
-        }
+        end += start;
 
         // Insert some more elements into the run if it's too short. Insertion sort is faster than
         // merge sort on short sequences, so this significantly improves performance.
@@ -291,63 +336,6 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             }
         } else {
             None
-        }
-    }
-
-    // Extremely basic versions of Vec.
-    // Their use is super limited and by having the code here, it allows reuse between the sort
-    // implementations.
-    struct BufGuard<T, ElemDeallocF>
-    where
-        ElemDeallocF: Fn(*mut T, usize),
-    {
-        buf_ptr: ptr::NonNull<T>,
-        capacity: usize,
-        elem_dealloc_fn: ElemDeallocF,
-    }
-
-    impl<T, ElemDeallocF> BufGuard<T, ElemDeallocF>
-    where
-        ElemDeallocF: Fn(*mut T, usize),
-    {
-        fn new<ElemAllocF>(
-            len_wish: usize,
-            len_fallback_min: usize,
-            elem_alloc_fn: ElemAllocF,
-            elem_dealloc_fn: ElemDeallocF,
-        ) -> Self
-        where
-            ElemAllocF: Fn(usize) -> *mut T,
-        {
-            let mut buf_ptr = elem_alloc_fn(len_wish);
-            let mut capacity = len_wish;
-
-            // There are overcommit style global allocators, but on such systems chances are half
-            // the length is gonna be a problem too.
-            if buf_ptr.is_null() {
-                buf_ptr = elem_alloc_fn(len_fallback_min);
-                capacity = len_fallback_min;
-
-                if buf_ptr.is_null() {
-                    // Maybe fall back to in-place stable sort?
-                    panic!("Unable to allocate memory for sort");
-                }
-            }
-
-            Self {
-                buf_ptr: ptr::NonNull::new(buf_ptr).unwrap(),
-                capacity,
-                elem_dealloc_fn,
-            }
-        }
-    }
-
-    impl<T, ElemDeallocF> Drop for BufGuard<T, ElemDeallocF>
-    where
-        ElemDeallocF: Fn(*mut T, usize),
-    {
-        fn drop(&mut self) {
-            (self.elem_dealloc_fn)(self.buf_ptr.as_ptr(), self.capacity);
         }
     }
 
@@ -933,74 +921,91 @@ unsafe fn merge_run_with_equal<T, F>(
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort_small_stable<T, F>(v: &mut [T], end: usize, is_less: &mut F) -> bool
+fn sort_small_stable<T, F>(v: &mut [T], is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
+
+    // Slices of up to this length get sorted using optimized sorting for small slices.
+    const fn max_len_small_sort_stable<T>() -> usize {
+        if is_cheap_to_move::<T>() {
+            32
+        } else {
+            20
+        }
+    }
+
+    if len > max_len_small_sort_stable::<T>() {
+        return false;
+    }
+
+    let (end, was_reversed) = find_streak(v, is_less);
+    if was_reversed {
+        v[..end].reverse();
+    }
+
+    if end == len {
+        return true;
+    }
 
     if is_cheap_to_move::<T>() {
         // Testing showed that even though this incurs more comparisons, up to size 32 (4 * 8),
         // avoiding the allocation and sticking with simple code is worth it. Going further eg. 40
         // is still worth it for u64 or even types with more expensive comparisons, but risks
         // incurring just too many comparisons than doing the regular TimSort.
-        const MAX_NO_ALLOC_SIZE: usize = 32;
-        if len <= MAX_NO_ALLOC_SIZE {
-            if len < 8 {
-                insertion_sort_shift_left(v, end, is_less);
-                return true;
-            } else if len < 16 {
-                sort8_stable(&mut v[0..8], is_less);
-                insertion_sort_shift_left(v, 8, is_less);
-                return true;
-            }
-
-            // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
-            let even_len = len - (len % 2 != 0) as usize;
-            let len_div_2 = even_len / 2;
-
-            sort8_stable(&mut v[0..8], is_less);
-            sort8_stable(&mut v[len_div_2..(len_div_2 + 8)], is_less);
-
-            insertion_sort_shift_left(&mut v[0..len_div_2], 8, is_less);
-            insertion_sort_shift_left(&mut v[len_div_2..], 8, is_less);
-
-            let mut swap = mem::MaybeUninit::<[T; MAX_NO_ALLOC_SIZE]>::uninit();
-            let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-            if has_no_direct_iterior_mutability::<T>() {
-                // SAFETY: We checked that T is Copy and thus observation safe.
-                // Should is_less panic v was not modified in parity_merge and retains it's original input.
-                // swap and v must not alias and swap has v.len() space.
-                unsafe {
-                    parity_merge(&mut v[..even_len], swap_ptr, is_less);
-                    ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
-                }
-            } else {
-                // SAFETY: swap_ptr can hold v.len() elements and both sides are at least of len 1.
-                unsafe {
-                    merge(&mut v[..even_len], len_div_2, swap_ptr, is_less);
-                }
-            }
-
-            if len != even_len {
-                // SAFETY: We know len >= 2.
-                unsafe {
-                    insert_tail(v, is_less);
-                }
-            }
-
-            return true;
-        }
-    } else {
-        const MAX_NO_ALLOC_SIZE: usize = 20;
-        if len <= MAX_NO_ALLOC_SIZE {
+        if len < 8 {
             insertion_sort_shift_left(v, end, is_less);
+            insertion_sort_shift_left(v, 1, is_less);
+            return true;
+        } else if len < 16 {
+            sort8_stable(&mut v[0..8], is_less);
+            insertion_sort_shift_left(v, 8, is_less);
             return true;
         }
+
+        // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
+        let even_len = len - (len % 2 != 0) as usize;
+        let len_div_2 = even_len / 2;
+
+        sort8_stable(&mut v[0..8], is_less);
+        sort8_stable(&mut v[len_div_2..(len_div_2 + 8)], is_less);
+
+        insertion_sort_shift_left(&mut v[0..len_div_2], 8, is_less);
+        insertion_sort_shift_left(&mut v[len_div_2..], 8, is_less);
+
+        let mut swap = mem::MaybeUninit::<[T; max_len_small_sort_stable::<i32>()]>::uninit();
+        let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+        if has_no_direct_iterior_mutability::<T>() {
+            // SAFETY: We checked that T is Copy and thus observation safe.
+            // Should is_less panic v was not modified in parity_merge and retains it's original input.
+            // swap and v must not alias and swap has v.len() space.
+            unsafe {
+                parity_merge(&mut v[..even_len], swap_ptr, is_less);
+                ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
+            }
+        } else {
+            // SAFETY: swap_ptr can hold v.len() elements and both sides are at least of len 1.
+            unsafe {
+                merge(&mut v[..even_len], len_div_2, swap_ptr, is_less);
+            }
+        }
+
+        if len != even_len {
+            // SAFETY: We know len >= 2.
+            unsafe {
+                insert_tail(v, is_less);
+            }
+        }
+
+        return true;
+    } else {
+        insertion_sort_shift_left(v, end, is_less);
+        return true;
     }
 
-    false
+    true
 }
 
 /// Takes a range as denoted by start and end, that is already sorted and extends it to the right if
