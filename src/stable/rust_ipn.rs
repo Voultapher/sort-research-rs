@@ -90,6 +90,20 @@ where
     );
 }
 
+unsafe fn maybe_uninit_from_buf<'a, T>(
+    ptr: &'a *mut T,
+    len: usize,
+) -> &'a mut [mem::MaybeUninit<T>] {
+    &mut *ptr::slice_from_raw_parts_mut(*ptr as *mut mem::MaybeUninit<T>, len)
+}
+
+fn unpack_maybe_unit_slice<T>(buf: &mut [mem::MaybeUninit<T>]) -> (*mut T, usize) {
+    let buf_ptr = mem::MaybeUninit::slice_as_mut_ptr(buf);
+    let buf_len = buf.len();
+
+    (buf_ptr, buf_len)
+}
+
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     v: &mut [T],
@@ -102,8 +116,8 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     CmpF: FnMut(&T, &T) -> Ordering,
     ElemAllocF: Fn(usize) -> *mut T,
     ElemDeallocF: Fn(*mut T, usize),
-    RunAllocF: Fn(usize) -> *mut TimSortRun,
-    RunDeallocF: Fn(*mut TimSortRun, usize),
+    RunAllocF: Fn(usize) -> *mut TimSortRun + Copy,
+    RunDeallocF: Fn(*mut TimSortRun, usize) + Copy,
 {
     // The caller should have already checked that.
     debug_assert!(!T::IS_ZST);
@@ -119,12 +133,14 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    let buf_len_wish = if has_no_direct_iterior_mutability::<T>() {
+    let buf_len_wish = if !has_direct_iterior_mutability::<T>() {
         len
     } else {
         len / 2
     };
 
+    // Experiments with stack allocation for small inputs showed worse performance.
+    // May depend on the platform.
     let buf_len_fallback_min = len / 2;
     let buf = BufGuard::new(
         buf_len_wish,
@@ -135,9 +151,10 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     let buf_ptr = buf.buf_ptr.as_ptr();
     let buf_len = buf.capacity;
 
-    // Experiments with stack allocation for small inputs showed worse performance.
-    // May depend on the platform.
-    merge_sort_impl(v, compare, buf_ptr, buf_len, run_alloc_fn, run_dealloc_fn);
+    // SAFETY: BufGuard has to report the correct ptr and len.
+    let buf_m = unsafe { maybe_uninit_from_buf(&buf_ptr, buf_len) };
+
+    merge_sort_impl(v, compare, buf_m, run_alloc_fn, run_dealloc_fn);
 
     // Extremely basic versions of Vec.
     // Their use is super limited and by having the code here, it allows reuse between the sort
@@ -200,111 +217,161 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
 pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
     v: &mut [T],
     compare: &mut CmpF,
-    buf_ptr: *mut T, // TODO mem::MaybeUninit<&mut [T]>,
-    buf_len: usize,
+    buf: &mut [mem::MaybeUninit<T>],
     run_alloc_fn: RunAllocF,
     run_dealloc_fn: RunDeallocF,
 ) where
     CmpF: FnMut(&T, &T) -> Ordering,
-    RunAllocF: Fn(usize) -> *mut TimSortRun,
-    RunDeallocF: Fn(*mut TimSortRun, usize),
+    RunAllocF: Fn(usize) -> *mut TimSortRun + Copy,
+    RunDeallocF: Fn(*mut TimSortRun, usize) + Copy,
 {
     // The caller should have already checked that.
     debug_assert!(!T::IS_ZST);
 
     let len = v.len();
 
-    const MIN_REPROBE_DISTANCE: usize = 256;
-    let max_probe_begin_len: usize = cmp::max(len / MIN_REPROBE_DISTANCE, 20);
-    // Limit the possibility of doing consecutive ineffective partitions.
-    let min_good_partiton_len: usize = ((len as f64).log2() * 2.0).round() as usize;
+    let (buf_ptr, buf_len) = unpack_maybe_unit_slice(buf);
 
-    let mut runs = RunVec::new(&run_alloc_fn, &run_dealloc_fn);
+    // Limit the possibility of doing consecutive ineffective partitions.
+    let min_good_partiton_len = (len.ilog2() * 2) as usize;
+    let min_re_probe_distance = cmp::max(256, min_good_partiton_len);
+
+    let mut runs = TimSortRunVec::new(&run_alloc_fn, &run_dealloc_fn);
+    let mut equal_runs = TimSortRunVec::new(&run_alloc_fn, &run_dealloc_fn);
 
     let mut start = 0;
     let mut end = 0;
     let mut next_probe_spot = 0;
-    let mut all_equal = false;
+    let mut run_end = len;
 
     // Scan forward. Memory pre-fetching prefers forward scanning vs backwards scanning, and the
     // code-gen is usually better. For the most sensitive types such as integers, these are merged
     // bidirectionally at once. So there is no benefit in scanning backwards.
-    while end < len {
-        let probe_for_common = start >= next_probe_spot && (len - start) <= buf_len;
+    while end < run_end {
+        let local_v = &mut v[start..run_end];
+        let probe_for_common = start >= next_probe_spot && local_v.len() <= buf_len;
 
-        // SAFETY: We checked that buf_ptr can hold `v[start..]` if probe_for_common is true.
-        (end, all_equal) =
-            unsafe { natural_sort(&mut v[start..], buf_ptr, probe_for_common, compare) };
+        // Probe for common value with priority over streak analysis.
+        if probe_for_common {
+            let mut equal_count = 0;
 
-        // Avoid re-probing the same area again and again if probing failed or was of low
-        // quality.
-        next_probe_spot = if !probe_for_common || (all_equal && end >= min_good_partiton_len) {
-            next_probe_spot
+            if let Some(common_idx) =
+                probe_for_common_val(local_v, &mut |a, b| compare(a, b) == Ordering::Equal)
+            {
+                // SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for
+                // `v.len()` writes.
+                equal_count = unsafe {
+                    partition_equal_stable(local_v, common_idx, buf_ptr, &mut |a, b| {
+                        compare(a, b) == Ordering::Equal
+                    })
+                };
+            }
+
+            if equal_count >= min_good_partiton_len {
+                run_end -= equal_count;
+                equal_runs.push(TimSortRun {
+                    start: run_end,
+                    len: equal_count,
+                });
+            } else {
+                // Avoid re-probing the same area again and again if probing failed or was of low
+                // quality.
+                next_probe_spot = start + min_re_probe_distance;
+            }
+
+            // It's important that this can reach the collapse, otherwise it might miss the end
+            // condition for the non equal runs.
         } else {
-            start + MIN_REPROBE_DISTANCE
-        };
+            let (mut local_end, was_reversed) =
+                find_streak(local_v, &mut |a, b| compare(a, b) == Ordering::Less);
+            if was_reversed {
+                local_v[..local_end].reverse();
+            }
 
-        end += start;
+            // Insert some more elements into the run if it's too short. Insertion sort is faster than
+            // merge sort on short sequences, so this significantly improves performance.
+            local_end = provide_sorted_batch(local_v, 0, local_end, &mut |a, b| {
+                compare(a, b) == Ordering::Less
+            });
 
-        // Insert some more elements into the run if it's too short. Insertion sort is faster than
-        // merge sort on short sequences, so this significantly improves performance.
-        let new_end =
-            provide_sorted_batch(v, start, end, &mut |a, b| compare(a, b) == Ordering::Less);
+            end = start + local_end;
 
-        // The all_equal assertion only holds if provide_sorted_batch did *not* extend the sorted
-        // batch.
-        all_equal = all_equal && new_end == end;
-        end = new_end;
-
-        // Push this run onto the stack.
-        runs.push(TimSortRun {
-            start,
-            len: end - start,
-            all_equal,
-        });
-        start = end;
-
-        // type DebugT = (i32, i32);
-        // let mut check_vec = Vec::new();
+            // Push this run onto the stack.
+            runs.push(TimSortRun {
+                start,
+                len: local_end,
+            });
+            start = end;
+        }
 
         // Merge some pairs of adjacent runs to satisfy the invariants.
-        while let Some(r) = collapse(runs.as_slice(), len) {
-            let left = runs[r];
-            let right = runs[r + 1];
-            let merge_slice = &mut v[left.start..right.start + right.len];
-            unsafe {
-                if (left.all_equal || right.all_equal) && merge_slice.len() <= buf_len {
-                    // check_vec = mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec();
-
-                    merge_run_with_equal(merge_slice, buf_ptr, &left, &right, compare);
-                } else if has_no_direct_iterior_mutability::<T>() && merge_slice.len() <= buf_len {
-                    parity_merge_plus(merge_slice, left.len, buf_ptr, &mut |a, b| {
-                        compare(a, b) == Ordering::Less
-                    });
-                    ptr::copy_nonoverlapping(buf_ptr, merge_slice.as_mut_ptr(), merge_slice.len());
-                } else {
-                    merge(merge_slice, left.len, buf_ptr, &mut |a, b| {
-                        compare(a, b) == Ordering::Less
-                    });
-                }
-            }
-            runs[r + 1] = TimSortRun {
-                start: left.start,
-                len: left.len + right.len,
-                all_equal: false,
-            };
-            runs.remove(r);
-
-            // if (left.all_equal || right.all_equal) {
-            //     check_vec.sort();
-            //     let x = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice) };
-            //     assert_eq!(x, check_vec);
-            // }
-        }
+        collapse_loop(v, buf_ptr, buf_len, run_end, &mut runs, &mut |a, b| {
+            compare(a, b) == Ordering::Less
+        });
     }
 
-    // Finally, exactly one run must remain in the stack.
-    debug_assert!(runs.len() == 1 && runs[0].start == 0 && runs[0].len == len);
+    if equal_runs.len != 0 {
+        // Now take care of all the fully equal runs that were put at the end of v.
+
+        // TODO this could be done more efficiently sorting only the runs.
+        equal_runs.as_mut_slice().reverse();
+
+        collapse_loop(v, buf_ptr, buf_len, len, &mut equal_runs, &mut |a, b| {
+            compare(a, b) == Ordering::Less
+        });
+
+        debug_assert!(runs.len() <= 1 && equal_runs.len() == 1 && equal_runs[0].start == run_end);
+
+        if run_end > 0 {
+            // SAFETY: TODO
+            unsafe {
+                merge(v, run_end, buf_ptr, buf_len, &mut |a, b| {
+                    compare(a, b) == Ordering::Less
+                });
+            }
+        }
+    } else {
+        // Finally, exactly one run must remain in the stack.
+        debug_assert!(runs.len() == 1 && runs[0].start == 0 && runs[0].len == len);
+    }
+}
+
+fn collapse_loop<T, F, RunAllocF, RunDeallocF>(
+    v: &mut [T],
+    buf_ptr: *mut T,
+    buf_len: usize,
+    stop: usize,
+    runs: &mut TimSortRunVec<RunAllocF, RunDeallocF>,
+    is_less: &mut F,
+) where
+    F: FnMut(&T, &T) -> bool,
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
+{
+    // type DebugT =
+    // let mut check_vec = Vec::new();
+
+    while let Some(r) = collapse(runs.as_slice(), stop) {
+        let left = runs[r];
+        let right = runs[r + 1];
+        let merge_slice = &mut v[left.start..right.start + right.len];
+
+        // check_vec = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice).to_vec() };
+
+        // SAFETY: TODO
+        unsafe {
+            merge(merge_slice, left.len, buf_ptr, buf_len, is_less);
+        }
+        runs[r + 1] = TimSortRun {
+            start: left.start,
+            len: left.len + right.len,
+        };
+        runs.remove(r);
+
+        // check_vec.sort();
+        // let x = unsafe { mem::transmute::<&[T], &[DebugT]>(merge_slice) };
+        // assert_eq!(x, check_vec);
+    }
 
     // Examines the stack of runs and identifies the next pair of runs to merge. More specifically,
     // if `Some(r)` is returned, that means `runs[r]` and `runs[r + 1]` must be merged next. If the
@@ -338,134 +405,6 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
             None
         }
     }
-
-    struct RunVec<RunAllocF, RunDeallocF>
-    where
-        RunAllocF: Fn(usize) -> *mut TimSortRun,
-        RunDeallocF: Fn(*mut TimSortRun, usize),
-    {
-        buf_ptr: ptr::NonNull<TimSortRun>,
-        capacity: usize,
-        len: usize,
-        run_alloc_fn: RunAllocF,
-        run_dealloc_fn: RunDeallocF,
-    }
-
-    impl<RunAllocF, RunDeallocF> RunVec<RunAllocF, RunDeallocF>
-    where
-        RunAllocF: Fn(usize) -> *mut TimSortRun,
-        RunDeallocF: Fn(*mut TimSortRun, usize),
-    {
-        fn new(run_alloc_fn: RunAllocF, run_dealloc_fn: RunDeallocF) -> Self {
-            // Most slices can be sorted with at most 16 runs in-flight.
-            const START_RUN_CAPACITY: usize = 16;
-
-            Self {
-                buf_ptr: ptr::NonNull::new(run_alloc_fn(START_RUN_CAPACITY)).unwrap(),
-                capacity: START_RUN_CAPACITY,
-                len: 0,
-                run_alloc_fn,
-                run_dealloc_fn,
-            }
-        }
-
-        fn push(&mut self, val: TimSortRun) {
-            if self.len == self.capacity {
-                let old_capacity = self.capacity;
-                let old_buf_ptr = self.buf_ptr.as_ptr();
-
-                self.capacity = self.capacity * 2;
-                self.buf_ptr = ptr::NonNull::new((self.run_alloc_fn)(self.capacity)).unwrap();
-
-                // SAFETY: buf_ptr new and old were correctly allocated and old_buf_ptr has
-                // old_capacity valid elements.
-                unsafe {
-                    ptr::copy_nonoverlapping(old_buf_ptr, self.buf_ptr.as_ptr(), old_capacity);
-                }
-
-                (self.run_dealloc_fn)(old_buf_ptr, old_capacity);
-            }
-
-            // SAFETY: The invariant was just checked.
-            unsafe {
-                self.buf_ptr.as_ptr().add(self.len).write(val);
-            }
-            self.len += 1;
-        }
-
-        fn remove(&mut self, index: usize) {
-            if index >= self.len {
-                panic!("Index out of bounds");
-            }
-
-            // SAFETY: buf_ptr needs to be valid and len invariant upheld.
-            unsafe {
-                // the place we are taking from.
-                let ptr = self.buf_ptr.as_ptr().add(index);
-
-                // Shift everything down to fill in that spot.
-                ptr::copy(ptr.add(1), ptr, self.len - index - 1);
-            }
-            self.len -= 1;
-        }
-
-        fn as_slice(&self) -> &[TimSortRun] {
-            // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
-            unsafe { &*ptr::slice_from_raw_parts(self.buf_ptr.as_ptr(), self.len) }
-        }
-
-        fn len(&self) -> usize {
-            self.len
-        }
-    }
-
-    impl<RunAllocF, RunDeallocF> core::ops::Index<usize> for RunVec<RunAllocF, RunDeallocF>
-    where
-        RunAllocF: Fn(usize) -> *mut TimSortRun,
-        RunDeallocF: Fn(*mut TimSortRun, usize),
-    {
-        type Output = TimSortRun;
-
-        fn index(&self, index: usize) -> &Self::Output {
-            if index < self.len {
-                // SAFETY: buf_ptr and len invariant must be upheld.
-                unsafe {
-                    return &*(self.buf_ptr.as_ptr().add(index));
-                }
-            }
-
-            panic!("Index out of bounds");
-        }
-    }
-
-    impl<RunAllocF, RunDeallocF> core::ops::IndexMut<usize> for RunVec<RunAllocF, RunDeallocF>
-    where
-        RunAllocF: Fn(usize) -> *mut TimSortRun,
-        RunDeallocF: Fn(*mut TimSortRun, usize),
-    {
-        fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-            if index < self.len {
-                // SAFETY: buf_ptr and len invariant must be upheld.
-                unsafe {
-                    return &mut *(self.buf_ptr.as_ptr().add(index));
-                }
-            }
-
-            panic!("Index out of bounds");
-        }
-    }
-
-    impl<RunAllocF, RunDeallocF> Drop for RunVec<RunAllocF, RunDeallocF>
-    where
-        RunAllocF: Fn(usize) -> *mut TimSortRun,
-        RunDeallocF: Fn(*mut TimSortRun, usize),
-    {
-        fn drop(&mut self) {
-            // As long as TimSortRun is Copy we don't need to drop them individually but just the
-            // whole allocation.
-            (self.run_dealloc_fn)(self.buf_ptr.as_ptr(), self.capacity);
-        }
-    }
 }
 
 /// Internal type used by merge_sort.
@@ -473,92 +412,140 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
 pub struct TimSortRun {
     len: usize,
     start: usize,
-    all_equal: bool,
+    // all_equal: bool,
 }
 
-/// Analyzes region at the start of `v` and will leverage natural patterns contained in the input.
-/// Returns offset until where `v[..end]` will be sorted after the call, and bool denoting wether
-/// that area contains only equal elements.
-///
-/// SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for `v.len()`
-/// writes.
-unsafe fn natural_sort<T, F>(
-    v: &mut [T],
-    buf: *mut T,
-    probe_for_common: bool,
-    compare: &mut F,
-) -> (usize, bool)
+struct TimSortRunVec<RunAllocF, RunDeallocF>
 where
-    F: FnMut(&T, &T) -> Ordering,
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
 {
-    // Starting at this streak size the one additional comparison is not too expensive.
-    const MIN_ASCENDING_ALL_EQUAL_CHECK: usize = 12;
-
-    let len = v.len();
-    if len < 2 {
-        return (len, false);
-    }
-
-    let probe_result = probe_region(v, probe_for_common, compare);
-    match probe_result {
-        ProbeResult::Ascending(end) => {
-            let all_equal = if end >= MIN_ASCENDING_ALL_EQUAL_CHECK {
-                // compare(&v[0], &v[end - 1]) == Ordering::Equal
-                // TODO enable this but it makes merge_run_with_equal more complicated.
-                false
-            } else {
-                false
-            };
-            (end, all_equal)
-        }
-        ProbeResult::Descending(end) => {
-            // These can't be all equal.
-            v[..end].reverse();
-            (end, false)
-        }
-        ProbeResult::CommonValue(idx) => {
-            // SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for
-            // `v.len()` writes.
-            let end = unsafe {
-                partition_equal_stable(v, idx, buf, &mut |a, b| compare(a, b) == Ordering::Equal)
-            };
-
-            (end, true)
-        }
-    }
+    buf_ptr: ptr::NonNull<TimSortRun>,
+    capacity: usize,
+    len: usize,
+    run_alloc_fn: RunAllocF,
+    run_dealloc_fn: RunDeallocF,
 }
 
-#[derive(Copy, Clone)]
-enum ProbeResult {
-    Ascending(usize),   // Offset until where it is sorted.
-    Descending(usize),  // Offset until where it is sorted descending.
-    CommonValue(usize), // Offset of element that is common.
-}
-
-/// Analyzes region at the start of `v` at tries to find these types of patterns:
-/// A) Fully ascending
-/// B) Full descending
-/// C) Common value
-fn probe_region<T, F>(v: &[T], probe_for_common: bool, compare: &mut F) -> ProbeResult
+impl<RunAllocF, RunDeallocF> TimSortRunVec<RunAllocF, RunDeallocF>
 where
-    F: FnMut(&T, &T) -> Ordering,
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
 {
-    // Probe for common value with priority over streak analysis.
-    if probe_for_common {
-        let probe_common_result =
-            probe_for_common_val(v, &mut |a, b| compare(a, b) == Ordering::Equal);
+    fn new(run_alloc_fn: RunAllocF, run_dealloc_fn: RunDeallocF) -> Self {
+        // Most slices can be sorted with at most 16 runs in-flight.
+        const START_RUN_CAPACITY: usize = 16;
 
-        if let Some(idx) = probe_common_result {
-            return ProbeResult::CommonValue(idx);
+        Self {
+            buf_ptr: ptr::NonNull::new(run_alloc_fn(START_RUN_CAPACITY)).unwrap(),
+            capacity: START_RUN_CAPACITY,
+            len: 0,
+            run_alloc_fn,
+            run_dealloc_fn,
         }
     }
 
-    let (streak_end, was_reversed) = find_streak(v, &mut |a, b| compare(a, b) == Ordering::Less);
-    return if was_reversed {
-        ProbeResult::Descending(streak_end)
-    } else {
-        ProbeResult::Ascending(streak_end)
-    };
+    fn push(&mut self, val: TimSortRun) {
+        if self.len == self.capacity {
+            let old_capacity = self.capacity;
+            let old_buf_ptr = self.buf_ptr.as_ptr();
+
+            self.capacity = self.capacity * 2;
+            self.buf_ptr = ptr::NonNull::new((self.run_alloc_fn)(self.capacity)).unwrap();
+
+            // SAFETY: buf_ptr new and old were correctly allocated and old_buf_ptr has
+            // old_capacity valid elements.
+            unsafe {
+                ptr::copy_nonoverlapping(old_buf_ptr, self.buf_ptr.as_ptr(), old_capacity);
+            }
+
+            (self.run_dealloc_fn)(old_buf_ptr, old_capacity);
+        }
+
+        // SAFETY: The invariant was just checked.
+        unsafe {
+            self.buf_ptr.as_ptr().add(self.len).write(val);
+        }
+        self.len += 1;
+    }
+
+    fn remove(&mut self, index: usize) {
+        if index >= self.len {
+            panic!("Index out of bounds");
+        }
+
+        // SAFETY: buf_ptr needs to be valid and len invariant upheld.
+        unsafe {
+            // the place we are taking from.
+            let ptr = self.buf_ptr.as_ptr().add(index);
+
+            // Shift everything down to fill in that spot.
+            ptr::copy(ptr.add(1), ptr, self.len - index - 1);
+        }
+        self.len -= 1;
+    }
+
+    fn as_slice(&self) -> &[TimSortRun] {
+        // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
+        unsafe { &*ptr::slice_from_raw_parts(self.buf_ptr.as_ptr(), self.len) }
+    }
+
+    fn as_mut_slice(&self) -> &mut [TimSortRun] {
+        // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
+        unsafe { &mut *ptr::slice_from_raw_parts_mut(self.buf_ptr.as_ptr(), self.len) }
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
+impl<RunAllocF, RunDeallocF> core::ops::Index<usize> for TimSortRunVec<RunAllocF, RunDeallocF>
+where
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
+{
+    type Output = TimSortRun;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        if index < self.len {
+            // SAFETY: buf_ptr and len invariant must be upheld.
+            unsafe {
+                return &*(self.buf_ptr.as_ptr().add(index));
+            }
+        }
+
+        panic!("Index out of bounds");
+    }
+}
+
+impl<RunAllocF, RunDeallocF> core::ops::IndexMut<usize> for TimSortRunVec<RunAllocF, RunDeallocF>
+where
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
+{
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index < self.len {
+            // SAFETY: buf_ptr and len invariant must be upheld.
+            unsafe {
+                return &mut *(self.buf_ptr.as_ptr().add(index));
+            }
+        }
+
+        panic!("Index out of bounds");
+    }
+}
+
+impl<RunAllocF, RunDeallocF> Drop for TimSortRunVec<RunAllocF, RunDeallocF>
+where
+    RunAllocF: Fn(usize) -> *mut TimSortRun,
+    RunDeallocF: Fn(*mut TimSortRun, usize),
+{
+    fn drop(&mut self) {
+        // As long as TimSortRun is Copy we don't need to drop them individually but just the
+        // whole allocation.
+        (self.run_dealloc_fn)(self.buf_ptr.as_ptr(), self.capacity);
+    }
 }
 
 /// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
@@ -671,8 +658,10 @@ where
     None
 }
 
-/// Partition `v` into elements that are equal to `v[pivot_pos]` followed by elements not equal to
+/// Partition `v` into elements that are not equal to `v[pivot_pos]` followed by elements equal to
 /// `v[pivot_pos]`. Relative position of `v[pivot_pos]` is maintained.
+///
+/// Returns the number of element equal to `v[pivot_pos]`.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 unsafe fn partition_equal_stable<T, F>(
     v: &mut [T],
@@ -685,7 +674,7 @@ where
 {
     let len = v.len();
 
-    let arr_ptr = v.as_ptr();
+    let arr_ptr = v.as_mut_ptr();
 
     // SAFETY: The caller must ensure `buf` is valid for `v.len()` writes.
     // See specific comments below.
@@ -695,7 +684,7 @@ where
         // loop panics. Because it could have changed due to interior mutability.
         let pivot_hole = InsertionHole {
             src: &*pivot_val,
-            dest: v.as_mut_ptr().add(pivot_pos),
+            dest: arr_ptr.add(pivot_pos),
         };
 
         let mut swap_ptr_l = buf;
@@ -726,8 +715,8 @@ where
             ptr::copy_nonoverlapping(elem_ptr, swap_ptr_l, 1);
             ptr::copy_nonoverlapping(elem_ptr, swap_ptr_r, 1);
 
-            swap_ptr_l = swap_ptr_l.add(!is_eq as usize);
-            swap_ptr_r = swap_ptr_r.sub(is_eq as usize);
+            swap_ptr_l = swap_ptr_l.wrapping_add(!is_eq as usize);
+            swap_ptr_r = swap_ptr_r.wrapping_sub(is_eq as usize);
         }
 
         debug_assert!((swap_ptr_l as usize).abs_diff(swap_ptr_r as usize) == mem::size_of::<T>());
@@ -744,179 +733,17 @@ where
 
         // Now that swap has the correct order overwrite arr_ptr.
         let arr_ptr = v.as_mut_ptr();
-        ptr::copy_nonoverlapping(buf.add(l_count), arr_ptr, r_count);
-        v[..r_count].reverse();
 
-        let arr_ptr = v.as_mut_ptr();
-        ptr::copy_nonoverlapping(buf, arr_ptr.add(r_count), l_count);
+        // Copy all the elements that were not equal directly from swap to v.
+        ptr::copy_nonoverlapping(buf, arr_ptr, l_count);
+
+        // Copy the elements that were equal or more from the buf into v and reverse them.
+        let rev_buf_ptr = buf.add(len - 1);
+        for i in 0..r_count {
+            ptr::copy_nonoverlapping(rev_buf_ptr.sub(i), arr_ptr.add(l_count + i), 1);
+        }
 
         r_count
-    }
-}
-
-/// Merges left and right run, assuming at least one of them contains only equal elements. SAFETY:
-/// buf must be able to hold at least v.len(), and both sides must hold at least 1 element.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-#[inline(never)]
-unsafe fn merge_run_with_equal<T, F>(
-    v: &mut [T],
-    buf: *mut T,
-    left: &TimSortRun,
-    right: &TimSortRun,
-    compare: &mut F,
-) where
-    F: FnMut(&T, &T) -> Ordering,
-{
-    assert!(left.len >= 1 && right.len >= 1 && v.len() == left.len + right.len);
-
-    let comp_l0_r0 = compare(&v[0], &v[left.len]);
-    let comp_l0_r_end = compare(&v[0], &v[v.len() - 1]);
-    let arr_ptr = v.as_mut_ptr();
-
-    // All runs that are marked all_equal imply they have not been merged before, as doing so loses
-    // the label. We know partition_equal_stable is guaranteed to find all elements that are equal.
-    // From this follows, if both runs are all_equal they cannot have the same elements, the
-    // previous partition_equal_stable would have already found them all. However it's possible that
-    // a previous run contains elements equal to the run that is all_equal, because they weren't
-    // found by probe_for_common_val. These must have been found before the call to
-    // partition_equal_stable. As consequence in both cases we have to find the last element that is
-    // equal or its according spot and insert the all_equal run there.
-    //
-    // However there is another way to create a run that is all equal, and that's ascending with
-    // first and last element being the same. This does not guarantee that the run will hold all the
-    // remaining elements that are equal. Yet we know that both types of runs are contiguous and we
-    // know their start position. By comparing their start positions we can know in what order they
-    // must appear. They cannot interleave, one must come before the other.
-
-    // type DebugT = (i32, i32);
-    // let v_as_x = mem::transmute::<&[T], &[DebugT]>(v);
-    // println!(
-    //     "\n\nLEFT:\n{:?}\nRight:\n{:?}",
-    //     &v_as_x[..left.len],
-    //     &v_as_x[left.len..]
-    // );
-    // dbg!(left, right);
-
-    if (left.all_equal && right.all_equal)
-        || (left.all_equal && comp_l0_r_end == Ordering::Equal && left.start > right.start)
-    {
-        debug_assert!(compare(&v[0], &v[left.len]) != Ordering::Equal);
-
-        let run_comes_after = comp_l0_r0 == Ordering::Greater
-            || (comp_l0_r0 == Ordering::Equal && left.start > right.start);
-
-        if run_comes_after {
-            // SAFETY: TODO
-            unsafe {
-                // Swap left and right side.
-                ptr::copy_nonoverlapping(arr_ptr, buf, left.len);
-                ptr::copy(arr_ptr.add(left.len), arr_ptr, right.len);
-                ptr::copy_nonoverlapping(buf, arr_ptr.add(right.len), left.len);
-            }
-        }
-        return;
-    }
-
-    if left.all_equal {
-        if comp_l0_r0 != Ordering::Less {
-            let l_elem = &v[0];
-
-            let insert_pos = match v[left.len..].binary_search_by(|elem| compare(elem, l_elem)) {
-                Ok(val) => {
-                    let run_comes_after = left.start > right.start;
-                    assert!(run_comes_after);
-
-                    let offset = left.len + val;
-
-                    let rel_pos = v[offset..]
-                        .iter()
-                        .position(|elem| compare(elem, l_elem) != Ordering::Equal)
-                        .unwrap(); // TODO explain unwrap Ord violation.
-
-                    if rel_pos > (v.len() - offset) {
-                        panic_on_ord_violation();
-                    }
-
-                    offset + rel_pos
-
-                    // // This is necessary to make this stable.
-                    // let run_comes_after = left.start > right.start;
-                    // if run_comes_after {
-                    //     let rel_pos = v[offset..]
-                    //         .iter()
-                    //         .position(|elem| compare(elem, l_elem) != Ordering::Equal)
-                    //         .unwrap(); // TODO explain unwrap Ord violation.
-
-                    //     offset + rel_pos
-                    // } else {
-                    //     let rel_pos = v[..offset]
-                    //         .iter()
-                    //         .rev()
-                    //         .position(|elem| compare(elem, l_elem) != Ordering::Equal)
-                    //         .unwrap(); // TODO explain unwrap Ord violation.
-
-                    //     offset - (rel_pos + 1)
-                    // }
-                }
-                Err(pos) => pos,
-            };
-
-            // SAFETY: TODO
-            unsafe {
-                // Safe left side in buf.
-                ptr::copy_nonoverlapping(arr_ptr, buf, left.len);
-                // Copy everything from right side up to insert_pos over left side.
-                // This can overlap.
-                ptr::copy(arr_ptr.add(left.len), arr_ptr, insert_pos);
-                // Now copy the left side into the hole.
-                ptr::copy_nonoverlapping(buf, arr_ptr.add(insert_pos), left.len);
-            }
-        }
-        return;
-    }
-
-    debug_assert!(right.all_equal);
-
-    let is_less_r0_l_end = compare(&v[left.len], &v[left.len - 1]) == Ordering::Less;
-
-    // If the the right elements are all more or equal than the last element of the assumed sorted
-    // left side, they are already in the correct spot.
-    if is_less_r0_l_end {
-        let r_elem = &v[left.len];
-
-        let insert_pos = match v[..left.len].binary_search_by(|elem| compare(elem, r_elem)) {
-            Ok(val) => {
-                let run_comes_after = right.start > left.start;
-                assert!(run_comes_after); // TODO why is this always true?
-
-                let rel_pos = v[val..]
-                    .iter()
-                    .position(|elem| compare(elem, r_elem) != Ordering::Equal)
-                    .unwrap(); // TODO explain unwrap Ord violation.
-
-                val + rel_pos
-            }
-            Err(pos) => pos,
-        };
-
-        // SAFETY: TODO
-        unsafe {
-            if insert_pos > left.len {
-                panic_on_ord_violation();
-            }
-
-            let overwrite_left_count = left.len - insert_pos;
-            // Safe all elements from left side that would be overwritten.
-            ptr::copy_nonoverlapping(arr_ptr.add(insert_pos), buf, overwrite_left_count);
-            // Copy everything from right side into the hole, this could overlap.
-            ptr::copy(arr_ptr.add(left.len), arr_ptr.add(insert_pos), right.len);
-            // Now copy the saved elements back to the end.
-            ptr::copy_nonoverlapping(
-                buf,
-                arr_ptr.add(v.len() - overwrite_left_count),
-                overwrite_left_count,
-            );
-        }
     }
 }
 
@@ -977,19 +804,11 @@ where
         let mut swap = mem::MaybeUninit::<[T; max_len_small_sort_stable::<i32>()]>::uninit();
         let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-        if has_no_direct_iterior_mutability::<T>() {
-            // SAFETY: We checked that T is Copy and thus observation safe.
-            // Should is_less panic v was not modified in parity_merge and retains it's original input.
-            // swap and v must not alias and swap has v.len() space.
-            unsafe {
-                parity_merge(&mut v[..even_len], swap_ptr, is_less);
-                ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
-            }
-        } else {
-            // SAFETY: swap_ptr can hold v.len() elements and both sides are at least of len 1.
-            unsafe {
-                merge(&mut v[..even_len], len_div_2, swap_ptr, is_less);
-            }
+        // SAFETY: We checked that T is Copy and thus observation safe.
+        // Should is_less panic v was not modified in parity_merge and retains it's original input.
+        // swap and v must not alias and swap has v.len() space.
+        unsafe {
+            merge(&mut v[..even_len], len_div_2, swap_ptr, even_len, is_less);
         }
 
         if len != even_len {
@@ -998,11 +817,8 @@ where
                 insert_tail(v, is_less);
             }
         }
-
-        return true;
     } else {
         insertion_sort_shift_left(v, end, is_less);
-        return true;
     }
 
     true
@@ -1031,7 +847,7 @@ where
     const FAST_SORT_SIZE: usize = 32;
 
     if is_cheap_to_move::<T>()
-        && has_no_direct_iterior_mutability::<T>()
+        && !has_direct_iterior_mutability::<T>()
         && (start + FAST_SORT_SIZE) <= len
         && start_end_diff <= MAX_IGNORE_PRE_SORTED
     {
@@ -1169,7 +985,7 @@ where
 /// performance impact.
 #[inline(never)]
 #[cfg(not(no_global_oom_handling))]
-unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
+unsafe fn merge_fallback<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -1294,6 +1110,34 @@ where
     }
 }
 
+/// Merges non-decreasing runs `v[..mid]` and `v[mid..]` using `buf` as temporary storage, and
+/// stores the result into `v[..]`.
+///
+/// # Safety
+///
+/// The two slices must be non-empty and `mid` must be in bounds. Buffer as pointed to by `buf_ptr`
+/// must be long enough to hold a copy of the shorter slice. Also, `T` must not be a zero-sized
+/// type.
+#[inline(always)]
+unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf_ptr: *mut T, buf_len: usize, is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+    assert!(mid > 0 && mid < len && buf_len >= (cmp::min(mid, len - mid)));
+    debug_assert!(!buf_ptr.is_null());
+
+    // SAFETY: TODO
+    unsafe {
+        if !has_direct_iterior_mutability::<T>() && len <= buf_len {
+            parity_merge_plus(v, mid, buf_ptr, is_less);
+            ptr::copy_nonoverlapping(buf_ptr, v.as_mut_ptr(), len);
+        } else {
+            merge_fallback(v, mid, buf_ptr, is_less);
+        }
+    }
+}
+
 // #[rustc_unsafe_specialization_marker]
 trait IsCopyMarker {}
 
@@ -1329,13 +1173,13 @@ const fn is_cheap_to_move<T>() -> bool {
 
 // I would like to make this a const fn.
 #[inline(always)]
-fn has_no_direct_iterior_mutability<T>() -> bool {
+fn has_direct_iterior_mutability<T>() -> bool {
     // - Can the type have interior mutability, this is checked by testing if T is Copy.
     //   If the type can have interior mutability it may alter itself during comparison in a way
     //   that must be observed after the sort operation concludes.
     //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
     //   FIXME use proper abstraction
-    T::is_copy()
+    !T::is_copy()
 }
 
 #[inline(always)]
@@ -1444,7 +1288,7 @@ where
     // Note, the pointers that have been written, are now one past where they were read and
     // copied. written == incremented or decremented + copy to dest.
 
-    assert!(has_no_direct_iterior_mutability::<T>());
+    assert!(!has_direct_iterior_mutability::<T>());
 
     let len = v.len();
     let src_ptr = v.as_ptr();
@@ -1474,7 +1318,7 @@ where
 }
 
 /// Merge v assuming v[..mid] and v[mid..] are already sorted.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+#[inline(never)]
 pub unsafe fn parity_merge_plus<T, F>(v: &[T], mid: usize, dest_ptr: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1487,7 +1331,7 @@ where
     let len = v.len();
     let src_ptr = v.as_ptr();
 
-    assert!(mid > 0 && mid < len && has_no_direct_iterior_mutability::<T>());
+    debug_assert!(!has_direct_iterior_mutability::<T>());
 
     // TODO explain why this is fast.
 
@@ -1721,7 +1565,7 @@ fn sort32_stable<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    assert!(v.len() == 32 && has_no_direct_iterior_mutability::<T>());
+    assert!(v.len() == 32 && !has_direct_iterior_mutability::<T>());
 
     let mut swap = mem::MaybeUninit::<[T; 32]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
@@ -1742,7 +1586,7 @@ where
         ptr::copy_nonoverlapping(swap_ptr, arr_ptr, 32);
 
         // It's slightly faster to merge directly into v and copy over the 'safe' elements of swap
-        // into v only if there was a panic.
+        // into v only if there was a panic. This technique is also known as ping-pong merge.
         let drop_guard = DropGuard {
             src: swap_ptr,
             dest: arr_ptr,
