@@ -124,6 +124,45 @@ pub fn saw_mixed(size: usize, saw_count: usize) -> Vec<i32> {
     vals
 }
 
+pub fn saw_mixed_range(size: usize, range: std::ops::Range<usize>) -> Vec<i32> {
+    //     :.
+    // :.  :::.    .::.      .:
+    // :::.:::::..::::::..:.:::
+
+    // ascending and descending randomly picked, with length in `range`.
+
+    if size == 0 {
+        return Vec::new();
+    }
+
+    let mut vals = random_vec(size);
+
+    let max_chunks = size / range.start;
+    let saw_directions = random_uniform(max_chunks + 1, 0..=1);
+    let chunk_sizes = random_uniform(max_chunks + 1, (range.start as i32)..(range.end as i32));
+
+    let mut i = 0;
+    let mut l = 0;
+    while l < size {
+        let chunk_size = chunk_sizes[i] as usize;
+        let chunk_end = std::cmp::min(l + chunk_size, size);
+        let chunk = &mut vals[l..chunk_end];
+
+        if saw_directions[i] == 0 {
+            chunk.sort();
+        } else if saw_directions[i] == 1 {
+            chunk.sort_by_key(|&e| std::cmp::Reverse(e));
+        } else {
+            unreachable!();
+        }
+
+        i += 1;
+        l += chunk_size;
+    }
+
+    vals
+}
+
 pub fn pipe_organ(size: usize) -> Vec<i32> {
     //   .:.
     // .:::::.

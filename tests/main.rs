@@ -319,6 +319,11 @@ fn saw_mixed() {
 }
 
 #[test]
+fn saw_mixed_range() {
+    test_impl(|test_size| patterns::saw_mixed_range(test_size, 20..50));
+}
+
+#[test]
 fn pipe_organ() {
     test_impl(patterns::pipe_organ);
 }

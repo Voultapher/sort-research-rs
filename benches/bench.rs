@@ -205,6 +205,7 @@ fn split_len(size: usize, part_a_percent: f64) -> (usize, usize) {
     (len_a, len_b)
 }
 
+// TODO move to patterns.
 fn random_x_percent(size: usize, percent: f64) -> Vec<i32> {
     assert!(percent > 0.0 && percent < 100.0);
 
@@ -238,9 +239,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("saws_long", |size| {
             patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
         }),
-        ("saws_short", |size| {
-            patterns::saw_mixed(size, (size as f64 / 22.0).round() as usize)
-        }),
+        ("saws_short", |size| patterns::saw_mixed_range(size, 20..70)),
     ];
 
     // Custom patterns designed to find worst case performance.
