@@ -133,14 +133,9 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
         return;
     }
 
-    let buf_len_wish = if !has_direct_iterior_mutability::<T>() {
-        len
-    } else {
-        len / 2
-    };
-
     // Experiments with stack allocation for small inputs showed worse performance.
     // May depend on the platform.
+    let buf_len_wish = len;
     let buf_len_fallback_min = len / 2;
     let buf = BufGuard::new(
         buf_len_wish,
