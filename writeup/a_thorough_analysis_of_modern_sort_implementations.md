@@ -1,7 +1,11 @@
 # A thorough analysis of modern sort implementations. And introduction of novel instruction-parallel sort implementations.
 
-Author: Lukas Bergdoll @Voultapher
+WIP: Please do not publish.
+
+Author: Lukas Bergdoll @Voultapher  
 Date: TODO
+
+Bias disclaimer. The author of this analysis is the author of the ipn family of sort implementations.
 
 ### Introduction
 
