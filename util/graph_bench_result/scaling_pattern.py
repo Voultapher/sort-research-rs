@@ -18,12 +18,10 @@ from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
 from single_size import parse_result, extract_groups, build_color_palette
+from cpu_info import CPU_BOOST_GHZ, CPU_ARCH
 
 TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
 
-# Adjust for machine
-CPU_BOOST_GHZ = 4.9
-CPU_ARCH = "Zen3"
 
 # Adjust for pattern
 # X_AXIS_LABEL = """% of input that is random, rest is zero"""
@@ -43,7 +41,7 @@ def init_tools():
         models.HoverTool(
             tooltips=[
                 (X_AXIS_LABEL, "@x"),
-                ("elements per cycle", "@y"),
+                ("Elements per cycle", "@y"),
                 ("Name", "@name"),
             ],
         ),
@@ -89,9 +87,9 @@ def plot_scaling(ty, prediction_state, prefix, test_size, values):
     plot_name = f"{prediction_state}-{ty}-{test_size}-scaling-{prefix}"
     plot = figure(
         title=plot_name,
-        x_axis_label=X_AXIS_LABEL,
+        x_axis_label=f"{X_AXIS_LABEL} (log)",
         x_axis_type="log",
-        y_axis_label=f"elements per cycle (log) | Higher is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
         y_axis_type="log",
         plot_width=800,
         plot_height=600,

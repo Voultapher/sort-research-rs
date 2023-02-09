@@ -17,12 +17,9 @@ from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
 from single_size import parse_result, extract_groups, build_color_palette
+from cpu_info import CPU_BOOST_GHZ, CPU_ARCH
 
 TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
-
-# Adjust for machine
-CPU_BOOST_GHZ = 4.9
-CPU_ARCH = "Zen3"
 
 
 # Needs to be shared instance :/
@@ -39,7 +36,7 @@ def init_tools():
         models.HoverTool(
             tooltips=[
                 ("Input Size", "@x"),
-                ("elements per cycle", "@y"),
+                ("Elements per cycle", "@y"),
                 ("Name", "@name"),
             ],
         ),
@@ -84,7 +81,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"elements per cycle (log) | Higher is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
         y_axis_type="log",
         plot_width=800,
         plot_height=600,
@@ -130,8 +127,9 @@ def plog_patterns(name, groups):
             for pattern in patterns:
                 init_tools()
 
-                plot_name, plot = plot_scaling(ty, prediction_state, pattern, val2)
-
+                plot_name, plot = plot_scaling(
+                    ty, prediction_state, pattern, val2
+                )
 
                 html = file_html(plot, CDN, plot_name)
                 with open(f"{name}-{plot_name}.html", "w+") as outfile:

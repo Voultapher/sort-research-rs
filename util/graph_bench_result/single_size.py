@@ -15,6 +15,10 @@ from bokeh.embed import file_html
 from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
+
+from cpu_info import CPU_BOOST_GHZ, CPU_ARCH
+
+
 TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
 
 
@@ -50,6 +54,9 @@ def extract_groups(bench_result):
         ty = entry_parts[1]
         pattern = entry_parts[2]
         test_size = int(entry_parts[3])
+
+        if sort_name == "c_fluxsort_stable" and ty not in ("u64", "i32"):
+            continue
 
         # if is_stable_sort(sort_name):
         #     continue  # TODO graph all.
@@ -180,7 +187,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
 
     plot_name = f"{prediction_state}-{ty}-{test_size}"
     plot = figure(
-        x_axis_label=f"Time ({time_unit}) | Lower is better",
+        x_axis_label=f"Time ({time_unit}) | Lower is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
         x_range=(0, max_time * 1.1),
         y_range=FactorRange(*y),
         y_axis_label="Pattern",
