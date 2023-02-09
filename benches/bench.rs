@@ -754,6 +754,55 @@ fn criterion_benchmark(c: &mut Criterion) {
         bench_patterns(c, test_size, "f128", |values| {
             values.iter().map(|val| F128::new(*val)).collect()
         });
+
+        // use std::cmp::Ordering;
+        // use std::sync::Mutex;
+
+        // #[derive(Debug)]
+        // struct ValWithMutex {
+        //     val: u64,
+        //     mutex: Mutex<u64>,
+        // }
+
+        // impl PartialEq for ValWithMutex {
+        //     fn eq(&self, other: &Self) -> bool {
+        //         self.val == other.val
+        //     }
+        // }
+
+        // impl Eq for ValWithMutex {}
+
+        // impl PartialOrd for ValWithMutex {
+        //     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        //         self.val.partial_cmp(&other.val)
+        //     }
+        // }
+
+        // impl Ord for ValWithMutex {
+        //     fn cmp(&self, other: &Self) -> Ordering {
+        //         self.partial_cmp(other).unwrap()
+        //     }
+        // }
+
+        // bench_patterns(c, test_size, "val_with_mutex", |values| {
+        //     values
+        //         .iter()
+        //         .map(|val| -> ValWithMutex {
+        //             let mut val_u64 = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
+        //             val_u64 = val_u64.checked_mul(i32::MAX as u64).unwrap();
+
+        //             let mut this = ValWithMutex {
+        //                 val: val_u64,
+        //                 mutex: Mutex::new(val_u64),
+        //             };
+
+        //             // To make sure mutex is not optimized away.
+        //             this.val = *this.mutex.lock().unwrap();
+
+        //             this
+        //         })
+        //         .collect()
+        // });
     }
 }
 
