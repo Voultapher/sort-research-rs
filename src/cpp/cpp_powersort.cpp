@@ -10,9 +10,6 @@
 #include "shared.h"
 
 template <typename T>
-using vec_iter = std::vector<T>::iterator;
-
-template <typename T>
 using powersort = algorithms::powersort<
     /*Iterator=*/T,
     /*minRunLen=*/24,
@@ -46,10 +43,10 @@ uint32_t sort_by_impl(T* data,
     CompWrapper<T>::cmp_fn_local = cmp_fn;
     CompWrapper<T>::ctx_local = ctx;
 
-    using iter_t = vec_iter<CompWrapper<T>>;
     // Let's just pray they are layout equivalent.
-    SortT<iter_t>{}.sort(iter_t{reinterpret_cast<CompWrapper<T>*>(data)},
-                         iter_t{reinterpret_cast<CompWrapper<T>*>(data + len)});
+    SortT<CompWrapper<T>*>{}.sort(
+        reinterpret_cast<CompWrapper<T>*>(data),
+        reinterpret_cast<CompWrapper<T>*>(data + len));
   } catch (const std::exception& exc) {
     // fprintf(stderr, "[ERROR]: %s\n", exc.what());
     return 1;
@@ -65,8 +62,7 @@ extern "C" {
 
 void powersort_stable_i32(int32_t* data, size_t len) {
   // Uses default configuration.
-  using iter_t = vec_iter<int32_t>;
-  powersort<iter_t>{}.sort(iter_t{data}, iter_t{data + len});
+  powersort<int32_t*>{}.sort(data, data + len);
 }
 
 uint32_t powersort_stable_i32_by(int32_t* data,
@@ -82,8 +78,7 @@ uint32_t powersort_stable_i32_by(int32_t* data,
 
 void powersort_stable_u64(uint64_t* data, size_t len) {
   // Uses default configuration.
-  using iter_t = vec_iter<uint64_t>;
-  powersort<iter_t>{}.sort(iter_t{data}, iter_t{data + len});
+  powersort<uint64_t*>{}.sort(data, data + len);
 }
 
 uint32_t powersort_stable_u64_by(uint64_t* data,
@@ -98,9 +93,8 @@ uint32_t powersort_stable_u64_by(uint64_t* data,
 // --- ffi_string ---
 
 void powersort_stable_ffi_string(FFIString* data, size_t len) {
-  using iter_t = vec_iter<FFIStringCpp>;
-  powersort<iter_t>{}.sort(iter_t{reinterpret_cast<FFIStringCpp*>(data)},
-                           iter_t{reinterpret_cast<FFIStringCpp*>(data) + len});
+  powersort<FFIStringCpp*>{}.sort(reinterpret_cast<FFIStringCpp*>(data),
+                                  reinterpret_cast<FFIStringCpp*>(data) + len);
 }
 
 uint32_t powersort_stable_ffi_string_by(FFIString* data,
@@ -115,9 +109,8 @@ uint32_t powersort_stable_ffi_string_by(FFIString* data,
 // --- f128 ---
 
 void powersort_stable_f128(F128* data, size_t len) {
-  using iter_t = vec_iter<F128Cpp>;
-  powersort<iter_t>{}.sort(iter_t{reinterpret_cast<F128Cpp*>(data)},
-                           iter_t{reinterpret_cast<F128Cpp*>(data) + len});
+  powersort<F128Cpp*>{}.sort(reinterpret_cast<F128Cpp*>(data),
+                             reinterpret_cast<F128Cpp*>(data) + len);
 }
 
 uint32_t powersort_stable_f128_by(F128* data,
@@ -132,10 +125,9 @@ uint32_t powersort_stable_f128_by(F128* data,
 // --- 1k ---
 
 void powersort_stable_1k(FFIOneKiloByte* data, size_t len) {
-  using iter_t = vec_iter<FFIOneKiloByteCpp>;
-  powersort<iter_t>{}.sort(
-      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data)},
-      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data) + len});
+  powersort<FFIOneKiloByteCpp*>{}.sort(
+      reinterpret_cast<FFIOneKiloByteCpp*>(data),
+      reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
 }
 
 uint32_t powersort_stable_1k_by(FFIOneKiloByte* data,
@@ -153,8 +145,7 @@ uint32_t powersort_stable_1k_by(FFIOneKiloByte* data,
 
 void powersort_4way_stable_i32(int32_t* data, size_t len) {
   // Uses default configuration.
-  using iter_t = vec_iter<int32_t>;
-  powersort_4way<iter_t>{}.sort(iter_t{data}, iter_t{data + len});
+  powersort_4way<int32_t*>{}.sort(data, data + len);
 }
 
 uint32_t powersort_4way_stable_i32_by(int32_t* data,
@@ -170,8 +161,7 @@ uint32_t powersort_4way_stable_i32_by(int32_t* data,
 
 void powersort_4way_stable_u64(uint64_t* data, size_t len) {
   // Uses default configuration.
-  using iter_t = vec_iter<uint64_t>;
-  powersort_4way<iter_t>{}.sort(iter_t{data}, iter_t{data + len});
+  powersort_4way<uint64_t*>{}.sort(data, data + len);
 }
 
 uint32_t powersort_4way_stable_u64_by(uint64_t* data,
@@ -186,10 +176,9 @@ uint32_t powersort_4way_stable_u64_by(uint64_t* data,
 // --- ffi_string ---
 
 void powersort_4way_stable_ffi_string(FFIString* data, size_t len) {
-  using iter_t = vec_iter<FFIStringCpp>;
-  powersort_4way<iter_t>{}.sort(
-      iter_t{reinterpret_cast<FFIStringCpp*>(data)},
-      iter_t{reinterpret_cast<FFIStringCpp*>(data) + len});
+  powersort_4way<FFIStringCpp*>{}.sort(
+      reinterpret_cast<FFIStringCpp*>(data),
+      reinterpret_cast<FFIStringCpp*>(data) + len);
 }
 
 uint32_t powersort_4way_stable_ffi_string_by(
@@ -203,9 +192,8 @@ uint32_t powersort_4way_stable_ffi_string_by(
 // --- f128 ---
 
 void powersort_4way_stable_f128(F128* data, size_t len) {
-  using iter_t = vec_iter<F128Cpp>;
-  powersort_4way<iter_t>{}.sort(iter_t{reinterpret_cast<F128Cpp*>(data)},
-                                iter_t{reinterpret_cast<F128Cpp*>(data) + len});
+  powersort_4way<F128Cpp*>{}.sort(reinterpret_cast<F128Cpp*>(data),
+                                  reinterpret_cast<F128Cpp*>(data) + len);
 }
 
 uint32_t powersort_4way_stable_f128_by(F128* data,
@@ -220,10 +208,9 @@ uint32_t powersort_4way_stable_f128_by(F128* data,
 // --- 1k ---
 
 void powersort_4way_stable_1k(FFIOneKiloByte* data, size_t len) {
-  using iter_t = vec_iter<FFIOneKiloByteCpp>;
-  powersort_4way<iter_t>{}.sort(
-      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data)},
-      iter_t{reinterpret_cast<FFIOneKiloByteCpp*>(data) + len});
+  powersort_4way<FFIOneKiloByteCpp*>{}.sort(
+      reinterpret_cast<FFIOneKiloByteCpp*>(data),
+      reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
 }
 
 uint32_t powersort_4way_stable_1k_by(FFIOneKiloByte* data,

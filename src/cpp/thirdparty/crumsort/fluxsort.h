@@ -179,8 +179,8 @@ void fluxsort(void *array, size_t nmemb, size_t size, CMPFUNC *cmp)
 		case sizeof(long long):
 			return fluxsort64(static_cast<long long*>(array), nmemb, cmp);
 
-		case sizeof(long double):
-			return fluxsort128(static_cast<long double*>(array), nmemb, cmp);
+		// case sizeof(long double):
+		// 	return fluxsort128(static_cast<long double*>(array), nmemb, cmp);
 
 		default:
 			return assert(size == sizeof(char) || size == sizeof(short) || size == sizeof(int) || size == sizeof(long long) || size == sizeof(long double));

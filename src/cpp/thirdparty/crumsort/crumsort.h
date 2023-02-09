@@ -178,8 +178,8 @@ void crumsort(void* array, size_t nmemb, size_t size, CMPFUNC* cmp) {
     case sizeof(long long):
       return crumsort64(static_cast<long long*>(array), nmemb, cmp);
 
-    case sizeof(long double):
-      return crumsort128(static_cast<long double*>(array), nmemb, cmp);
+    // case sizeof(long double):
+    //   return crumsort128(static_cast<long double*>(array), nmemb, cmp);
 
     default:
       return assert(size == sizeof(char) || size == sizeof(short) ||
