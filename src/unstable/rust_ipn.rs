@@ -597,7 +597,8 @@ fn break_patterns<T>(v: &mut [T]) {
         // Some pivot candidates will be in the nearby of this index. Let's randomize them.
         let pos = len / 2;
 
-        for i in 0..3 {
+        // Swap in in 5 values to pick a better median of nine done in the middle next time.
+        for i in 0..5 {
             // Generate a random number modulo `len`. However, in order to avoid costly operations
             // we first take it modulo a power of two, and then decrease by `len` until it fits
             // into the range `[0, len - 1]`.
@@ -608,7 +609,7 @@ fn break_patterns<T>(v: &mut [T]) {
                 other -= len;
             }
 
-            v.swap(pos - 1 + i, other);
+            v.swap((pos - 2) + i, other);
         }
     }
 }

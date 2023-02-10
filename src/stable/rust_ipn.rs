@@ -333,13 +333,6 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
     if equal_runs.len != 0 {
         // Now take care of all the fully equal runs that were put at the end of v.
 
-        // TODO this could be done more efficiently sorting only the runs.
-        // equal_runs.as_mut_slice().reverse();
-
-        // collapse_loop(v, buf_ptr, buf_len, len, &mut equal_runs, &mut |a, b| {
-        //     compare(a, b) == Ordering::Less
-        // });
-
         // SAFETY: TODO
         unsafe {
             merge_equal_runs(
