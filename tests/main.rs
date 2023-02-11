@@ -211,6 +211,36 @@ fn random() {
 }
 
 #[test]
+fn random_u64() {
+    test_impl(|size| {
+        patterns::random(size)
+            .iter()
+            .map(|val| -> u64 {
+                // Extends the value into the 64 bit range,
+                // while preserving input order.
+                let x = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
+                x.checked_mul(i32::MAX as u64).unwrap()
+            })
+            .collect()
+    });
+}
+
+#[test]
+fn random_u128() {
+    test_impl(|size| {
+        patterns::random(size)
+            .iter()
+            .map(|val| -> u128 {
+                // Extends the value into the 128 bit range,
+                // while preserving input order.
+                let x = ((*val as i128) + (i64::MAX as i128) + 1) as u128;
+                x.checked_mul(i64::MAX as u128).unwrap()
+            })
+            .collect()
+    });
+}
+
+#[test]
 fn random_4() {
     test_impl(|size| {
         if size > 3 {
