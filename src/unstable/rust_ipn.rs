@@ -645,13 +645,22 @@ where
 
         // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
 
-        let is_less_count =
-            if false && is_cheap_to_move::<T>() && !has_direct_iterior_mutability::<T>() {
-                // Disabled by default because it has panic safety issues.
-                fulcrum_partition(v, pivot, is_less)
-            } else {
-                partition_in_blocks(v, pivot, is_less)
-            };
+        // After a certain size, fulcrum partitioning is less efficient than partition_in_blocks.
+        // This is a guess.
+        const MAX_FLUCRUM_LEN: usize = 2usize.pow(12);
+
+        // Disabled by default because it currently has panic safety issues.
+        const FULCRUM_ENABLED: bool = false;
+
+        let is_less_count = if FULCRUM_ENABLED
+            && is_cheap_to_move::<T>()
+            && !has_direct_iterior_mutability::<T>()
+            && v.len() <= MAX_FLUCRUM_LEN
+        {
+            fulcrum_partition(v, pivot, is_less)
+        } else {
+            partition_in_blocks(v, pivot, is_less)
+        };
 
         is_less_count
 
