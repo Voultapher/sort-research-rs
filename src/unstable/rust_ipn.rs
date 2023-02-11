@@ -511,6 +511,109 @@ where
     }
 }
 
+// Inspired by Igor van den Hoven and his work in quadsort/crumsort.
+// TODO document.
+fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // TODO explain ideas. and panic safety. cleanup.
+    let len = v.len();
+
+    const ROTATION_ELEMS: usize = 16;
+    assert!(len > (ROTATION_ELEMS * 2));
+
+    let mut swap = mem::MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
+    let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: TODO
+    unsafe {
+        ptr::copy_nonoverlapping(arr_ptr, swap_ptr, ROTATION_ELEMS);
+        ptr::copy_nonoverlapping(
+            arr_ptr.add(len - ROTATION_ELEMS),
+            swap_ptr.add(ROTATION_ELEMS),
+            ROTATION_ELEMS,
+        );
+
+        let mut l_ptr = arr_ptr;
+        let mut r_ptr = arr_ptr.add(len - 1);
+
+        let mut a_ptr = arr_ptr.add(ROTATION_ELEMS);
+        let mut t_ptr = arr_ptr.add(len - (ROTATION_ELEMS + 1));
+
+        let mut count = (len / ROTATION_ELEMS) - 2;
+        let mut elem_i = 0;
+
+        loop {
+            if (a_ptr.sub_ptr(l_ptr) - elem_i) <= ROTATION_ELEMS {
+                if count == 0 {
+                    break;
+                }
+                count -= 1;
+
+                for _ in 0..ROTATION_ELEMS {
+                    let is_l = !is_less(pivot, &*a_ptr); // TODO can this be just is_less?
+                    ptr::copy_nonoverlapping(a_ptr, r_ptr.add(elem_i), 1);
+                    ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+                    elem_i += is_l as usize;
+                    a_ptr = a_ptr.wrapping_add(1);
+                    r_ptr = r_ptr.wrapping_sub(1);
+                }
+            }
+            // TODO can this be a else?
+            if (a_ptr.sub_ptr(l_ptr) - elem_i) > ROTATION_ELEMS {
+                if count == 0 {
+                    break;
+                }
+                count -= 1;
+
+                for _ in 0..ROTATION_ELEMS {
+                    let is_l = !is_less(pivot, &*t_ptr); // TODO can this be just is_less?
+                    ptr::copy_nonoverlapping(t_ptr, r_ptr.add(elem_i), 1);
+                    ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+                    elem_i += is_l as usize;
+                    t_ptr = t_ptr.wrapping_sub(1);
+                    r_ptr = r_ptr.wrapping_sub(1);
+                }
+            }
+        }
+
+        if (a_ptr.sub_ptr(l_ptr) - elem_i) <= ROTATION_ELEMS {
+            for _ in 0..(len % ROTATION_ELEMS) {
+                let is_l = !is_less(pivot, &*a_ptr); // TODO can this be just is_less?
+                ptr::copy_nonoverlapping(a_ptr, r_ptr.add(elem_i), 1);
+                ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+                elem_i += is_l as usize;
+                a_ptr = a_ptr.wrapping_add(1);
+                r_ptr = r_ptr.wrapping_sub(1);
+            }
+        } else {
+            for _ in 0..(len % ROTATION_ELEMS) {
+                let is_l = !is_less(pivot, &*t_ptr); // TODO can this be just is_less?
+                ptr::copy_nonoverlapping(t_ptr, r_ptr.add(elem_i), 1);
+                ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+                elem_i += is_l as usize;
+                t_ptr = t_ptr.wrapping_sub(1);
+                r_ptr = r_ptr.wrapping_sub(1);
+            }
+        }
+
+        a_ptr = swap_ptr;
+        for _ in 0..(ROTATION_ELEMS * 2) {
+            let is_l = !is_less(pivot, &*a_ptr); // TODO can this be just is_less?
+            ptr::copy_nonoverlapping(a_ptr, r_ptr.add(elem_i), 1);
+            ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+            elem_i += is_l as usize;
+            a_ptr = a_ptr.wrapping_add(1);
+            r_ptr = r_ptr.wrapping_sub(1);
+        }
+
+        elem_i
+    }
+}
+
 /// Partitions `v` into elements smaller than `v[pivot]`, followed by elements greater than or
 /// equal to `v[pivot]`.
 ///
@@ -542,12 +645,18 @@ where
 
         // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
 
-        let is_less_count = partition_in_blocks(v, pivot, is_less);
+        let is_less_count =
+            if false && is_cheap_to_move::<T>() && !has_direct_iterior_mutability::<T>() {
+                // Disabled by default because it has panic safety issues.
+                fulcrum_partition(v, pivot, is_less)
+            } else {
+                partition_in_blocks(v, pivot, is_less)
+            };
+
+        is_less_count
 
         // pivot quality measurement.
         // println!("len: {} is_less: {}", v.len(), l + is_less_count);
-
-        is_less_count
 
         // `_pivot_guard` goes out of scope and writes the pivot (which is a stack-allocated
         // variable) back into the slice where it originally was. This step is critical in ensuring
@@ -1462,6 +1571,16 @@ const fn is_cheap_to_move<T>() -> bool {
     //
     // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
     mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
+}
+
+#[inline(always)]
+fn has_direct_iterior_mutability<T>() -> bool {
+    // - Can the type have interior mutability, this is checked by testing if T is Copy.
+    //   If the type can have interior mutability it may alter itself during comparison in a way
+    //   that must be observed after the sort operation concludes.
+    //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
+    //   FIXME use proper abstraction
+    !T::is_copy()
 }
 
 // --- Branchless sorting (less branches not zero) ---
