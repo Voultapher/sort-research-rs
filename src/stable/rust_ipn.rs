@@ -578,7 +578,7 @@ where
     // Slices of up to this length get sorted using optimized sorting for small slices.
     const fn max_len_small_sort_stable<T>() -> usize {
         if is_cheap_to_move::<T>() {
-            32
+            40
         } else {
             20
         }
@@ -612,15 +612,22 @@ where
             return true;
         }
 
-        // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
-        let even_len = len - (len % 2 != 0) as usize;
-        let len_div_2 = even_len / 2;
+        let len_div_2 = len / 2;
 
-        sort8_stable(&mut v[0..8], is_less);
-        sort8_stable(&mut v[len_div_2..(len_div_2 + 8)], is_less);
+        let pre_sorted = if len < 32 {
+            sort8_stable(&mut v[0..8], is_less);
+            sort8_stable(&mut v[len_div_2..(len_div_2 + 8)], is_less);
 
-        insertion_sort_shift_left(&mut v[0..len_div_2], 8, is_less);
-        insertion_sort_shift_left(&mut v[len_div_2..], 8, is_less);
+            8
+        } else {
+            sort16_stable(&mut v[0..16], is_less);
+            sort16_stable(&mut v[len_div_2..(len_div_2 + 16)], is_less);
+
+            16
+        };
+
+        insertion_sort_shift_left(&mut v[0..len_div_2], pre_sorted, is_less);
+        insertion_sort_shift_left(&mut v[len_div_2..], pre_sorted, is_less);
 
         let mut swap = mem::MaybeUninit::<[T; max_len_small_sort_stable::<i32>()]>::uninit();
         let swap_ptr = swap.as_mut_ptr() as *mut T;
@@ -629,14 +636,7 @@ where
         // Should is_less panic v was not modified in bi_directional_merge_even and retains it's original input.
         // swap and v must not alias and swap has v.len() space.
         unsafe {
-            merge(&mut v[..even_len], len_div_2, swap_ptr, even_len, is_less);
-        }
-
-        if len != even_len {
-            // SAFETY: We know len >= 2.
-            unsafe {
-                insert_tail(v, is_less);
-            }
+            merge(v, len_div_2, swap_ptr, len, is_less);
         }
     } else {
         insertion_sort_shift_left(v, end, is_less);
@@ -654,19 +654,21 @@ where
     let len = v.len();
     assert!(end >= start && end <= len);
 
-    // This value is a balance between least comparisons and best performance, as
-    // influenced by for example cache locality.
-    const MIN_INSERTION_RUN: usize = 10;
-    const MAX_IGNORE_PRE_SORTED: usize = 6;
-
     // Insert some more elements into the run if it's too short. Insertion sort is faster than
     // merge sort on short sequences, so this significantly improves performance.
     let start_end_diff = end - start;
 
+    // This value is a balance between least comparisons and best performance, as
+    // influenced by for example cache locality.
+    const MAX_IGNORE_PRE_SORTED: usize = 6;
     const FAST_SORT_SIZE: usize = 32;
 
-    if is_cheap_to_move::<T>()
-        && !has_direct_iterior_mutability::<T>()
+    let qualifies_for_fast_sort = is_cheap_to_move::<T>() && !has_direct_iterior_mutability::<T>();
+
+    // Reduce the border conditions where new runs are created that don't fit FAST_SORT_SIZE.
+    let min_insertion_run = if qualifies_for_fast_sort { 20 } else { 10 };
+
+    if qualifies_for_fast_sort
         && (start + FAST_SORT_SIZE) <= len
         && start_end_diff <= MAX_IGNORE_PRE_SORTED
     {
@@ -685,11 +687,11 @@ where
         // ought to have found it. So we prefer minimizing the total amount of comparisons,
         // which are user provided and may be of arbitrary cost.
         sort32_stable(&mut v[start..(start + FAST_SORT_SIZE)], is_less);
-    } else if start_end_diff < MIN_INSERTION_RUN && end < len {
+    } else if start_end_diff < min_insertion_run && end < len {
         // v[start_found..end] are elements that are already sorted in the input. We want to extend
-        // the sorted region to the left, so we push up MIN_INSERTION_RUN - 1 to the right. Which is
+        // the sorted region to the left, so we push up min_insertion_run - 1 to the right. Which is
         // more efficient that trying to push those already sorted elements to the left.
-        end = cmp::min(start + MIN_INSERTION_RUN, len);
+        end = cmp::min(start + min_insertion_run, len);
         let presorted_start = cmp::max(start_end_diff, 1);
 
         insertion_sort_shift_left(&mut v[start..end], presorted_start, is_less);
@@ -1637,6 +1639,31 @@ where
         swap_next_if_less(arr_ptr.add(1), is_less);
         swap_next_if_less(arr_ptr.add(3), is_less);
         swap_next_if_less(arr_ptr.add(5), is_less);
+    }
+}
+
+/// Sort 16 elements
+///
+/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+/// performance impact.
+#[inline(never)]
+fn sort16_stable<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    assert!(v.len() == 16);
+
+    sort8_stable(&mut v[0..8], is_less);
+    sort8_stable(&mut v[8..16], is_less);
+
+    let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
+    let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+    // SAFETY: We checked that T is Copy and thus observation safe. Should is_less panic v
+    // was not modified in bi_directional_merge_even and retains it's original input. swap
+    // and v must not alias and swap has v.len() space.
+    unsafe {
+        merge(v, 8, swap_ptr, 16, is_less);
     }
 }
 
