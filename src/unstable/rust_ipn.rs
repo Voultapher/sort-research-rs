@@ -986,8 +986,6 @@ where
             sort16_plus(v, is_less);
         } else if len >= 8 {
             sort8_plus(v, is_less);
-        } else if len >= 4 {
-            sort4_plus(v, is_less);
         } else if len >= 2 {
             insertion_sort_shift_left(v, 1, is_less);
         }
