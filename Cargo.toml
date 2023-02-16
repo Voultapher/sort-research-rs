@@ -50,6 +50,7 @@ default = [
     # "cpp_powersort",
     # "cpp_simdsort",
     # "cpp_highwaysort",
+    # "cpp_intel_avx512",
     # "cpp_ips4o",
     # "cpp_blockquicksort",
     # "c_crumsort",
@@ -84,9 +85,13 @@ cpp_powersort = []
 # Uses system C++ standard lib.
 cpp_simdsort = []
 
-# Enable avx2 sort from https://github.com/google/highway/tree/master/.
+# Enable highway sort from https://github.com/google/highway/tree/master/.
 # Uses clang and libcxx.
 cpp_highwaysort = []
+
+# Enable avx512 sort from https://github.com/intel/x86-simd-sort.
+# Uses clang and libcxx.
+cpp_intel_avx512 = []
 
 # Enable ips4o from Engineering In-place (Shared-memory) Sorting Algorithms (2020) paper.
 # Uses system C++ standard lib.

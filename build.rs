@@ -111,6 +111,23 @@ fn build_and_link_cpp_highwaysort() {
 #[cfg(not(feature = "cpp_highwaysort"))]
 fn build_and_link_cpp_highwaysort() {}
 
+#[cfg(feature = "cpp_intel_avx512")]
+fn build_and_link_cpp_intel_avx512() {
+    build_and_link_cpp_sort(
+        "cpp_intel_avx512",
+        Some(|builder: &mut cc::Build| {
+            // Make an exception for march=native here because AVX512 will not work without it.
+            builder.flag_if_supported("-march=native");
+            builder.compiler("clang++"); // gcc yields terrible code here.
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_intel_avx512"))]
+fn build_and_link_cpp_intel_avx512() {}
+
 #[cfg(not(feature = "cpp_ips4o"))]
 fn build_and_link_cpp_ips4o() {}
 
@@ -205,6 +222,7 @@ fn main() {
     build_and_link_cpp_powersort();
     build_and_link_cpp_simdsort();
     build_and_link_cpp_highwaysort();
+    build_and_link_cpp_intel_avx512();
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
     build_and_link_c_crumsort();
