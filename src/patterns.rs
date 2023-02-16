@@ -2,6 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use rand::prelude::*;
 
+use zipf::ZipfDistribution;
+
 use once_cell::sync::OnceCell;
 
 /// Provides a set of patterns useful for testing and benchmarking sorting algorithms.
@@ -28,6 +30,16 @@ where
     let dist: rand::distributions::Uniform<i32> = range.into();
 
     (0..size).map(|_| dist.sample(&mut rng)).collect()
+}
+
+pub fn random_zipf(size: usize, exponent: f64) -> Vec<i32> {
+    // https://en.wikipedia.org/wiki/Zipf's_law
+    let mut rng = rand::rngs::StdRng::from(new_seed());
+
+    // Abstracting over ranges in Rust :(
+    let dist = ZipfDistribution::new(size, exponent).unwrap();
+
+    (0..size).map(|_| dist.sample(&mut rng) as i32).collect()
 }
 
 pub fn random_random_size(max_size: usize) -> Vec<i32> {

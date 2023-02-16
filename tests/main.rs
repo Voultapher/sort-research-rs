@@ -241,7 +241,7 @@ fn random_u128() {
 }
 
 #[test]
-fn random_4() {
+fn random_d4() {
     test_impl(|size| {
         if size > 3 {
             patterns::random_uniform(size, 0..4)
@@ -252,7 +252,7 @@ fn random_4() {
 }
 
 #[test]
-fn random_8() {
+fn random_d8() {
     test_impl(|size| {
         if size > 3 {
             patterns::random_uniform(size, 0..8)
@@ -263,7 +263,7 @@ fn random_8() {
 }
 
 #[test]
-fn random_16() {
+fn random_d16() {
     test_impl(|size| {
         if size > 3 {
             patterns::random_uniform(size, 0..16)
@@ -274,7 +274,7 @@ fn random_16() {
 }
 
 #[test]
-fn random_256() {
+fn random_d256() {
     test_impl(|size| {
         if size > 3 {
             patterns::random_uniform(size, 0..256)
@@ -285,10 +285,46 @@ fn random_256() {
 }
 
 #[test]
-fn random_1024() {
+fn random_d1024() {
     test_impl(|size| {
         if size > 3 {
             patterns::random_uniform(size, 0..1024)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_z1() {
+    // Great for debugging.
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_zipf(size, 1.0)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_z1_03() {
+    // Great for debugging.
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_zipf(size, 1.03)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_z2() {
+    // Great for debugging.
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_zipf(size, 2.0)
         } else {
             Vec::new()
         }

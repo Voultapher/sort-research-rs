@@ -231,7 +231,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
     let mut pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
         ("random", patterns::random),
-        ("random_d2", |size| patterns::random_uniform(size, 0..2)),
+        ("random_z1", |size| patterns::random_zipf(size, 1.0)),
         ("random_d20", |size| patterns::random_uniform(size, 0..20)),
         ("random_p5", |size| random_x_percent(size, 5.0)),
         ("ascending", patterns::ascending),
@@ -335,6 +335,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random__div8", |size| {
             patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
+        ("random_d2", |size| patterns::random_uniform(size, 0..2)),
         ("random_d4", |size| patterns::random_uniform(size, 0..4)),
         ("random_d8", |size| patterns::random_uniform(size, 0..8)),
         ("random_d10", |size| patterns::random_uniform(size, 0..10)),
@@ -364,6 +365,15 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_p90", |size| random_x_percent(size, 90.0)),
         ("random_p95", |size| random_x_percent(size, 95.0)),
         ("random_p99", |size| random_x_percent(size, 99.0)),
+        ("random_z1_05", |size| patterns::random_zipf(size, 1.05)),
+        ("random_z1_1", |size| patterns::random_zipf(size, 1.1)),
+        ("random_z1_2", |size| patterns::random_zipf(size, 1.2)),
+        ("random_z1_3", |size| patterns::random_zipf(size, 1.3)),
+        ("random_z1_4", |size| patterns::random_zipf(size, 1.4)),
+        ("random_z1_6", |size| patterns::random_zipf(size, 1.6)),
+        ("random_z2", |size| patterns::random_zipf(size, 2.0)),
+        ("random_z3", |size| patterns::random_zipf(size, 3.0)),
+        ("random_z4", |size| patterns::random_zipf(size, 4.0)),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {

@@ -138,7 +138,7 @@ def build_color_palette():
         "rust_ipn_stable": palette[5],
         "cpp_powersort_stable": palette[6],
         "cpp_powersort_4way_stable": palette[7],
-        "rust_wpwoodjr": palette[7],
+        "rust_wpwoodjr_stable": palette[7],
         # Unstable
         "c_crumsort_unstable": palette[0],
         "cpp_std_sys_unstable": palette[1],

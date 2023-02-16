@@ -24,8 +24,9 @@ TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
 
 
 # Adjust for pattern
-# X_AXIS_LABEL = """% of input that is random, rest is zero"""
-X_AXIS_LABEL = "Number of distintinct values"
+X_AXIS_LABEL = """% of input that is random, rest is zero"""
+# X_AXIS_LABEL = "Number of distintinct values"
+# X_AXIS_LABEL = "Zipf distribution exponent"
 
 # Needs to be shared instance :/
 TOOLS = None
@@ -59,7 +60,7 @@ def add_tools_to_plot(plot):
 
 def extract_line(sort_name, test_size, prefix, values):
     def extract_property(pattern):
-        return int(pattern.partition(prefix)[2])
+        return float(pattern.partition(prefix)[2].replace("_", "."))
 
     x = []
     y = []
