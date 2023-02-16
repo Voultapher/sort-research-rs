@@ -27,7 +27,7 @@ uint32_t intel_avx512_i32_by(int32_t* data,
 // --- u64 ---
 
 void intel_avx512_u64(uint64_t* data, size_t len) {
-  printf("Not supported\n");
+  avx512_qsort(reinterpret_cast<int64_t*>(data), len);
 }
 
 uint32_t intel_avx512_u64_by(uint64_t* data,
