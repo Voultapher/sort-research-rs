@@ -511,9 +511,35 @@ where
     }
 }
 
+#[inline(always)]
+unsafe fn fulcrum_rotate<T, F>(
+    l_ptr: *mut T,
+    mut r_ptr: *mut T,
+    mut x_ptr: *mut T,
+    mut elem_i: usize,
+    offset_val: isize,
+    loop_len: usize,
+    pivot: &T,
+    is_less: &mut F,
+) -> (*mut T, *mut T, usize)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    for _ in 0..loop_len {
+        let is_l = is_less(&*x_ptr, pivot);
+        ptr::copy_nonoverlapping(x_ptr, r_ptr.add(elem_i), 1);
+        ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+        elem_i += is_l as usize;
+        x_ptr = x_ptr.wrapping_offset(offset_val);
+        r_ptr = r_ptr.wrapping_sub(1);
+    }
+
+    (r_ptr, x_ptr, elem_i)
+}
+
 // Inspired by Igor van den Hoven and his work in quadsort/crumsort.
 // TODO document.
-fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+fn fulcrum_partition_x<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -522,6 +548,11 @@ where
 
     const ROTATION_ELEMS: usize = 16;
     assert!(len > (ROTATION_ELEMS * 2));
+
+    let advance_left = |a_ptr: *const T, l_ptr: *const T, elem_i: usize| -> bool {
+        // SAFETY: TODO
+        unsafe { (a_ptr.sub_ptr(l_ptr) - elem_i) <= ROTATION_ELEMS }
+    };
 
     let mut swap = mem::MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
@@ -537,82 +568,114 @@ where
             ROTATION_ELEMS,
         );
 
-        let mut l_ptr = arr_ptr;
+        let l_ptr = arr_ptr;
         let mut r_ptr = arr_ptr.add(len - 1);
 
         let mut a_ptr = arr_ptr.add(ROTATION_ELEMS);
         let mut t_ptr = arr_ptr.add(len - (ROTATION_ELEMS + 1));
 
-        let mut count = (len / ROTATION_ELEMS) - 2;
         let mut elem_i = 0;
 
-        loop {
-            if (a_ptr.sub_ptr(l_ptr) - elem_i) <= ROTATION_ELEMS {
-                if count == 0 {
-                    break;
-                }
-                count -= 1;
-
-                for _ in 0..ROTATION_ELEMS {
-                    let is_l = !is_less(pivot, &*a_ptr); // TODO can this be just is_less?
-                    ptr::copy_nonoverlapping(a_ptr, r_ptr.add(elem_i), 1);
-                    ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
-                    elem_i += is_l as usize;
-                    a_ptr = a_ptr.wrapping_add(1);
-                    r_ptr = r_ptr.wrapping_sub(1);
-                }
-            }
-            // TODO can this be a else?
-            if (a_ptr.sub_ptr(l_ptr) - elem_i) > ROTATION_ELEMS {
-                if count == 0 {
-                    break;
-                }
-                count -= 1;
-
-                for _ in 0..ROTATION_ELEMS {
-                    let is_l = !is_less(pivot, &*t_ptr); // TODO can this be just is_less?
-                    ptr::copy_nonoverlapping(t_ptr, r_ptr.add(elem_i), 1);
-                    ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
-                    elem_i += is_l as usize;
-                    t_ptr = t_ptr.wrapping_sub(1);
-                    r_ptr = r_ptr.wrapping_sub(1);
-                }
+        for _ in 0..((len / ROTATION_ELEMS) - 2) {
+            let loop_len = ROTATION_ELEMS;
+            if advance_left(a_ptr, l_ptr, elem_i) {
+                (r_ptr, a_ptr, elem_i) =
+                    fulcrum_rotate(l_ptr, r_ptr, a_ptr, elem_i, 1, loop_len, pivot, is_less);
+            } else {
+                (r_ptr, t_ptr, elem_i) =
+                    fulcrum_rotate(l_ptr, r_ptr, t_ptr, elem_i, -1, loop_len, pivot, is_less);
             }
         }
 
-        if (a_ptr.sub_ptr(l_ptr) - elem_i) <= ROTATION_ELEMS {
-            for _ in 0..(len % ROTATION_ELEMS) {
-                let is_l = !is_less(pivot, &*a_ptr); // TODO can this be just is_less?
-                ptr::copy_nonoverlapping(a_ptr, r_ptr.add(elem_i), 1);
-                ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
-                elem_i += is_l as usize;
-                a_ptr = a_ptr.wrapping_add(1);
-                r_ptr = r_ptr.wrapping_sub(1);
-            }
+        let loop_len = len % ROTATION_ELEMS;
+        if advance_left(a_ptr, l_ptr, elem_i) {
+            (r_ptr, a_ptr, elem_i) =
+                fulcrum_rotate(l_ptr, r_ptr, a_ptr, elem_i, 1, loop_len, pivot, is_less);
         } else {
-            for _ in 0..(len % ROTATION_ELEMS) {
-                let is_l = !is_less(pivot, &*t_ptr); // TODO can this be just is_less?
-                ptr::copy_nonoverlapping(t_ptr, r_ptr.add(elem_i), 1);
-                ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
-                elem_i += is_l as usize;
-                t_ptr = t_ptr.wrapping_sub(1);
-                r_ptr = r_ptr.wrapping_sub(1);
-            }
+            (r_ptr, t_ptr, elem_i) =
+                fulcrum_rotate(l_ptr, r_ptr, t_ptr, elem_i, -1, loop_len, pivot, is_less);
         }
 
-        a_ptr = swap_ptr;
-        for _ in 0..(ROTATION_ELEMS * 2) {
-            let is_l = !is_less(pivot, &*a_ptr); // TODO can this be just is_less?
-            ptr::copy_nonoverlapping(a_ptr, r_ptr.add(elem_i), 1);
-            ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
-            elem_i += is_l as usize;
-            a_ptr = a_ptr.wrapping_add(1);
-            r_ptr = r_ptr.wrapping_sub(1);
-        }
+        let loop_len = ROTATION_ELEMS * 2;
+        (_, _, elem_i) =
+            fulcrum_rotate(l_ptr, r_ptr, swap_ptr, elem_i, 1, loop_len, pivot, is_less);
 
         elem_i
     }
 }
+
+// pub fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+// where
+//     F: FnMut(&T, &T) -> bool,
+// {
+//     const ROTATION_ELEMS: usize = 16;
+
+//     // TODO explain ideas. and panic safety. cleanup.
+//     let len = v.len();
+//     assert!(len > (ROTATION_ELEMS * 2));
+
+//     // SAFETY: TODO
+//     unsafe {
+//         let fill_left =
+//             |mut l_ptr: *mut T, r_ptr: *mut T, swap_ptr: *mut T, is_less: &mut F| -> *mut T {
+//                 let mut i = 0;
+
+//                 while (l_ptr < r_ptr) && i < ROTATION_ELEMS {
+//                     panic!();
+//                 }
+
+//                 l_ptr
+//             };
+
+//         let next_right = |l_ptr: *mut T, mut r_ptr: *mut T, is_less: &mut F| -> *mut T {
+//             // Find next value on the right side that needs to go on the left side.
+//             while (l_ptr < r_ptr) && !is_less(&*r_ptr, pivot) {
+//                 r_ptr = r_ptr.sub(1);
+//             }
+
+//             r_ptr
+//         };
+
+//         let arr_ptr = v.as_mut_ptr();
+
+//         let mut l_ptr = arr_ptr;
+//         let mut r_ptr = arr_ptr.add(len - 1);
+
+//         let mut swap = mem::MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
+//         let swap_ptr = swap.as_mut_ptr() as *mut T;
+
+//         // l_ptr = fill_left(l_ptr, r_ptr);
+//         // l_ptr = next_left(l_ptr, r_ptr, is_less);
+//         // r_ptr = next_right(l_ptr, r_ptr, is_less);
+
+//         // let mut drop_guard = InsertionHole {
+//         //     src: &tmp,
+//         //     dest: r_ptr,
+//         // };
+
+//         while l_ptr < r_ptr {
+//             // l_ptr = next_left(l_ptr, r_ptr, is_less);
+
+//             // Copy left wrong side element into right side wrong side element.
+//             ptr::copy_nonoverlapping(l_ptr, r_ptr, 1);
+
+//             // The drop_guard also participates in the rotation logic. Only requiring one update per
+//             // loop. The two places that could panic are next_left and next_right, If either of them
+//             // panics, drop_guard.dest will hold a spot that contains a duplicate element. Which
+//             // will be overwritten with the temporary value.
+//             // drop_guard.dest = l_ptr;
+
+//             r_ptr = next_right(l_ptr, r_ptr, is_less);
+//             // Copy right wrong side element into left side wrong side element.
+//             ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
+//         }
+
+//         // ptr::copy_nonoverlapping(&tmp, r_ptr, 1);
+//         // mem::forget(drop_guard);
+
+//         l_ptr.sub_ptr(arr_ptr)
+//     }
+// }
 
 /// Partitions `v` into elements smaller than `v[pivot]`, followed by elements greater than or
 /// equal to `v[pivot]`.
@@ -645,19 +708,14 @@ where
 
         // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
 
-        // After a certain size, fulcrum partitioning is less efficient than partition_in_blocks.
-        // This is a guess.
-        const MAX_FLUCRUM_LEN: usize = 2usize.pow(12);
-
         // Disabled by default because it currently has panic safety issues.
         const FULCRUM_ENABLED: bool = false;
 
         let is_less_count = if FULCRUM_ENABLED
             && is_cheap_to_move::<T>()
             && !has_direct_iterior_mutability::<T>()
-            && v.len() <= MAX_FLUCRUM_LEN
         {
-            fulcrum_partition(v, pivot, is_less)
+            fulcrum_partition_x(v, pivot, is_less)
         } else {
             partition_in_blocks(v, pivot, is_less)
         };
