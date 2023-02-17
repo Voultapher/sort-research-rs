@@ -17,3 +17,4 @@ for line in vals.strip().split('\n'):
         b = int(parts[1])
 
         print(f"swap_if_less(arr_ptr, {a}, {b}, is_less);")
+        # print(f"swap_next_if_less(arr_ptr.add({a}), is_less);")

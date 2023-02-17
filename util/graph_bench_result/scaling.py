@@ -17,10 +17,10 @@ from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
 from single_size import parse_result, extract_groups, build_color_palette
-from cpu_info import CPU_BOOST_GHZ, CPU_ARCH
+from cpu_info import get_cpu_info
 
-TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
-
+CPU_BOOST_GHZ = None
+CPU_ARCH = None
 
 # Needs to be shared instance :/
 TOOLS = None
@@ -117,7 +117,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
     return plot_name, plot
 
 
-def plog_patterns(name, groups):
+def plot_patterns(name, groups):
     patterns = sorted(
         list(list(list(groups.values())[0].values())[0].values())[0].keys()
     )
@@ -142,4 +142,5 @@ if __name__ == "__main__":
     groups = extract_groups(combined_result)
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
-    plog_patterns(name, groups)
+    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
+    plot_patterns(name, groups)

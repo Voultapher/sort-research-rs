@@ -17,9 +17,10 @@ from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
 from single_size import parse_result, extract_groups
-from cpu_info import CPU_BOOST_GHZ, CPU_ARCH
+from cpu_info import get_cpu_info
 
-TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
+CPU_BOOST_GHZ = None
+CPU_ARCH = None
 
 
 def map_pattern_to_color(patterns, pattern):
@@ -170,4 +171,5 @@ if __name__ == "__main__":
     sort_name_b = "rust_glidesort_stable"
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
+    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
     plot_types(sort_name_a, sort_name_b, name, groups)

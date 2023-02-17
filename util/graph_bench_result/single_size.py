@@ -15,11 +15,10 @@ from bokeh.embed import file_html
 from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
+from cpu_info import get_cpu_info
 
-from cpu_info import CPU_BOOST_GHZ, CPU_ARCH
-
-
-TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
+CPU_BOOST_GHZ = None
+CPU_ARCH = None
 
 
 def parse_result(path):
@@ -132,6 +131,7 @@ def build_color_palette():
         # Stable
         "c_fluxsort_stable": palette[0],
         "cpp_std_sys_stable": palette[1],
+        "cpp_std_msvc_stable": palette[1],
         "rust_std_stable": palette[2],
         "rust_glidesort_stable": palette[3],
         "cpp_std_libcxx_stable": palette[4],
@@ -142,6 +142,7 @@ def build_color_palette():
         # Unstable
         "c_crumsort_unstable": palette[0],
         "cpp_std_sys_unstable": palette[1],
+        "cpp_std_msvc_unstable": palette[1],
         "rust_std_unstable": palette[2],
         "cpp_pdqsort_unstable": palette[3],
         "cpp_std_libcxx_unstable": palette[4],
@@ -150,6 +151,9 @@ def build_color_palette():
         "cpp_blockquicksort": palette[7],
         # There are more sorts but they don't really fit the graph or colors at
         # the same time
+        "rust_radsort_radix": palette[4],
+        "cpp_highwaysort": palette[6],
+        "cpp_intel_avx512": palette[7],
     }
 
     return pinned_colors
@@ -253,4 +257,5 @@ if __name__ == "__main__":
     groups = extract_groups(combined_result)
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
+    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
     plot_sizes(name, groups)
