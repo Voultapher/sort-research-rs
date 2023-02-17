@@ -63,11 +63,11 @@ A selection of high-performance in-place sort implementations.
 - cpp_intel_avx512           | https://github.com/intel/x86-simd-sort (5)
 ```
 
-- 1. Vendored ca. mid 2022.
-- 2. Still WIP and these are only preliminary results.
-- 3. Build with msvc.
-- 4. Compiled with `#define cmp(a, b) (*(a) > *(b))`. This is required to be competitive, the regular way of providing a comparison function is problematic because of C language limitations.
-- 5. Build with clang and `-march=native`. Compiled with static dispatch, this would not be portable. Any CPU without AVX-512 support would fail to run the binary. It's unknown what the overhead of dynamic dispatch would be. 
+1. Vendored ca. mid 2022.
+2. Still WIP and these are only preliminary results.
+3. Build with msvc.
+4. Compiled with `#define cmp(a, b) (*(a) > *(b))`. This is required to be competitive, the regular way of providing a comparison function is problematic because of C language limitations.
+5. Build with clang and `-march=native`. Compiled with static dispatch, this would not be portable. Any CPU without AVX-512 support would fail to run the binary. It's unknown what the overhead of dynamic dispatch would be. 
 
 ### Results `u64`
 
