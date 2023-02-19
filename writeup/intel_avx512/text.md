@@ -91,19 +91,20 @@ Is not an honest representation. And it's generally very difficult to compress s
 - ascending and descending show the largest variance with the fastest sort being ~33x and ~23x faster respectively than the slowest.
 - More natural random distributions like random_z1 close the gap between manually vectorized code and pdqsort derived designs, rust_std_unstable, rust_ipn_unstable and c_crumsort_unstable.
 
-Whether these patterns are representative will depend on your workload. These are fundamentally synthetic benchmarks exploring sort performance in isolation. Especially small sizes are likely not representative of real world performance, where CPU branch, instruction and data caches may be cold. These numbers should be interpreted as best case performance under laboratory conditions.
+Whether these patterns are representative will depend on your workload. These are fundamentally synthetic benchmarks exploring sort performance in isolation. Especially small sizes are likely not representative of real world performance, where CPU branch, instruction and data caches may be cold. **These numbers should be interpreted as best case performance under laboratory conditions.**
 
 #### hot-u64-scaling
 
 Measuring random pattern performance across different sizes:
 <img src="assets/hot-u64-scaling-random.png" width=600 />
+
 Zoomed in:
 <img src="assets/hot-u64-scaling-random_zoomed.png" width=600 />
 
 Observations:
 
 - cpp_vqsort is exceedingly slow for small inputs.
-- cpp_intel_avx512 is fast across all sizes.
+- cpp_intel_avx512 is fast across all sizes, when benchmarked in a hot loop.
 - cpp_intel_avx512, rust_ipn_unstable and c_crumsort_unstable, differentiate themselves from implementations using insertion sort for small inputs, rust_std_unstable, cpp_pdqsort_unstable and cpp_std_msvc_unstable.
 - cpp_std_msvc_unstable shows sub-log scaling.
 - Starting at ~50k cpp_vqsort is the fastest.
@@ -147,7 +148,7 @@ cpp_intel_avx512 is a very fast sort implementation, especially for random input
 
 #### Specialized sort in a library
 
-cpp_intel_avx512 can be a great choice, if the input is assumed mostly random, and not of low-cardinality. When inputs of varying sizes have to be sorted and the appropriate hardware supporting AVX-512 is available. However one should be carful, in adopting new code [[4](https://github.com/numpy/numpy/pull/22315/#issuecomment-1434389399)].
+cpp_intel_avx512 can be a great choice, if the input is assumed mostly random, and not of low-cardinality. When inputs of varying sizes have to be sorted and the appropriate hardware supporting AVX-512 is available.
 
 #### Specialized HPC code
 
@@ -155,4 +156,4 @@ If you need the best possible throughput, and know you only have large inputs wi
 
 #### Language standard library
 
-A standard library implementation should be good in most scenarios, with bad performance in as few scenarios as possible. There are many glaring issues with cpp_intel_avx512 for such a use case. It would only support a small fraction of devices, would increase binary size for all x86 targets. It is not good at exploiting existing patterns in the input. There are worries about it's functional correctness [[5](https://github.com/numpy/numpy/pull/22315/#issuecomment-1434766714)]. It can't support custom comparisons, which would potentially mean that `v.sort()` and `v.sort_by(|a, b| a.cmp(b))` could have a surprising difference in performance. It can't support user defined types without additional code by the user, eg. `#[derive(Copy, Clone)]struct X(i32)` could have a surprising difference in performance to just `i32`.
+A standard library implementation should be good in most scenarios, with bad performance in as few scenarios as possible. There are many glaring issues with cpp_intel_avx512 for such a use case. It would only support a small fraction of devices, would increase binary size for all x86 targets. It is not good at exploiting existing patterns in the input. It can't support custom comparisons, which would potentially mean that `v.sort()` and `v.sort_by(|a, b| a.cmp(b))` could have a surprising difference in performance. It can't support user defined types without additional code by the user, eg. `#[derive(Copy, Clone)]struct X(i32)` could have a surprising difference in performance to just `i32`.
