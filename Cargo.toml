@@ -49,7 +49,7 @@ default = [
     # "cpp_pdqsort",
     # "cpp_powersort",
     # "cpp_simdsort",
-    # "cpp_highwaysort",
+    # "cpp_vqsort",
     # "cpp_intel_avx512",
     # "cpp_ips4o",
     # "cpp_blockquicksort",
@@ -87,7 +87,7 @@ cpp_simdsort = []
 
 # Enable highway sort from https://github.com/google/highway/tree/master/.
 # Uses clang and libcxx.
-cpp_highwaysort = []
+cpp_vqsort = []
 
 # Enable avx512 sort from https://github.com/intel/x86-simd-sort.
 # Uses clang and libcxx.

@@ -1,16 +1,16 @@
 {
   "name": "scaling",
   "benchmarks": {
-    "cpp_highwaysort-hot-u64-random-0": {
+    "cpp_vqsort-hot-u64-random-0": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-0",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-0",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-0",
+        "group_id": "cpp_vqsort-hot-u64-random-0",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-0",
-        "directory_name": "cpp_highwaysort-hot-u64-random-0"
+        "full_id": "cpp_vqsort-hot-u64-random-0",
+        "directory_name": "cpp_vqsort-hot-u64-random-0"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -60,16 +60,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-1": {
+    "cpp_vqsort-hot-u64-random-1": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-1",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-1",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-1",
+        "group_id": "cpp_vqsort-hot-u64-random-1",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-1",
-        "directory_name": "cpp_highwaysort-hot-u64-random-1"
+        "full_id": "cpp_vqsort-hot-u64-random-1",
+        "directory_name": "cpp_vqsort-hot-u64-random-1"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -119,16 +119,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-1000": {
+    "cpp_vqsort-hot-u64-random-1000": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-1000",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-1000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-1000",
+        "group_id": "cpp_vqsort-hot-u64-random-1000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-1000",
-        "directory_name": "cpp_highwaysort-hot-u64-random-1000"
+        "full_id": "cpp_vqsort-hot-u64-random-1000",
+        "directory_name": "cpp_vqsort-hot-u64-random-1000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -178,16 +178,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-10000": {
+    "cpp_vqsort-hot-u64-random-10000": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-10000",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-10000",
+        "group_id": "cpp_vqsort-hot-u64-random-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-random-10000"
+        "full_id": "cpp_vqsort-hot-u64-random-10000",
+        "directory_name": "cpp_vqsort-hot-u64-random-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -237,16 +237,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-100000": {
+    "cpp_vqsort-hot-u64-random-100000": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-100000",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-100000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-100000",
+        "group_id": "cpp_vqsort-hot-u64-random-100000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-100000",
-        "directory_name": "cpp_highwaysort-hot-u64-random-100000"
+        "full_id": "cpp_vqsort-hot-u64-random-100000",
+        "directory_name": "cpp_vqsort-hot-u64-random-100000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -296,16 +296,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-1000000": {
+    "cpp_vqsort-hot-u64-random-1000000": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-1000000",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-1000000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-1000000",
+        "group_id": "cpp_vqsort-hot-u64-random-1000000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-1000000",
-        "directory_name": "cpp_highwaysort-hot-u64-random-1000000"
+        "full_id": "cpp_vqsort-hot-u64-random-1000000",
+        "directory_name": "cpp_vqsort-hot-u64-random-1000000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -347,16 +347,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-10000000": {
+    "cpp_vqsort-hot-u64-random-10000000": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-10000000",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-10000000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-10000000",
+        "group_id": "cpp_vqsort-hot-u64-random-10000000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-10000000",
-        "directory_name": "cpp_highwaysort-hot-u64-random-10000000"
+        "full_id": "cpp_vqsort-hot-u64-random-10000000",
+        "directory_name": "cpp_vqsort-hot-u64-random-10000000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -398,16 +398,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-101": {
+    "cpp_vqsort-hot-u64-random-101": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-101",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-101",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-101",
+        "group_id": "cpp_vqsort-hot-u64-random-101",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-101",
-        "directory_name": "cpp_highwaysort-hot-u64-random-101"
+        "full_id": "cpp_vqsort-hot-u64-random-101",
+        "directory_name": "cpp_vqsort-hot-u64-random-101"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -457,16 +457,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-11": {
+    "cpp_vqsort-hot-u64-random-11": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-11",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-11",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-11",
+        "group_id": "cpp_vqsort-hot-u64-random-11",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-11",
-        "directory_name": "cpp_highwaysort-hot-u64-random-11"
+        "full_id": "cpp_vqsort-hot-u64-random-11",
+        "directory_name": "cpp_vqsort-hot-u64-random-11"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -516,16 +516,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-13": {
+    "cpp_vqsort-hot-u64-random-13": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-13",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-13",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-13",
+        "group_id": "cpp_vqsort-hot-u64-random-13",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-13",
-        "directory_name": "cpp_highwaysort-hot-u64-random-13"
+        "full_id": "cpp_vqsort-hot-u64-random-13",
+        "directory_name": "cpp_vqsort-hot-u64-random-13"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -575,16 +575,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-15": {
+    "cpp_vqsort-hot-u64-random-15": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-15",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-15",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-15",
+        "group_id": "cpp_vqsort-hot-u64-random-15",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-15",
-        "directory_name": "cpp_highwaysort-hot-u64-random-15"
+        "full_id": "cpp_vqsort-hot-u64-random-15",
+        "directory_name": "cpp_vqsort-hot-u64-random-15"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -634,16 +634,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-16": {
+    "cpp_vqsort-hot-u64-random-16": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-16",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-16",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-16",
+        "group_id": "cpp_vqsort-hot-u64-random-16",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-16",
-        "directory_name": "cpp_highwaysort-hot-u64-random-16"
+        "full_id": "cpp_vqsort-hot-u64-random-16",
+        "directory_name": "cpp_vqsort-hot-u64-random-16"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -693,16 +693,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-17": {
+    "cpp_vqsort-hot-u64-random-17": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-17",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-17",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-17",
+        "group_id": "cpp_vqsort-hot-u64-random-17",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-17",
-        "directory_name": "cpp_highwaysort-hot-u64-random-17"
+        "full_id": "cpp_vqsort-hot-u64-random-17",
+        "directory_name": "cpp_vqsort-hot-u64-random-17"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -752,16 +752,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-19": {
+    "cpp_vqsort-hot-u64-random-19": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-19",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-19",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-19",
+        "group_id": "cpp_vqsort-hot-u64-random-19",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-19",
-        "directory_name": "cpp_highwaysort-hot-u64-random-19"
+        "full_id": "cpp_vqsort-hot-u64-random-19",
+        "directory_name": "cpp_vqsort-hot-u64-random-19"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -811,16 +811,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-2": {
+    "cpp_vqsort-hot-u64-random-2": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-2",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-2",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-2",
+        "group_id": "cpp_vqsort-hot-u64-random-2",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-2",
-        "directory_name": "cpp_highwaysort-hot-u64-random-2"
+        "full_id": "cpp_vqsort-hot-u64-random-2",
+        "directory_name": "cpp_vqsort-hot-u64-random-2"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -870,16 +870,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-20": {
+    "cpp_vqsort-hot-u64-random-20": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-20",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-20",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-20",
+        "group_id": "cpp_vqsort-hot-u64-random-20",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-20",
-        "directory_name": "cpp_highwaysort-hot-u64-random-20"
+        "full_id": "cpp_vqsort-hot-u64-random-20",
+        "directory_name": "cpp_vqsort-hot-u64-random-20"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -929,16 +929,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-200": {
+    "cpp_vqsort-hot-u64-random-200": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-200",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-200",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-200",
+        "group_id": "cpp_vqsort-hot-u64-random-200",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-200",
-        "directory_name": "cpp_highwaysort-hot-u64-random-200"
+        "full_id": "cpp_vqsort-hot-u64-random-200",
+        "directory_name": "cpp_vqsort-hot-u64-random-200"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -988,16 +988,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-2048": {
+    "cpp_vqsort-hot-u64-random-2048": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-2048",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-2048",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-2048",
+        "group_id": "cpp_vqsort-hot-u64-random-2048",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-2048",
-        "directory_name": "cpp_highwaysort-hot-u64-random-2048"
+        "full_id": "cpp_vqsort-hot-u64-random-2048",
+        "directory_name": "cpp_vqsort-hot-u64-random-2048"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1047,16 +1047,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-24": {
+    "cpp_vqsort-hot-u64-random-24": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-24",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-24",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-24",
+        "group_id": "cpp_vqsort-hot-u64-random-24",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-24",
-        "directory_name": "cpp_highwaysort-hot-u64-random-24"
+        "full_id": "cpp_vqsort-hot-u64-random-24",
+        "directory_name": "cpp_vqsort-hot-u64-random-24"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1106,16 +1106,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-28": {
+    "cpp_vqsort-hot-u64-random-28": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-28",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-28",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-28",
+        "group_id": "cpp_vqsort-hot-u64-random-28",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-28",
-        "directory_name": "cpp_highwaysort-hot-u64-random-28"
+        "full_id": "cpp_vqsort-hot-u64-random-28",
+        "directory_name": "cpp_vqsort-hot-u64-random-28"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1165,16 +1165,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-3": {
+    "cpp_vqsort-hot-u64-random-3": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-3",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-3",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-3",
+        "group_id": "cpp_vqsort-hot-u64-random-3",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-3",
-        "directory_name": "cpp_highwaysort-hot-u64-random-3"
+        "full_id": "cpp_vqsort-hot-u64-random-3",
+        "directory_name": "cpp_vqsort-hot-u64-random-3"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1224,16 +1224,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-31": {
+    "cpp_vqsort-hot-u64-random-31": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-31",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-31",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-31",
+        "group_id": "cpp_vqsort-hot-u64-random-31",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-31",
-        "directory_name": "cpp_highwaysort-hot-u64-random-31"
+        "full_id": "cpp_vqsort-hot-u64-random-31",
+        "directory_name": "cpp_vqsort-hot-u64-random-31"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1283,16 +1283,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-36": {
+    "cpp_vqsort-hot-u64-random-36": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-36",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-36",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-36",
+        "group_id": "cpp_vqsort-hot-u64-random-36",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-36",
-        "directory_name": "cpp_highwaysort-hot-u64-random-36"
+        "full_id": "cpp_vqsort-hot-u64-random-36",
+        "directory_name": "cpp_vqsort-hot-u64-random-36"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1342,16 +1342,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-5": {
+    "cpp_vqsort-hot-u64-random-5": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-5",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-5",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-5",
+        "group_id": "cpp_vqsort-hot-u64-random-5",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-5",
-        "directory_name": "cpp_highwaysort-hot-u64-random-5"
+        "full_id": "cpp_vqsort-hot-u64-random-5",
+        "directory_name": "cpp_vqsort-hot-u64-random-5"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1401,16 +1401,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-50": {
+    "cpp_vqsort-hot-u64-random-50": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-50",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-50",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-50",
+        "group_id": "cpp_vqsort-hot-u64-random-50",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-50",
-        "directory_name": "cpp_highwaysort-hot-u64-random-50"
+        "full_id": "cpp_vqsort-hot-u64-random-50",
+        "directory_name": "cpp_vqsort-hot-u64-random-50"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1460,16 +1460,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-500": {
+    "cpp_vqsort-hot-u64-random-500": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-500",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-500",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-500",
+        "group_id": "cpp_vqsort-hot-u64-random-500",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-500",
-        "directory_name": "cpp_highwaysort-hot-u64-random-500"
+        "full_id": "cpp_vqsort-hot-u64-random-500",
+        "directory_name": "cpp_vqsort-hot-u64-random-500"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1519,16 +1519,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-7": {
+    "cpp_vqsort-hot-u64-random-7": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-7",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-7",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-7",
+        "group_id": "cpp_vqsort-hot-u64-random-7",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-7",
-        "directory_name": "cpp_highwaysort-hot-u64-random-7"
+        "full_id": "cpp_vqsort-hot-u64-random-7",
+        "directory_name": "cpp_vqsort-hot-u64-random-7"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1578,16 +1578,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-8": {
+    "cpp_vqsort-hot-u64-random-8": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-8",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-8",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-8",
+        "group_id": "cpp_vqsort-hot-u64-random-8",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-8",
-        "directory_name": "cpp_highwaysort-hot-u64-random-8"
+        "full_id": "cpp_vqsort-hot-u64-random-8",
+        "directory_name": "cpp_vqsort-hot-u64-random-8"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -1637,16 +1637,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-9": {
+    "cpp_vqsort-hot-u64-random-9": {
       "baseline": "scaling",
-      "fullname": "scaling/cpp_highwaysort-hot-u64-random-9",
+      "fullname": "scaling/cpp_vqsort-hot-u64-random-9",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-9",
+        "group_id": "cpp_vqsort-hot-u64-random-9",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-9",
-        "directory_name": "cpp_highwaysort-hot-u64-random-9"
+        "full_id": "cpp_vqsort-hot-u64-random-9",
+        "directory_name": "cpp_vqsort-hot-u64-random-9"
       },
       "criterion_estimates_v1": {
         "mean": {

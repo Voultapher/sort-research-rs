@@ -473,16 +473,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-ascending-10000": {
+    "cpp_vqsort-hot-u64-ascending-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-ascending-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-ascending-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-ascending-10000",
+        "group_id": "cpp_vqsort-hot-u64-ascending-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-ascending-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-ascending-10000"
+        "full_id": "cpp_vqsort-hot-u64-ascending-10000",
+        "directory_name": "cpp_vqsort-hot-u64-ascending-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -532,16 +532,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-descending-10000": {
+    "cpp_vqsort-hot-u64-descending-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-descending-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-descending-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-descending-10000",
+        "group_id": "cpp_vqsort-hot-u64-descending-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-descending-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-descending-10000"
+        "full_id": "cpp_vqsort-hot-u64-descending-10000",
+        "directory_name": "cpp_vqsort-hot-u64-descending-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -591,16 +591,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random-10000": {
+    "cpp_vqsort-hot-u64-random-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-random-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-random-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random-10000",
+        "group_id": "cpp_vqsort-hot-u64-random-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-random-10000"
+        "full_id": "cpp_vqsort-hot-u64-random-10000",
+        "directory_name": "cpp_vqsort-hot-u64-random-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -650,16 +650,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random_d20-10000": {
+    "cpp_vqsort-hot-u64-random_d20-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-random_d20-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-random_d20-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random_d20-10000",
+        "group_id": "cpp_vqsort-hot-u64-random_d20-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random_d20-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-random_d20-10000"
+        "full_id": "cpp_vqsort-hot-u64-random_d20-10000",
+        "directory_name": "cpp_vqsort-hot-u64-random_d20-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -709,16 +709,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random_p5-10000": {
+    "cpp_vqsort-hot-u64-random_p5-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-random_p5-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-random_p5-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random_p5-10000",
+        "group_id": "cpp_vqsort-hot-u64-random_p5-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random_p5-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-random_p5-10000"
+        "full_id": "cpp_vqsort-hot-u64-random_p5-10000",
+        "directory_name": "cpp_vqsort-hot-u64-random_p5-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -768,16 +768,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-random_z1-10000": {
+    "cpp_vqsort-hot-u64-random_z1-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-random_z1-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-random_z1-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-random_z1-10000",
+        "group_id": "cpp_vqsort-hot-u64-random_z1-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-random_z1-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-random_z1-10000"
+        "full_id": "cpp_vqsort-hot-u64-random_z1-10000",
+        "directory_name": "cpp_vqsort-hot-u64-random_z1-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -827,16 +827,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-saws_long-10000": {
+    "cpp_vqsort-hot-u64-saws_long-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-saws_long-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-saws_long-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-saws_long-10000",
+        "group_id": "cpp_vqsort-hot-u64-saws_long-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-saws_long-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-saws_long-10000"
+        "full_id": "cpp_vqsort-hot-u64-saws_long-10000",
+        "directory_name": "cpp_vqsort-hot-u64-saws_long-10000"
       },
       "criterion_estimates_v1": {
         "mean": {
@@ -886,16 +886,16 @@
         }
       }
     },
-    "cpp_highwaysort-hot-u64-saws_short-10000": {
+    "cpp_vqsort-hot-u64-saws_short-10000": {
       "baseline": "10k",
-      "fullname": "10k/cpp_highwaysort-hot-u64-saws_short-10000",
+      "fullname": "10k/cpp_vqsort-hot-u64-saws_short-10000",
       "criterion_benchmark_v1": {
-        "group_id": "cpp_highwaysort-hot-u64-saws_short-10000",
+        "group_id": "cpp_vqsort-hot-u64-saws_short-10000",
         "function_id": null,
         "value_str": null,
         "throughput": null,
-        "full_id": "cpp_highwaysort-hot-u64-saws_short-10000",
-        "directory_name": "cpp_highwaysort-hot-u64-saws_short-10000"
+        "full_id": "cpp_vqsort-hot-u64-saws_short-10000",
+        "directory_name": "cpp_vqsort-hot-u64-saws_short-10000"
       },
       "criterion_estimates_v1": {
         "mean": {

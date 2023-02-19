@@ -5,9 +5,9 @@ pub mod rust_radsort;
 #[cfg(feature = "cpp_simdsort")]
 pub mod cpp_simdsort;
 
-// Call highwaysort sort via FFI.
-#[cfg(feature = "cpp_highwaysort")]
-pub mod cpp_highwaysort;
+// Call vqsort sort via FFI.
+#[cfg(feature = "cpp_vqsort")]
+pub mod cpp_vqsort;
 
 // Call intel_avx512 sort via FFI.
 #[cfg(feature = "cpp_intel_avx512")]

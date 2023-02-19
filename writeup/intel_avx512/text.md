@@ -59,7 +59,7 @@ A selection of high-performance in-place sort implementations.
 #### Manually vectorized 
 
 ```
-- cpp_highwaysort            | https://github.com/google/highway/tree/master/hwy/contrib/sort (5)
+- cpp_vqsort                 | https://github.com/google/highway/tree/master/hwy/contrib/sort (5)
 - cpp_intel_avx512           | https://github.com/intel/x86-simd-sort (5)
 ```
 
@@ -83,8 +83,8 @@ Using this data to write a headline like:
 
 Is not an honest representation. And it's generally very difficult to compress so much information into a single number, while still remaining representative. Looking at this one input size, on one specific micro-architecture, using this specific set of compilers, and testing these synthetic patterns, yields:
 
-- cpp_intel_avx512 is generally faster than cpp_highwaysort at this input size.
-- The two manually vectorized sort implementations cpp_intel_avx512 and cpp_highwaysort, are not good at exploiting existing patterns in the input.
+- cpp_intel_avx512 is generally faster than cpp_vqsort at this input size.
+- The two manually vectorized sort implementations cpp_intel_avx512 and cpp_vqsort, are not good at exploiting existing patterns in the input.
 - cpp_intel_avx512 struggles if there is one very common value in the input (random_p5).
 - cpp_std_msvc_unstable is generally the slowest of the comparison based sort implementations.
 - rust_std_unstable which is based on cpp_pdqsort_unstable performs similar, with the exception of fully ascending or descending inputs.
@@ -102,11 +102,11 @@ Zoomed in:
 
 Observations:
 
-- cpp_highwaysort is exceedingly slow for small inputs.
+- cpp_vqsort is exceedingly slow for small inputs.
 - cpp_intel_avx512 is fast across all sizes.
 - cpp_intel_avx512, rust_ipn_unstable and c_crumsort_unstable, differentiate themselves from implementations using insertion sort for small inputs, rust_std_unstable, cpp_pdqsort_unstable and cpp_std_msvc_unstable.
 - cpp_std_msvc_unstable shows sub-log scaling.
-- Starting at ~50k cpp_highwaysort is the fastest.
+- Starting at ~50k cpp_vqsort is the fastest.
 - rust_ipn_unstable catches up to cpp_intel_avx512 at ~1m, despite only using SSE2 instructions and using no hardware specific code.
 
 Measuring a more natural zipfian distribution random_z1 across different sizes:
@@ -128,7 +128,7 @@ The main difference between `i32` and `u64` is that `i32` is only 4 bytes compar
 
 Observations:
 - Compared to `u64` cpp_intel_avx512 manages to cut it's runtime in half.
-- cpp_highwaysort only sees a ~1.37x speedup compared to `u64` at this input size.
+- cpp_vqsort only sees a ~1.37x speedup compared to `u64` at this input size.
 - All comparison based sort implementations only see a small change compared to `u64`.
 
 #### hot-i32-scaling
@@ -138,7 +138,7 @@ Observations:
 Observations:
 
 - Very similar scaling to `u64`.
-- It takes a bit longer, but eventually cpp_highwaysort overtakes cpp_intel_avx512.
+- It takes a bit longer, but eventually cpp_vqsort overtakes cpp_intel_avx512.
 - The manually vectorized implementations are a lot better at leveraging the increased potential throughput, than the generic comparison based implementations.
 
 ## Author's conclusion and opinion
@@ -151,7 +151,7 @@ cpp_intel_avx512 can be a great choice, if the input is assumed mostly random, a
 
 #### Specialized HPC code
 
-If you need the best possible throughput, and know you only have large inputs with high-cardinality, cpp_highwaysort is the faster option.
+If you need the best possible throughput, and know you only have large inputs with high-cardinality, cpp_vqsort is the faster option.
 
 #### Language standard library
 

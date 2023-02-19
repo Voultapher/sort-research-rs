@@ -152,7 +152,7 @@ def build_color_palette():
         # There are more sorts but they don't really fit the graph or colors at
         # the same time
         "rust_radsort_radix": palette[4],
-        "cpp_highwaysort": palette[6],
+        "cpp_vqsort": palette[6],
         "cpp_intel_avx512": palette[7],
     }
 

@@ -107,7 +107,7 @@ Properties:
 | c_crumsort_unstable        | ✅         | ⚠️ (4)  | 512    | -     | C          | 🚫 (8)           | 1. 🚫 2. 🚫     | -    |
 | rust_radsort               | ✅         | 🚫      | ?      | N     | -          | -                | -               | -    |
 | cpp_simdsort_unstable      | ✅         | 🚫      | ?      | -     | -          | -                | -               | -    | 
-| cpp_highwaysort_unstable   | ✅         | 🚫      | ?      | -     | -          | -                | -               | -    | 
+| cpp_vqsort_unstable   | ✅         | 🚫      | ?      | -     | -          | -                | -               | -    | 
 
 Footnotes:
 1. cpp_powersort_stable uses `vector::resize` for it's buffer, requiring that `T` is default constructible.

@@ -629,7 +629,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             sort_comp::other::cpp_simdsort::SortImpl,
         );
 
-        #[cfg(feature = "cpp_highwaysort")]
+        #[cfg(feature = "cpp_vqsort")]
         bench_impl(
             c,
             test_size,
@@ -637,7 +637,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             &transform,
             pattern_name,
             pattern_provider,
-            sort_comp::other::cpp_highwaysort::SortImpl,
+            sort_comp::other::cpp_vqsort::SortImpl,
         );
 
         #[cfg(feature = "cpp_intel_avx512")]
