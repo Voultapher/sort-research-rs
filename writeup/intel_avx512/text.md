@@ -28,7 +28,7 @@ Benchmarking is notoriously tricky, and especially synthetic benchmarks may not 
 rustc 1.69.0-nightly (0416b1a6f 2023-02-14)
 clang version 15.0.1
 Microsoft (R) C/C++ Optimizing Compiler Version 19.31.31104 for x86
-Intel Core i9-10980XE 18-Core Processor (Cascade Lake-X micro-architecture)
+Intel Core i9-10980XE 18-Core Processor (Skylake micro-architecture)
 ```
 
 Modern sort implementations are adaptive, they will try to exploit existing patterns in the data to do less work. A breakdown of the benchmark patterns:
