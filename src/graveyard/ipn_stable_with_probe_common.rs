@@ -82,7 +82,7 @@ where
 
     merge_sort(
         v,
-        &mut |a, b| compare(a, b) == Ordering::Less,
+        &mut compare,
         elem_alloc_fn,
         elem_dealloc_fn,
         run_alloc_fn,
@@ -107,13 +107,13 @@ fn unpack_maybe_unit_slice<T>(buf: &mut [mem::MaybeUninit<T>]) -> (*mut T, usize
 #[inline(always)]
 pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     v: &mut [T],
-    is_less: &mut CmpF,
+    compare: &mut CmpF,
     elem_alloc_fn: ElemAllocF,
     elem_dealloc_fn: ElemDeallocF,
     run_alloc_fn: RunAllocF,
     run_dealloc_fn: RunDeallocF,
 ) where
-    CmpF: FnMut(&T, &T) -> bool,
+    CmpF: FnMut(&T, &T) -> Ordering,
     ElemAllocF: Fn(usize) -> *mut T,
     ElemDeallocF: Fn(*mut T, usize),
     RunAllocF: Fn(usize) -> *mut TimSortRun + Copy,
@@ -133,7 +133,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
             // More specialized and faster options, extending the range of allocation free sorting
             // are possible but come at a great cost of additional code, which is problematic for
             // compile-times.
-            insertion_sort_shift_left(v, 1, is_less);
+            insertion_sort_shift_left(v, 1, &mut |a, b| compare(a, b) == Ordering::Less);
         }
 
         return;
@@ -155,7 +155,7 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
     // SAFETY: BufGuard has to report the correct ptr and len.
     let buf_m = unsafe { maybe_uninit_from_buf(&buf_ptr, buf_len) };
 
-    merge_sort_impl(v, is_less, buf_m, run_alloc_fn, run_dealloc_fn);
+    merge_sort_impl(v, compare, buf_m, run_alloc_fn, run_dealloc_fn);
 
     // Extremely basic versions of Vec.
     // Their use is super limited and by having the code here, it allows reuse between the sort
@@ -221,12 +221,12 @@ pub fn merge_sort<T, CmpF, ElemAllocF, ElemDeallocF, RunAllocF, RunDeallocF>(
 #[inline(never)]
 pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
     v: &mut [T],
-    is_less: &mut CmpF,
+    compare: &mut CmpF,
     buf: &mut [mem::MaybeUninit<T>],
     run_alloc_fn: RunAllocF,
     run_dealloc_fn: RunDeallocF,
 ) where
-    CmpF: FnMut(&T, &T) -> bool,
+    CmpF: FnMut(&T, &T) -> Ordering,
     RunAllocF: Fn(usize) -> *mut TimSortRun + Copy,
     RunDeallocF: Fn(*mut TimSortRun, usize) + Copy,
 {
@@ -237,37 +237,88 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
 
     let (buf_ptr, buf_len) = unpack_maybe_unit_slice(buf);
 
+    // Limit the possibility of doing consecutive ineffective partitions.
+    let min_good_partiton_len = len / 16;
+    let min_re_probe_distance = cmp::max(256, min_good_partiton_len);
+
     let mut runs = TimSortRunVec::new(&run_alloc_fn, &run_dealloc_fn);
+    let mut equal_runs = TimSortRunVec::new(&run_alloc_fn, &run_dealloc_fn);
 
     let mut start = 0;
     let mut end = 0;
+    let mut run_end = len;
+
+    // The logic for this get's hairy if buf_len is not the full length of v. If the fallback
+    // allocation size was used, common value filtering doesn't work anymore. Plus if memory is that
+    // constrained the extra allocations needed for equal_runs may be problematic too.
+    let mut next_probe_spot = if buf_len == len { 0 } else { usize::MAX };
 
     // Scan forward. Memory pre-fetching prefers forward scanning vs backwards scanning, and the
     // code-gen is usually better. For the most sensitive types such as integers, these are merged
     // bidirectionally at once. So there is no benefit in scanning backwards.
-    while end < len {
-        let local_v = &mut v[start..];
+    while end < run_end {
+        let local_v = &mut v[start..run_end];
 
-        let (mut local_end, was_reversed) = find_streak(local_v, is_less);
-        if was_reversed {
-            local_v[..local_end].reverse();
+        let probe_for_common = start >= next_probe_spot;
+
+        // Probe for common value with priority over streak analysis.
+        if probe_for_common {
+            let mut equal_count = 0;
+
+            if let Some(common_idx) =
+                probe_for_common_val(local_v, &mut |a, b| compare(a, b) == Ordering::Equal)
+            {
+                // SAFETY: Caller must ensure if probe_for_common is set to true that `buf` is valid for
+                // `v.len()` writes.
+                equal_count = unsafe {
+                    partition_equal_stable(local_v, common_idx, buf_ptr, &mut |a, b| {
+                        compare(a, b) == Ordering::Equal
+                    })
+                };
+            }
+
+            if equal_count >= min_good_partiton_len {
+                run_end -= equal_count;
+                equal_runs.push(TimSortRun {
+                    start: run_end,
+                    len: equal_count,
+                });
+            } else {
+                // Avoid re-probing the same area again and again if probing failed or was of low
+                // quality.
+                next_probe_spot = start + min_re_probe_distance;
+            }
+
+            // It's important that this can reach the collapse, otherwise it might miss the end
+            // condition for the non equal runs.
+        } else {
+            let (mut local_end, was_reversed) =
+                find_streak(local_v, &mut |a, b| compare(a, b) == Ordering::Less);
+            if was_reversed {
+                local_v[..local_end].reverse();
+            }
+
+            // Insert some more elements into the run if it's too short. Insertion sort is faster than
+            // merge sort on short sequences, so this significantly improves performance.
+            local_end = <T as StableSortTypeImpl>::provide_sorted_batch(
+                local_v,
+                0,
+                local_end,
+                &mut |a, b| compare(a, b) == Ordering::Less,
+            );
+
+            end = start + local_end;
+
+            // Push this run onto the stack.
+            runs.push(TimSortRun {
+                start,
+                len: local_end,
+            });
+            start = end;
         }
 
-        // Insert some more elements into the run if it's too short. Insertion sort is faster than
-        // merge sort on short sequences, so this significantly improves performance.
-        local_end = <T as StableSortTypeImpl>::provide_sorted_batch(local_v, 0, local_end, is_less);
-
-        end = start + local_end;
-
-        // Push this run onto the stack.
-        runs.push(TimSortRun {
-            start,
-            len: local_end,
-        });
-        start = end;
-
         // Merge some pairs of adjacent runs to satisfy the invariants.
-        while let Some(r) = collapse(runs.as_slice(), len) {
+        while let Some(r) = collapse(runs.as_slice(), run_end) {
             let left = runs[r];
             let right = runs[r + 1];
             let merge_slice = &mut v[left.start..right.start + right.len];
@@ -276,7 +327,9 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
 
             // SAFETY: TODO
             unsafe {
-                merge(merge_slice, left.len, buf_ptr, buf_len, is_less);
+                merge(merge_slice, left.len, buf_ptr, buf_len, &mut |a, b| {
+                    compare(a, b) == Ordering::Less
+                });
             }
             runs[r + 1] = TimSortRun {
                 start: left.start,
@@ -290,8 +343,34 @@ pub fn merge_sort_impl<T, CmpF, RunAllocF, RunDeallocF>(
         }
     }
 
-    // Finally, exactly one run must remain in the stack.
-    debug_assert!(runs.len() == 1 && runs[0].start == 0 && runs[0].len == len);
+    if equal_runs.len != 0 {
+        // Now take care of all the fully equal runs that were put at the end of v.
+
+        // SAFETY: TODO
+        unsafe {
+            merge_equal_runs(
+                v,
+                equal_runs.as_mut_slice(),
+                buf_ptr,
+                buf_len,
+                &mut |a, b| compare(a, b) == Ordering::Less,
+            );
+        }
+
+        debug_assert!(runs.len() <= 1);
+
+        if run_end > 0 {
+            // SAFETY: TODO
+            unsafe {
+                merge(v, run_end, buf_ptr, buf_len, &mut |a, b| {
+                    compare(a, b) == Ordering::Less
+                });
+            }
+        }
+    } else {
+        // Finally, exactly one run must remain in the stack.
+        debug_assert!(runs.len() == 1 && runs[0].start == 0 && runs[0].len == len);
+    }
 }
 
 // Examines the stack of runs and identifies the next pair of runs to merge. More specifically,
@@ -408,6 +487,11 @@ where
     fn as_slice(&self) -> &[TimSortRun] {
         // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
         unsafe { &*ptr::slice_from_raw_parts(self.buf_ptr.as_ptr(), self.len) }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [TimSortRun] {
+        // SAFETY: Safe as long as buf_ptr is valid and len invariant was upheld.
+        unsafe { &mut *ptr::slice_from_raw_parts_mut(self.buf_ptr.as_ptr(), self.len) }
     }
 
     fn len(&self) -> usize {
@@ -1195,6 +1279,229 @@ where
         // >least len 2.
         unsafe {
             insert_tail(&mut v[..=i], is_less);
+        }
+    }
+}
+
+/// Probe `v` and try to find a recurring value. Starting at `v[start..]`.
+/// Returns the index of said element if it has a high confidence that it is recurring.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn probe_for_common_val<T, F>(v: &[T], is_equal: &mut F) -> Option<usize>
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Two-stage probing to improve accuracy. Reducing false positives and false negatives.
+    const PROBE_REGION_SIZE: usize = 256;
+    const INITAL_PROBE_SET_SIZE: usize = 8;
+    const VERIFY_PROBE_STEPS: usize = 32;
+    const INITIAL_PROBE_OFFSET: usize = PROBE_REGION_SIZE / 2;
+    const MIN_HIT_COUNT: u8 = 2;
+
+    let len = v.len();
+
+    if len < PROBE_REGION_SIZE {
+        return None;
+    }
+
+    let mut inital_match_counts = mem::MaybeUninit::<[u8; INITAL_PROBE_SET_SIZE]>::uninit();
+    let inital_match_counts_ptr = inital_match_counts.as_mut_ptr() as *mut u8;
+
+    // Ideally the optimizer will unroll this.
+    for i in 0..INITAL_PROBE_SET_SIZE {
+        // SAFETY: INITAL_PROBE_SET_SIZE is used as array size and INITIAL_PROBE_OFFSET + i is
+        // withing the checked bounds of `v`.
+        unsafe {
+            *inital_match_counts_ptr.add(i) = is_equal(
+                v.get_unchecked(i),
+                v.get_unchecked(INITIAL_PROBE_OFFSET + i),
+            ) as u8;
+        }
+    }
+
+    // SAFETY: We initialized all the values in the loop above.
+    let inital_match_counts = unsafe { inital_match_counts.assume_init() };
+    let inital_match_counts_u64 = u64::from_ne_bytes(inital_match_counts);
+
+    if inital_match_counts_u64 == 0 {
+        return None;
+    }
+
+    // At least one element was found again, do deeper probing to find out if is common.
+    let best_idx = if cfg!(target_endian = "little") {
+        ((inital_match_counts_u64.trailing_zeros() + 1) / 8) as usize
+    } else {
+        ((inital_match_counts_u64.leading_zeros() + 1) / 8) as usize
+    };
+
+    let candidate = &v[best_idx];
+    // Check it against locations that have not yet been checked.
+    // Already checked:
+    // v[<0..8> <IPO..IPO+8>]
+
+    let mut count = 0;
+    for i in (PROBE_REGION_SIZE - VERIFY_PROBE_STEPS)..PROBE_REGION_SIZE {
+        // SAFETY: Access happens inside checked PROBE_REGION_SIZE.
+        let elem = unsafe { v.get_unchecked(i) };
+        count += is_equal(candidate, elem) as u8;
+
+        if i == (VERIFY_PROBE_STEPS / 2) && count == 0 {
+            break;
+        }
+
+        if count >= MIN_HIT_COUNT {
+            return Some(best_idx);
+        }
+    }
+
+    None
+}
+
+/// Partition `v` into elements that are not equal to `v[pivot_pos]` followed by elements equal to
+/// `v[pivot_pos]`. Relative position of `v[pivot_pos]` is maintained.
+///
+/// Returns the number of element equal to `v[pivot_pos]`.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+unsafe fn partition_equal_stable<T, F>(
+    v: &mut [T],
+    pivot_pos: usize,
+    buf: *mut T,
+    is_equal: &mut F,
+) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: The caller must ensure `buf` is valid for `v.len()` writes.
+    // See specific comments below.
+    unsafe {
+        let pivot_val = mem::ManuallyDrop::new(ptr::read(&v[pivot_pos]));
+        // It's crucial that pivot_hole will be copied back to the input if any comparison in the
+        // loop panics. Because it could have changed due to interior mutability.
+        let pivot_hole = InsertionHole {
+            src: &*pivot_val,
+            dest: arr_ptr.add(pivot_pos),
+        };
+
+        let mut swap_ptr_l = buf;
+        let mut swap_ptr_r = buf.add(len.saturating_sub(1));
+        let mut pivot_partioned_ptr = ptr::null_mut();
+
+        for i in 0..len {
+            // This should only happen once and be branch that can be predicted very well.
+            if i == pivot_pos {
+                // Technically we are leaving a hole in buf here, but we don't overwrite `v` until
+                // all comparisons have been done. So this should be fine. We patch it up later to
+                // make sure that a unique observation path happened for `pivot_val`. If we just
+                // write the value as pointed to by `elem_ptr` into `buf` as it was in the input
+                // slice `v` we would risk that the call to `is_equal` modifies the value pointed to
+                // by `elem_ptr`. This could be UB for types such as `Mutex<Option<Box<String>>>`
+                // where during the comparison it replaces the box with None, leading to double
+                // free. As the value written back into `v` from `buf` did not observe that
+                // modification.
+                pivot_partioned_ptr = swap_ptr_r;
+                swap_ptr_r = swap_ptr_r.sub(1);
+                continue;
+            }
+
+            let elem_ptr = arr_ptr.add(i);
+
+            let is_eq = is_equal(&*elem_ptr, &pivot_val);
+
+            ptr::copy_nonoverlapping(elem_ptr, swap_ptr_l, 1);
+            ptr::copy_nonoverlapping(elem_ptr, swap_ptr_r, 1);
+
+            swap_ptr_l = swap_ptr_l.wrapping_add(!is_eq as usize);
+            swap_ptr_r = swap_ptr_r.wrapping_sub(is_eq as usize);
+        }
+
+        debug_assert!((swap_ptr_l as usize).abs_diff(swap_ptr_r as usize) == mem::size_of::<T>());
+
+        // SAFETY: swap now contains all elements, `swap[..l_count]` has the elements that are not
+        // equal and swap[l_count..]` all the elements that are equal but reversed. All comparisons
+        // have been done now, if is_less would have panicked v would have stayed untouched.
+        let l_count = swap_ptr_l.sub_ptr(buf);
+        let r_count = len - l_count;
+
+        // Copy pivot_val into it's correct position.
+        mem::forget(pivot_hole);
+        ptr::copy_nonoverlapping(&*pivot_val, pivot_partioned_ptr, 1);
+
+        // Now that swap has the correct order overwrite arr_ptr.
+        let arr_ptr = v.as_mut_ptr();
+
+        // Copy all the elements that were not equal directly from swap to v.
+        ptr::copy_nonoverlapping(buf, arr_ptr, l_count);
+
+        // Copy the elements that were equal or more from the buf into v and reverse them.
+        let rev_buf_ptr = buf.add(len - 1);
+        for i in 0..r_count {
+            ptr::copy_nonoverlapping(rev_buf_ptr.sub(i), arr_ptr.add(l_count + i), 1);
+        }
+
+        r_count
+    }
+}
+
+/// Merge the `runs` of `v` assuming they all each contain only equal elements and each run has a
+/// unique value. The runs must be contiguous in `v`.
+///
+/// SAFETY: The caller must ensure that buf_ptr is valid to write for the total length of the runs.
+unsafe fn merge_equal_runs<T, F>(
+    v: &mut [T],
+    runs: &mut [TimSortRun],
+    buf_ptr: *mut T,
+    buf_len: usize,
+    is_less: &mut F,
+) where
+    F: FnMut(&T, &T) -> bool,
+{
+    if runs.len() <= 1 {
+        return;
+    }
+
+    // The way it was added this is the left-most run.
+    // Create a copy for later.
+    let left_most_run: TimSortRun = runs[runs.len() - 1];
+    // The partitioned runs are always put at the end.
+    let total_run_len = v.len() - left_most_run.start;
+    debug_assert!(total_run_len <= buf_len);
+
+    // Figure out the required oder by sorting via indirection. The heuristic should give us at most
+    // 16 runs with equal elements, for that range, insertion sort is cheap on binary size and
+    // relatively fast.
+    insertion_sort_shift_left(runs, 1, &mut |a, b| {
+        // SAFETY: The caller must ensure that the runs are valid within `v`.
+        unsafe {
+            let a_val = v.get_unchecked(a.start);
+            let b_val = v.get_unchecked(b.start);
+
+            is_less(a_val, b_val)
+        }
+    });
+
+    // Now that the runs have the order as they should be when merged, and all comparisons could
+    // have been observed. We can 'swap' them in the input. This is achieved efficiently by first
+    // copying out the total run area and. Then copying over the relevant areas. None of the
+    // following operation is allowed to panic.
+    let arr_ptr = v.as_mut_ptr();
+
+    // SAFETY: TODO
+    unsafe {
+        let mut dest_ptr = arr_ptr.add(left_most_run.start);
+
+        // First save the full region that will be overwritten.
+        ptr::copy_nonoverlapping(dest_ptr, buf_ptr, total_run_len);
+
+        for run in runs {
+            ptr::copy_nonoverlapping(
+                buf_ptr.add(run.start - left_most_run.start),
+                dest_ptr,
+                run.len,
+            );
+            dest_ptr = dest_ptr.add(run.len);
         }
     }
 }

@@ -48,7 +48,7 @@ impl Eq for FFIString {}
 
 impl PartialOrd for FFIString {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_str().partial_cmp(&other.as_str())
+        self.as_str().partial_cmp(other.as_str())
     }
 }
 

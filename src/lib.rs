@@ -11,7 +11,8 @@
     sized_type_properties,
     portable_simd,
     const_mut_refs,
-    vec_into_raw_parts
+    vec_into_raw_parts,
+    inline_const
 )]
 
 pub trait Sort {
