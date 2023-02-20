@@ -43,6 +43,7 @@ harness = false
 
 [features]
 default = [
+    # "cold_benchmarks",
     # "cpp_std_sys",
     # "cpp_std_libcxx",
     # "cpp_std_gcc4_3",
@@ -134,3 +135,6 @@ evolution = []
 # This allows better tracing with tools like uftrace.
 # However this skews the results, the measured effect will vary.
 no_inline_sub_functions = []
+
+# Cold benchmarks, enable cold benchmarks that clobber the btb and other CPU caches.
+cold_benchmarks = []

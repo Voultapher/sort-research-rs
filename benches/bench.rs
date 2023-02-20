@@ -11,8 +11,8 @@ use sort_comp::{
     ffi_util::FFIOneKiloByte, ffi_util::FFIString, ffi_util::F128, patterns, stable, unstable,
 };
 
+#[cfg(feature = "cold_benchmarks")]
 mod trash_prediction;
-use trash_prediction::trash_prediction_state;
 
 mod bench_custom;
 use bench_custom::bench_custom;
@@ -69,6 +69,7 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
         },
     );
 
+    #[cfg(feature = "cold_benchmarks")]
     c.bench_function(
         &format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_size}"),
         |b| {
@@ -84,7 +85,8 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
                     // calling the benchmark function as part of a larger program. Caveat, memory
                     // caches. We don't want to benchmark how expensive it is to load something from
                     // main memory.
-                    let first_val = black_box(trash_prediction_state(test_ints[0]));
+                    let first_val =
+                        black_box(trash_prediction::trash_prediction_state(test_ints[0]));
 
                     // Limit the optimizer in getting rid of trash_prediction_state,
                     // by tying its output to the test input.
