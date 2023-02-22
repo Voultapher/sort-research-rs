@@ -1436,8 +1436,10 @@ where
 
 // Slices of up to this length get sorted using optimized sorting for small slices.
 const fn max_len_small_sort<T>() -> usize {
-    if is_cheap_to_move::<T>() {
+    if is_cheap_to_move::<T>() && !has_direct_iterior_mutability::<T>() {
         36
+    } else if !has_direct_iterior_mutability::<T>() {
+        34
     } else {
         20
     }
