@@ -2,6 +2,7 @@
 
 //! Instruction-Parallel-Network Unstable Sort by Lukas Bergdoll
 
+use core::intrinsics;
 use std::cmp;
 use std::cmp::Ordering;
 use std::mem::{self, MaybeUninit};
@@ -537,9 +538,12 @@ where
     (r_ptr, x_ptr, elem_i)
 }
 
+// Disabled by default because it currently has panic safety issues.
+const FULCRUM_ENABLED: bool = false;
+
 // Inspired by Igor van den Hoven and his work in quadsort/crumsort.
 // TODO document.
-fn fulcrum_partition_x<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -547,7 +551,7 @@ where
     let len = v.len();
 
     const ROTATION_ELEMS: usize = 16;
-    assert!(len > (ROTATION_ELEMS * 2));
+    assert!(len > (ROTATION_ELEMS * 2) && !has_direct_iterior_mutability::<T>());
 
     let advance_left = |a_ptr: *const T, l_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO
@@ -589,10 +593,10 @@ where
 
         let loop_len = len % ROTATION_ELEMS;
         if advance_left(a_ptr, l_ptr, elem_i) {
-            (r_ptr, a_ptr, elem_i) =
+            (r_ptr, _, elem_i) =
                 fulcrum_rotate(l_ptr, r_ptr, a_ptr, elem_i, 1, loop_len, pivot, is_less);
         } else {
-            (r_ptr, t_ptr, elem_i) =
+            (r_ptr, _, elem_i) =
                 fulcrum_rotate(l_ptr, r_ptr, t_ptr, elem_i, -1, loop_len, pivot, is_less);
         }
 
@@ -708,17 +712,7 @@ where
 
         // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
 
-        // Disabled by default because it currently has panic safety issues.
-        const FULCRUM_ENABLED: bool = false;
-
-        let is_less_count = if FULCRUM_ENABLED
-            && is_cheap_to_move::<T>()
-            && !has_direct_iterior_mutability::<T>()
-        {
-            fulcrum_partition_x(v, pivot, is_less)
-        } else {
-            partition_in_blocks(v, pivot, is_less)
-        };
+        let is_less_count = <T as UnstableSortTypeImpl>::partition(v, pivot, is_less);
 
         is_less_count
 
@@ -795,10 +789,162 @@ fn break_patterns<T>(v: &mut [T]) {
     }
 }
 
-/// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
+/// Sorts `v` recursively.
 ///
-/// Elements in `v` might be reordered in the process.
-fn choose_pivot_indirect<T, F>(v: &mut [T], is_less: &mut F) -> usize
+/// If the slice had a predecessor in the original array, it is specified as `pred`.
+///
+/// `limit` is the number of allowed imbalanced partitions before switching to `heapsort`. If zero,
+/// this function will immediately switch to heapsort.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn recurse<'a, T, F>(mut v: &'a mut [T], is_less: &mut F, mut pred: Option<&'a T>, mut limit: u32)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // True if the last partitioning was reasonably balanced.
+    let mut was_good_partition = true;
+
+    loop {
+        let len = v.len();
+
+        // println!("len: {len}");
+
+        if sort_small(v, is_less) {
+            return;
+        }
+
+        // If too many bad pivot choices were made, simply fall back to heapsort in order to
+        // guarantee `O(n * log(n))` worst-case.
+        if limit == 0 {
+            heapsort(v, is_less);
+            return;
+        }
+
+        // If the last partitioning was imbalanced, try breaking patterns in the slice by shuffling
+        // some elements around. Hopefully we'll choose a better pivot this time.
+        if !was_good_partition {
+            break_patterns(v);
+            limit -= 1;
+        }
+
+        // Choose a pivot and try guessing whether the slice is already sorted.
+        let pivot = <T as UnstableSortTypeImpl>::choose_pivot(v, is_less);
+
+        // If the chosen pivot is equal to the predecessor, then it's the smallest element in the
+        // slice. Partition the slice into elements equal to and elements greater than the pivot.
+        // This case is usually hit when the slice contains many duplicate elements.
+        if let Some(p) = pred {
+            if !is_less(p, &v[pivot]) {
+                let mid = partition_equal(v, pivot, is_less);
+
+                // Continue sorting elements greater than the pivot. We know that mid contains the
+                // pivot. So we can continue after mid. It's important that this shrinks the
+                // remaining to-be-sorted slice `v`. Otherwise Ord violations could get this stuck
+                // loop forever.
+                v = &mut v[(mid + 1)..];
+                continue;
+            }
+        }
+
+        // Partition the slice.
+        let mid = partition(v, pivot, is_less);
+        was_good_partition = cmp::min(mid, len - mid) >= len / 8;
+
+        // Split the slice into `left`, `pivot`, and `right`.
+        let (left, right) = v.split_at_mut(mid);
+        let (pivot, right) = right.split_at_mut(1);
+        let pivot = &pivot[0];
+
+        // Recurse into the shorter side only in order to minimize the total number of recursive
+        // calls and consume less stack space. Then just continue with the longer side (this is
+        // akin to tail recursion).
+        if left.len() < right.len() {
+            recurse(left, is_less, pred, limit);
+            v = right;
+            pred = Some(pivot);
+        } else {
+            recurse(right, is_less, Some(pivot), limit);
+            v = left;
+        }
+    }
+}
+
+/// Sorts `v` using strategies optimized for small sizes.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    if intrinsics::unlikely(len > max_len_small_sort::<T>()) {
+        return false;
+    }
+
+    <T as UnstableSortTypeImpl>::small_sort(v, is_less);
+
+    true
+}
+
+// Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
+// LLVM-IR for the sorting-network and median-networks for types that don't qualify.
+trait UnstableSortTypeImpl: Sized {
+    /// Sorts `v` using strategies optimized for small sizes.
+    fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    where
+        F: FnMut(&Self, &Self) -> bool;
+
+    /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already
+    /// sorted.
+    ///
+    /// Elements in `v` might be reordered in the process.
+    fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool;
+
+    /// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or
+    /// equal to `pivot`.
+    ///
+    /// Returns the number of elements smaller than `pivot`.
+    fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool;
+}
+
+impl<T> UnstableSortTypeImpl for T {
+    default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        small_sort_default(v, is_less);
+    }
+
+    default fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        choose_pivot_default(v, is_less)
+    }
+
+    default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        partition_in_blocks(v, pivot, is_less)
+    }
+}
+
+fn small_sort_default<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    if intrinsics::likely(len >= 2) {
+        insertion_sort_shift_left(v, 1, is_less);
+    }
+}
+
+fn choose_pivot_default<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -859,276 +1005,113 @@ where
     b
 }
 
-/// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
-///
-/// Elements in `v` might be reordered in the process.
-fn choose_pivot_network<T, F>(v: &mut [T], is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // Collecting values + sorting network is cheaper than swapping via indirection, even if it does
-    // more comparisons. See https://godbolt.org/z/qqoThxEP1 and https://godbolt.org/z/bh16s3Wfh.
-    // In addition this only access 1, at most 2 cache-lines.
-
-    let len = v.len();
-
-    // It's a logic bug if this get's called on slice that would be small-sorted.
-    assert!(len > max_len_small_sort::<T>());
-
-    let len_div_2 = len / 2;
-
-    if len < 52 {
-        let start = len_div_2 - 2;
-        median5_optimal(&mut v[start..(start + 5)], is_less);
-        len_div_2
-    } else {
-        // This only samples the middle, `break_patterns` will randomize this area if it picked a
-        // bad partition. Additionally the cyclic permutation of `partition_in_blocks` will further
-        // randomize the original pattern, avoiding even more situations where this would be a
-        // problem.
-        let start = len_div_2 - 4;
-        median9_optimal(&mut v[start..(start + 9)], is_less);
-        len_div_2
-    }
-}
-
-/// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
-///
-/// Elements in `v` might be reordered in the process.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn choose_pivot<T, F>(v: &mut [T], is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    if is_cheap_to_move::<T>() {
-        choose_pivot_network(v, is_less)
-    } else {
-        choose_pivot_indirect(v, is_less)
-    }
-}
-
-/// Sorts `v` recursively.
-///
-/// If the slice had a predecessor in the original array, it is specified as `pred`.
-///
-/// `limit` is the number of allowed imbalanced partitions before switching to `heapsort`. If zero,
-/// this function will immediately switch to heapsort.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn recurse<'a, T, F>(mut v: &'a mut [T], is_less: &mut F, mut pred: Option<&'a T>, mut limit: u32)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // True if the last partitioning was reasonably balanced.
-    let mut was_good_partition = true;
-
-    loop {
-        let len = v.len();
-
-        // println!("len: {len}");
-
-        if sort_small(v, is_less) {
+// Some types like String have no direct interior mutability and can benefit from specialized logic,
+// even without sorting-networks which would be too expensive to compile for such types.
+impl<T: Freeze> UnstableSortTypeImpl for T {
+    default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        if intrinsics::unlikely(v.len() < 2) {
             return;
         }
 
-        // If too many bad pivot choices were made, simply fall back to heapsort in order to
-        // guarantee `O(n * log(n))` worst-case.
-        if limit == 0 {
-            heapsort(v, is_less);
-            return;
-        }
-
-        // If the last partitioning was imbalanced, try breaking patterns in the slice by shuffling
-        // some elements around. Hopefully we'll choose a better pivot this time.
-        if !was_good_partition {
-            break_patterns(v);
-            limit -= 1;
-        }
-
-        // Choose a pivot and try guessing whether the slice is already sorted.
-        let pivot = choose_pivot(v, is_less);
-
-        // If the chosen pivot is equal to the predecessor, then it's the smallest element in the
-        // slice. Partition the slice into elements equal to and elements greater than the pivot.
-        // This case is usually hit when the slice contains many duplicate elements.
-        if let Some(p) = pred {
-            if !is_less(p, &v[pivot]) {
-                let mid = partition_equal(v, pivot, is_less);
-
-                // Continue sorting elements greater than the pivot. We know that mid contains the
-                // pivot. So we can continue after mid. It's important that this shrinks the
-                // remaining to-be-sorted slice `v`. Otherwise Ord violations could get this stuck
-                // loop forever.
-                v = &mut v[(mid + 1)..];
-                continue;
-            }
-        }
-
-        // Partition the slice.
-        let mid = partition(v, pivot, is_less);
-        was_good_partition = cmp::min(mid, len - mid) >= len / 8;
-
-        // Split the slice into `left`, `pivot`, and `right`.
-        let (left, right) = v.split_at_mut(mid);
-        let (pivot, right) = right.split_at_mut(1);
-        let pivot = &pivot[0];
-
-        // Recurse into the shorter side only in order to minimize the total number of recursive
-        // calls and consume less stack space. Then just continue with the longer side (this is
-        // akin to tail recursion).
-        if left.len() < right.len() {
-            recurse(left, is_less, pred, limit);
-            v = right;
-            pred = Some(pivot);
+        if const { is_cheap_to_move::<T>() } {
+            insertion_merge(v, is_less);
         } else {
-            recurse(right, is_less, Some(pivot), limit);
-            v = left;
+            small_sort_default(v, is_less);
         }
     }
-}
 
-/// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
-/// value that is not part of said streak, and a bool denoting wether the streak was reversed.
-/// Streaks can be increasing or decreasing.
-fn find_streak<T, F>(v: &[T], is_less: &mut F) -> (usize, bool)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    if len < 2 {
-        return (len, false);
+    default fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        choose_pivot_default(v, is_less)
     }
 
-    let mut end = 2;
-
-    // SAFETY: See below specific.
-    unsafe {
-        // SAFETY: We checked that len >= 2, so 0 and 1 are valid indices.
-        let assume_reverse = is_less(v.get_unchecked(1), v.get_unchecked(0));
-
-        // SAFETY: We know end >= 2 and check end < len.
-        // From that follows that accessing v at end and end - 1 is safe.
-        if assume_reverse {
-            while end < len && is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
-                end += 1;
-            }
-
-            (end, true)
+    default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        if const { FULCRUM_ENABLED && is_cheap_to_move::<T>() } {
+            fulcrum_partition(v, pivot, is_less)
         } else {
-            while end < len && !is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
-                end += 1;
+            partition_in_blocks(v, pivot, is_less)
+        }
+    }
+}
+
+// Limit this code-gen to Copy types, to limit emitted LLVM-IR.
+// The sorting-networks will have the best effect for types like integers.
+impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
+    fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        if const { is_cheap_to_move::<T>() } {
+            let len = v.len();
+
+            // Always sort assuming somewhat random distribution.
+            // Patterns should have already been found by the other analysis steps.
+            //
+            // Small total slices are handled separately, see function quicksort.
+            if len >= 16 {
+                sort16_plus(v, is_less);
+            } else if len >= 8 {
+                sort8_plus(v, is_less);
+            } else if len >= 2 {
+                insertion_sort_shift_left(v, 1, is_less);
             }
-            (end, false)
+        } else {
+            small_sort_default(v, is_less);
         }
     }
-}
 
-/// Sorts `v` using strategies optimized for small sizes.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
+    fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        if const { is_cheap_to_move::<T>() } {
+            // Collecting values + sorting network is cheaper than swapping via indirection, even if
+            // it does more comparisons. See https://godbolt.org/z/qqoThxEP1 and
+            // https://godbolt.org/z/bh16s3Wfh. In addition this only access 1, at most 2
+            // cache-lines.
 
-    if len > max_len_small_sort::<T>() {
-        return false;
-    }
+            let len = v.len();
 
-    if is_cheap_to_move::<T>() {
-        // Always sort assuming somewhat random distribution.
-        // Patterns should have already been found by the other analysis steps.
-        //
-        // Small total slices are handled separately, see function quicksort.
-        if len >= 16 {
-            sort16_plus(v, is_less);
-        } else if len >= 8 {
-            sort8_plus(v, is_less);
-        } else if len >= 2 {
-            insertion_sort_shift_left(v, 1, is_less);
-        }
-    } else if len >= 2 {
-        insertion_sort_shift_left(v, 1, is_less);
-    }
+            // It's a logic bug if this get's called on slice that would be small-sorted.
+            assert!(len > max_len_small_sort::<T>());
 
-    true
-}
+            let len_div_2 = len / 2;
 
-/// Sorts `v` using strategies optimized for small sizes.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort_small_with_pattern_analysis<T, F>(v: &mut [T], is_less: &mut F) -> bool
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-    assert!(len <= max_len_small_sort::<T>());
-
-    if len < 2 {
-        return true;
-    }
-
-    // Handles both ascending and descending inputs in N-1 comparisons.
-    let (streak_end, was_reversed) = find_streak(v, is_less);
-
-    if !is_cheap_to_move::<T>() || (len - streak_end) <= cmp::max(len / 2, 8) {
-        if was_reversed {
-            v[..streak_end].reverse();
-        }
-
-        insertion_sort_shift_left(v, streak_end, is_less);
-        return true;
-    }
-
-    // For some reasons calling sort_small here has a 5+% perf overhead.
-    // Delegate it by returning a bool, this also improves binary size.
-    false
-}
-
-/// Probes `v` to see if it is likely sorted.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn is_likely_sorted<T, F>(v: &mut [T], is_less: &mut F) -> bool
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // Probe beginning, mid and end.
-    let len = v.len();
-
-    debug_assert!(len > max_len_small_sort::<T>());
-
-    let streak_check_len = cmp::max(cmp::min(len / 256, 16), 4);
-
-    let mut check_streak = |start| {
-        let mut count = 0;
-        let end = start + streak_check_len + 1;
-        assert!(end <= len);
-
-        for i in (start + 1)..(start + streak_check_len + 1) {
-            // SAFETY: We just bounds checked end.
-            unsafe {
-                count += is_less(v.get_unchecked(i), v.get_unchecked(i - 1)) as usize;
+            if len < 52 {
+                let start = len_div_2 - 2;
+                median5_optimal(&mut v[start..(start + 5)], is_less);
+                len_div_2
+            } else {
+                // This only samples the middle, `break_patterns` will randomize this area if it
+                // picked a bad partition. Additionally the cyclic permutation of
+                // `partition_in_blocks` will further randomize the original pattern, avoiding even
+                // more situations where this would be a problem.
+                let start = len_div_2 - 4;
+                median9_optimal(&mut v[start..(start + 9)], is_less);
+                len_div_2
             }
+        } else {
+            choose_pivot_default(v, is_less)
         }
-
-        count
-    };
-
-    let mut count = check_streak(0);
-    if count != 0 && count != streak_check_len {
-        return false;
     }
 
-    count += check_streak(len / 2);
-    if count != 0 && count != (streak_check_len * 2) {
-        return false;
-    }
-
-    count += check_streak(len - streak_check_len - 1);
-    if count != (streak_check_len * 3) {
-        count == 0
-    } else {
-        // We assume it is fully or nearly reversed.
-        v.reverse();
-        true
+    fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        if const { FULCRUM_ENABLED && is_cheap_to_move::<T>() } {
+            fulcrum_partition(v, pivot, is_less)
+        } else {
+            partition_in_blocks(v, pivot, is_less)
+        }
     }
 }
 
@@ -1143,28 +1126,35 @@ where
         return;
     }
 
-    if v.len() <= max_len_small_sort::<T>() {
-        // This code cannot rely on external pattern analysis,
-        // so add extra code for already sorted inputs.
-        if sort_small_with_pattern_analysis(v, &mut is_less) {
-            return;
+    // This path is critical for very small inputs. Always pick insertion sort for these inputs,
+    // without any other analysis. This is perf critical for small inputs, in cold code.
+    const MAX_LEN_ALWAYS_INSERTION_SORT: usize = 20;
+
+    let len = v.len();
+
+    if intrinsics::likely(len <= MAX_LEN_ALWAYS_INSERTION_SORT) {
+        if intrinsics::likely(len >= 2) {
+            // More specialized and faster options, extending the range of allocation free sorting
+            // are possible but come at a great cost of additional code, which is problematic for
+            // compile-times.
+            insertion_sort_shift_left(v, 1, &mut is_less);
         }
-    } else if is_likely_sorted(v, &mut is_less) {
+
+        return;
+    } else if partial_insertion_sort(v, &mut is_less) {
+        // Try identifying several out-of-order elements and shifting them to correct
+        // positions. If the slice ends up being completely sorted, we're done.
+
         // The pdqsort implementation, does partial_insertion_sort as part of every recurse call.
         // However whatever ascending or descending input pattern there used to be, is most likely
         // destroyed via partitioning. Even more so because partitioning changes the input order
         // while performing it's cyclic permutation. As a consequence this check is only really
         // useful for nearly fully ascending or descending inputs.
-
-        // Try identifying several out-of-order elements and shifting them to correct
-        // positions. If the slice ends up being completely sorted, we're done.
-        if partial_insertion_sort(v, &mut is_less) {
-            return;
-        }
+        return;
     }
 
     // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
-    let limit = usize::BITS - v.len().leading_zeros();
+    let limit = usize::BITS - len.leading_zeros();
 
     recurse(v, &mut is_less, None, limit);
 }
@@ -1303,10 +1293,6 @@ where
 }
 
 /// Sort `v` assuming `v[..offset]` is already sorted.
-///
-/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-/// performance impact. Even improving performance in some cases.
-#[inline(never)]
 fn insertion_sort_shift_left<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1327,10 +1313,6 @@ where
 }
 
 /// Sort `v` assuming `v[offset..]` is already sorted.
-///
-/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-/// performance impact. Even improving performance in some cases.
-#[inline(never)]
 fn insertion_sort_shift_right<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1347,133 +1329,6 @@ where
         // and the range is exclusive. Which gives us i always <= (end - 2).
         unsafe {
             insert_head(&mut v[i..len], is_less);
-        }
-    }
-}
-
-/// Merges non-decreasing runs `v[..mid]` and `v[mid..]` using `buf` as temporary storage, and
-/// stores the result into `v[..]`.
-///
-/// # Safety
-///
-/// The two slices must be non-empty and `mid` must be in bounds. Buffer `buf` must be long enough
-/// to hold a copy of the shorter slice. Also, `T` must not be a zero-sized type.
-///
-/// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-/// performance impact.
-#[inline(never)]
-unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-    let arr_ptr = v.as_mut_ptr();
-    let (v_mid, v_end) = unsafe { (arr_ptr.add(mid), arr_ptr.add(len)) };
-
-    // The merge process first copies the shorter run into `buf`. Then it traces the newly copied
-    // run and the longer run forwards (or backwards), comparing their next unconsumed elements and
-    // copying the lesser (or greater) one into `v`.
-    //
-    // As soon as the shorter run is fully consumed, the process is done. If the longer run gets
-    // consumed first, then we must copy whatever is left of the shorter run into the remaining
-    // hole in `v`.
-    //
-    // Intermediate state of the process is always tracked by `hole`, which serves two purposes:
-    // 1. Protects integrity of `v` from panics in `is_less`.
-    // 2. Fills the remaining hole in `v` if the longer run gets consumed first.
-    //
-    // Panic safety:
-    //
-    // If `is_less` panics at any point during the process, `hole` will get dropped and fill the
-    // hole in `v` with the unconsumed range in `buf`, thus ensuring that `v` still holds every
-    // object it initially held exactly once.
-    let mut hole;
-
-    if mid <= len - mid {
-        // The left run is shorter.
-        unsafe {
-            ptr::copy_nonoverlapping(arr_ptr, buf, mid);
-            hole = MergeHole {
-                start: buf,
-                end: buf.add(mid),
-                dest: arr_ptr,
-            };
-        }
-
-        // Initially, these pointers point to the beginnings of their arrays.
-        let left = &mut hole.start;
-        let mut right = v_mid;
-        let out = &mut hole.dest;
-
-        while *left < hole.end && right < v_end {
-            // Consume the lesser side.
-            // If equal, prefer the left run to maintain stability.
-            unsafe {
-                let to_copy = if is_less(&*right, &**left) {
-                    get_and_increment(&mut right)
-                } else {
-                    get_and_increment(left)
-                };
-                ptr::copy_nonoverlapping(to_copy, get_and_increment(out), 1);
-            }
-        }
-    } else {
-        // The right run is shorter.
-        unsafe {
-            ptr::copy_nonoverlapping(v_mid, buf, len - mid);
-            hole = MergeHole {
-                start: buf,
-                end: buf.add(len - mid),
-                dest: v_mid,
-            };
-        }
-
-        // Initially, these pointers point past the ends of their arrays.
-        let left = &mut hole.dest;
-        let right = &mut hole.end;
-        let mut out = v_end;
-
-        while arr_ptr < *left && buf < *right {
-            // Consume the greater side.
-            // If equal, prefer the right run to maintain stability.
-            unsafe {
-                let to_copy = if is_less(&*right.offset(-1), &*left.offset(-1)) {
-                    decrement_and_get(left)
-                } else {
-                    decrement_and_get(right)
-                };
-                ptr::copy_nonoverlapping(to_copy, decrement_and_get(&mut out), 1);
-            }
-        }
-    }
-    // Finally, `hole` gets dropped. If the shorter run was not fully consumed, whatever remains of
-    // it will now be copied into the hole in `v`.
-
-    unsafe fn get_and_increment<T>(ptr: &mut *mut T) -> *mut T {
-        let old = *ptr;
-        *ptr = unsafe { ptr.offset(1) };
-        old
-    }
-
-    unsafe fn decrement_and_get<T>(ptr: &mut *mut T) -> *mut T {
-        *ptr = unsafe { ptr.offset(-1) };
-        *ptr
-    }
-
-    // When dropped, copies the range `start..end` into `dest..`.
-    struct MergeHole<T> {
-        start: *mut T,
-        end: *mut T,
-        dest: *mut T,
-    }
-
-    impl<T> Drop for MergeHole<T> {
-        fn drop(&mut self) {
-            // `T` is not a zero-sized type, and these are pointers into a slice's elements.
-            unsafe {
-                let len = self.end.sub_ptr(self.start);
-                ptr::copy_nonoverlapping(self.start, self.dest, len);
-            }
         }
     }
 }
@@ -1587,46 +1442,49 @@ const fn max_len_small_sort<T>() -> usize {
     }
 }
 
+// // #[rustc_unsafe_specialization_marker]
+// trait IsCopyMarker {}
+
+// impl<T: Copy> IsCopyMarker for T {}
+
 // #[rustc_unsafe_specialization_marker]
-trait IsCopyMarker {}
+trait Freeze {}
 
-impl<T: Copy> IsCopyMarker for T {}
+// Can the type have interior mutability, this is checked by testing if T is Copy. If the type can
+// have interior mutability it may alter itself during comparison in a way that must be observed
+// after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
+// double free. FIXME use proper abstraction
+impl<T: Copy> Freeze for T {}
 
-trait IsCopy {
-    fn is_copy() -> bool;
+// Enable for testing.
+// impl<T: Ord> Freeze for T {}
+
+#[const_trait]
+trait IsFreeze {
+    fn value() -> bool;
 }
 
-impl<T> IsCopy for T {
-    default fn is_copy() -> bool {
+impl<T> const IsFreeze for T {
+    default fn value() -> bool {
         false
     }
 }
 
-impl<T: IsCopyMarker> IsCopy for T {
-    fn is_copy() -> bool {
+impl<T: Freeze> const IsFreeze for T {
+    fn value() -> bool {
         true
     }
 }
 
-// I would like to make this a const fn.
-#[inline(always)]
-fn qualifies_for_parity_merge<T>() -> bool {
-    // This checks two things:
-    //
-    // - Type size: Is it ok to create 40 of them on the stack.
-    //
+#[must_use]
+const fn has_direct_iterior_mutability<T>() -> bool {
     // - Can the type have interior mutability, this is checked by testing if T is Copy.
     //   If the type can have interior mutability it may alter itself during comparison in a way
     //   that must be observed after the sort operation concludes.
     //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
-
-    let is_small = mem::size_of::<T>() <= mem::size_of::<[usize; 2]>();
-    let is_copy = T::is_copy();
-
-    return is_small && is_copy;
+    !<T as IsFreeze>::value()
 }
 
-#[inline(always)]
 const fn is_cheap_to_move<T>() -> bool {
     // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
     // down:
@@ -1636,16 +1494,6 @@ const fn is_cheap_to_move<T>() -> bool {
     //
     // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
     mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
-}
-
-#[inline(always)]
-fn has_direct_iterior_mutability<T>() -> bool {
-    // - Can the type have interior mutability, this is checked by testing if T is Copy.
-    //   If the type can have interior mutability it may alter itself during comparison in a way
-    //   that must be observed after the sort operation concludes.
-    //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
-    //   FIXME use proper abstraction
-    !T::is_copy()
 }
 
 // --- Branchless sorting (less branches not zero) ---
@@ -1697,31 +1545,6 @@ where
     // equal, so we don't swap.
     let should_swap = is_less(&*b_ptr, &*a_ptr);
     branchless_swap(a_ptr, b_ptr, should_swap);
-}
-
-// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-// performance impact.
-#[inline(never)]
-fn sort4_optimal<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 4.
-    assert!(v.len() == 4);
-
-    let arr_ptr = v.as_mut_ptr();
-
-    // Optimal sorting network see:
-    // https://bertdobbelaere.github.io/sorting_networks.html.
-
-    // We checked the len.
-    unsafe {
-        swap_if_less(arr_ptr, 0, 2, is_less);
-        swap_if_less(arr_ptr, 1, 3, is_less);
-        swap_if_less(arr_ptr, 0, 1, is_less);
-        swap_if_less(arr_ptr, 2, 3, is_less);
-        swap_if_less(arr_ptr, 1, 2, is_less);
-    }
 }
 
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
@@ -1905,47 +1728,22 @@ where
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort4_plus<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 4.
-    let len = v.len();
-    assert!(len >= 4);
-
-    sort4_optimal(&mut v[0..4], is_less);
-
-    if len > 4 {
-        insertion_sort_shift_left(v, 4, is_less);
-    }
-}
-
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort8_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
-    assert!(len >= 8);
+    assert!(len >= 8 && !has_direct_iterior_mutability::<T>());
 
     sort8_optimal(&mut v[0..8], is_less);
 
     if len > 8 {
-        insertion_sort_shift_left(&mut v[8..], 1, is_less);
-
-        let mut swap = mem::MaybeUninit::<[T; 8]>::uninit();
-        let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-        // SAFETY: We only need place for 8 entries because we know the shorter side is at most 8
-        // long.
-        unsafe {
-            merge(v, 8, swap_ptr, is_less);
-        }
+        insertion_sort_shift_left(v, 8, is_less);
     }
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort16_plus_parity<T, F>(v: &mut [T], is_less: &mut F)
+fn sort16_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -1953,7 +1751,7 @@ where
     let len = v.len();
     const MAX_BRANCHLESS_SMALL_SORT: usize = max_len_small_sort::<i32>();
 
-    assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT && T::is_copy());
+    assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT && !has_direct_iterior_mutability::<T>());
 
     if len < 24 {
         sort16_optimal(&mut v[0..16], is_less);
@@ -1999,64 +1797,41 @@ where
     }
 }
 
+/// Sort a small slice by doing two insertion sorts and merging the result.
+/// This can be faster than just doing an insertion sort up to 20 elements.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort16_plus_min_cmp<T, F>(v: &mut [T], is_less: &mut F)
+fn insertion_merge<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
+    const MAX_LEN: usize = max_len_small_sort::<String>();
+
     let len = v.len();
-    const MAX_BRANCHLESS_SMALL_SORT: usize = max_len_small_sort::<i32>();
+    assert!(len >= 2 && len <= MAX_LEN && !has_direct_iterior_mutability::<T>());
 
-    // SAFETY: caller must ensure v.len() >= 16.
-    assert!(len >= 16 && len <= MAX_BRANCHLESS_SMALL_SORT);
+    // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
+    let even_len = len - (len % 2 != 0) as usize;
+    let len_div_2 = even_len / 2;
 
-    sort16_optimal(&mut v[0..16], is_less);
+    insertion_sort_shift_left(&mut v[0..len_div_2], 1, is_less);
+    insertion_sort_shift_left(&mut v[len_div_2..], 1, is_less);
 
-    if len > 16 {
-        let start = match len {
-            17..=19 => 1,
-            20..=23 => {
-                sort4_optimal(&mut v[16..20], is_less);
-                4
-            }
-            24..=31 => {
-                sort8_optimal(&mut v[16..24], is_less);
-                8
-            }
-            32..=MAX_BRANCHLESS_SMALL_SORT => {
-                sort16_optimal(&mut v[16..32], is_less);
-                16
-            }
-            _ => {
-                unreachable!()
-            }
-        };
+    let mut swap = mem::MaybeUninit::<[T; MAX_LEN]>::uninit();
+    let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-        insertion_sort_shift_left(&mut v[16..], start, is_less);
-
-        // We only need place for 16 entries because we know the shorter side is at most 16 long.
-        let mut swap = mem::MaybeUninit::<[T; 16]>::uninit();
-        let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-        // SAFETY: The shorter side is guaranteed to be at most 16 and both sides not empty, because
-        // we checked len > 16.
-        unsafe {
-            merge(v, 16, swap_ptr, is_less);
-        }
+    // SAFETY: We checked that T is Copy and thus observation safe.
+    // Should is_less panic v was not modified in parity_merge and retains it's original input.
+    // swap and v must not alias and swap has v.len() space.
+    unsafe {
+        parity_merge(&mut v[..even_len], swap_ptr, is_less);
+        ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
     }
-}
 
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort16_plus<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    if qualifies_for_parity_merge::<T>() {
-        // Allows it to use more stack space.
-        sort16_plus_parity(v, is_less);
-    } else {
-        // Minimize the amount of comparisons.
-        sort16_plus_min_cmp(v, is_less);
+    if len != even_len {
+        // SAFETY: We know len >= 2.
+        unsafe {
+            insert_tail(v, is_less);
+        }
     }
 }
 
