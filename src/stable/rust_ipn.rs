@@ -757,8 +757,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
-    assert!(mid > 0 && mid < len && buf_len >= (cmp::min(mid, len - mid)));
-    debug_assert!(!buf_ptr.is_null());
+    assert!(mid > 0 && mid < len && buf_len >= (cmp::min(mid, len - mid)) && !buf_ptr.is_null());
 
     // SAFETY: We checked that the two slices must be non-empty and `mid` must be in bounds. The
     // caller has to guarantee that Buffer `buf` must be long enough to hold a copy of the shorter
