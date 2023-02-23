@@ -1123,7 +1123,7 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
 
             let len_div_2 = len / 2;
 
-            if len < 52 {
+            if intrinsics::likely(len < 54) {
                 let start = len_div_2 - 2;
                 median5_optimal(&mut v[start..(start + 5)], is_less);
                 len_div_2
