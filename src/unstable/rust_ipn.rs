@@ -944,65 +944,102 @@ where
     }
 }
 
-fn choose_pivot_default<T, F>(v: &mut [T], is_less: &mut F) -> usize
+// Recursively select a pseudomedian if above this threshold.
+const PSEUDO_MEDIAN_REC_THRESHOLD: usize = 64;
+
+/// Selects a pivot from left, right.
+///
+/// Idea taken from glidesort by Orson Peters.
+///
+/// This chooses a pivot by sampling an adaptive amount of points, mimicking the median quality of
+/// median of square root.
+fn choose_pivot_default<T, F>(v: &[T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // Minimum length to choose the median-of-medians method.
-    // Shorter slices use the simple median-of-three method.
-    const SHORTEST_MEDIAN_OF_MEDIANS: usize = 50;
-
     let len = v.len();
 
-    // It's a logic bug if this get's called on slice that would be small-sorted.
-    assert!(len > max_len_small_sort::<T>());
+    // SAFETY: TODO
+    unsafe {
+        // We use unsafe code and raw pointers here because we're dealing with
+        // two non-contiguous buffers and heavy recursion. Passing safe slices
+        // around would involve a lot of branches and function call overhead.
+        let arr_ptr = v.as_ptr();
 
-    // Three indices near which we are going to choose a pivot.
-    let len_div_4 = len / 4;
-    let mut a = len_div_4 * 1;
-    let mut b = len_div_4 * 2;
-    let mut c = len_div_4 * 3;
+        let len_div_8 = len / 8;
+        let mut a = arr_ptr;
+        let mut b = arr_ptr.add(len_div_8 * 4);
+        let mut c = arr_ptr.add(len_div_8 * 7);
 
-    // Swaps indices so that `v[a] <= v[b]`.
-    // SAFETY: `len > 20` so there are at least two elements in the neighborhoods of
-    // `a`, `b` and `c`. This means the three calls to `sort_adjacent` result in
-    // corresponding calls to `sort3` with valid 3-item neighborhoods around each
-    // pointer, which in turn means the calls to `sort2` are done with valid
-    // references. Thus the `v.get_unchecked` calls are safe, as is the `ptr::swap`
-    // call.
-    let mut sort2_idx = |a: &mut usize, b: &mut usize| unsafe {
-        let should_swap = is_less(v.get_unchecked(*b), v.get_unchecked(*a));
-
-        // Generate branchless cmov code, it's not super important but reduces BHB and BTB pressure.
-        let tmp_idx = if should_swap { *a } else { *b };
-        *a = if should_swap { *b } else { *a };
-        *b = tmp_idx;
-    };
-
-    // Swaps indices so that `v[a] <= v[b] <= v[c]`.
-    let mut sort3_idx = |a: &mut usize, b: &mut usize, c: &mut usize| {
-        sort2_idx(a, b);
-        sort2_idx(b, c);
-        sort2_idx(a, b);
-    };
-
-    if len >= SHORTEST_MEDIAN_OF_MEDIANS {
-        // Finds the median of `v[a - 1], v[a], v[a + 1]` and stores the index into `a`.
-        let mut sort_adjacent = |a: &mut usize| {
-            let tmp = *a;
-            sort3_idx(&mut (tmp - 1), a, &mut (tmp + 1));
-        };
-
-        // Find medians in the neighborhoods of `a`, `b`, and `c`.
-        sort_adjacent(&mut a);
-        sort_adjacent(&mut b);
-        sort_adjacent(&mut c);
+        if len < PSEUDO_MEDIAN_REC_THRESHOLD {
+            median3(a, b, c, is_less).sub_ptr(arr_ptr)
+        } else {
+            median3_rec(a, b, c, len_div_8, is_less).sub_ptr(arr_ptr)
+        }
     }
+}
 
-    // Find the median among `a`, `b`, and `c`.
-    sort3_idx(&mut a, &mut b, &mut c);
+/// Calculates an approximate median of 3 elements from sections a, b, c, or recursively from an
+/// approximation of each, if they're large enough. By dividing the size of each section by 8 when
+/// recursing we have logarithmic recursion depth and overall sample from
+/// f(n) = 3*f(n/8) -> f(n) = O(n^(log(3)/log(8))) ~= O(n^0.528) elements.
+///
+/// SAFETY: a, b, c must point to the start of initialized regions of memory of
+/// at least n elements.
+#[inline(never)]
+unsafe fn median3_rec<T, F>(
+    mut a: *const T,
+    mut b: *const T,
+    mut c: *const T,
+    n: usize,
+    is_less: &mut F,
+) -> *const T
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: TODO
+    unsafe {
+        if n * 8 >= PSEUDO_MEDIAN_REC_THRESHOLD {
+            let n8 = n / 8;
+            a = median3_rec(a, a.add(n8 * 4), a.add(n8 * 7), n8, is_less);
+            b = median3_rec(b, b.add(n8 * 4), b.add(n8 * 7), n8, is_less);
+            c = median3_rec(c, c.add(n8 * 4), c.add(n8 * 7), n8, is_less);
+        }
+        median3(a, b, c, is_less)
+    }
+}
 
-    b
+/// Calculates the median of 3 elements.
+///
+/// SAFETY: a, b, c must be valid initialized elements.
+#[inline(always)]
+unsafe fn median3<T, F>(a: *const T, b: *const T, c: *const T, is_less: &mut F) -> *const T
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: TODO
+    //
+    // Compiler tends to make this branchless when sensible, and avoids the
+    // third comparison when not.
+    unsafe {
+        let x = is_less(&*a, &*b);
+        let y = is_less(&*a, &*c);
+        if x == y {
+            // If x=y=0 then b, c <= a. In this case we want to return max(b, c).
+            // If x=y=1 then a < b, c. In this case we want to return min(b, c).
+            // By toggling the outcome of b < c using XOR x we get this behavior.
+            let z = is_less(&*b, &*c);
+
+            if z ^ x {
+                c
+            } else {
+                b
+            }
+        } else {
+            // Either c <= a < b or b <= a < c, thus a is our median.
+            a
+        }
+    }
 }
 
 // Some types like String have no direct interior mutability and can benefit from specialized logic,
