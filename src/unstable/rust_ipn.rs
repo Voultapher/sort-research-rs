@@ -822,7 +822,9 @@ where
         // If the last partitioning was imbalanced, try breaking patterns in the slice by shuffling
         // some elements around. Hopefully we'll choose a better pivot this time.
         if !was_good_partition {
-            break_patterns(v);
+            if len >= 54 {
+                break_patterns(v);
+            }
             limit -= 1;
         }
 
@@ -1126,16 +1128,42 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
             if intrinsics::likely(len < 54) {
                 let start = len_div_2 - 2;
                 median5_optimal(&mut v[start..(start + 5)], is_less);
-                len_div_2
             } else {
+                let start = len_div_2 - 4;
+
+                // Improve pivot quality for larger slices, this is a delicate balance. This also
+                // helps mitigate pathological cases.
+                //
+                // This done in a way that allows the len_div_2 to remain the only value this
+                // functions returns.
+                if intrinsics::unlikely(len > 712) {
+                    let len_div_8 = len / 8;
+                    median5_optimal(&mut v[len_div_8..(len_div_8 + 5)], is_less);
+
+                    let near_end = len_div_8 * 7;
+                    median5_optimal(&mut v[near_end..(near_end + 5)], is_less);
+
+                    let arr_ptr = v.as_mut_ptr();
+                    // SAFETY: TODO
+                    unsafe {
+                        ptr::copy_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
+                        ptr::copy_nonoverlapping(
+                            arr_ptr.add(near_end + 1),
+                            arr_ptr.add(start + 6),
+                            3,
+                        );
+                    }
+                }
+
                 // This only samples the middle, `break_patterns` will randomize this area if it
                 // picked a bad partition. Additionally the cyclic permutation of
                 // `partition_in_blocks` will further randomize the original pattern, avoiding even
                 // more situations where this would be a problem.
-                let start = len_div_2 - 4;
                 median9_optimal(&mut v[start..(start + 9)], is_less);
-                len_div_2
             }
+
+            // It's important for the perf that this always returns the same value.
+            len_div_2
         } else {
             choose_pivot_default(v, is_less)
         }
