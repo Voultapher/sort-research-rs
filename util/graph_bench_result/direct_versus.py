@@ -6,6 +6,7 @@ import json
 import sys
 import os
 import math
+import itertools
 
 from collections import defaultdict
 
@@ -167,9 +168,20 @@ if __name__ == "__main__":
 
     groups = extract_groups(combined_result)
 
-    sort_name_a = "c_fluxsort_stable"
-    sort_name_b = "rust_glidesort_stable"
+    sort_names = list(
+        list(
+            list(list(list(groups.values())[0].values())[0].values())[
+                0
+            ].values()
+        )[0].keys()
+    )
 
-    name = os.path.basename(sys.argv[1]).partition(".")[0]
-    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
-    plot_types(sort_name_a, sort_name_b, name, groups)
+    for sort_name_a, sort_name_b in itertools.product(
+        *[sort_names, sort_names]
+    ):
+        if sort_name_a == sort_name_b:
+            continue
+
+        name = os.path.basename(sys.argv[1]).partition(".")[0]
+        CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
+        plot_types(sort_name_a, sort_name_b, name, groups)

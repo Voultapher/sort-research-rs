@@ -2631,3 +2631,52 @@ unsafe {
 //     unsafe { &*ptr::slice_from_raw_parts(val as *const T as *const u8, mem::size_of::<T>()) }
 // }
 }
+
+// Branchless insertion sort
+/// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
+/// becomes sorted.
+unsafe fn insert_tail_branchless<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    debug_assert!(v.len() >= 2);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    let tail_elem_pos = v.len() - 1;
+
+    // SAFETY: caller must ensure v is at least len 2.
+    unsafe {
+        // See insert_head which talks about why this approach is beneficial.
+        let tail_elem_ptr = arr_ptr.add(tail_elem_pos);
+
+        // It's important, that we use tmp for comparison from now on. As it is the value that
+        // will be copied back. And notionally we could have created a divergence if we copy
+        // back the wrong value.
+        let tmp = mem::ManuallyDrop::new(ptr::read(tail_elem_ptr));
+        // Intermediate state of the insertion process is always tracked by `hole`, which
+        // serves two purposes:
+        // 1. Protects integrity of `v` from panics in `is_less`.
+        // 2. Fills the remaining hole in `v` in the end.
+        //
+        // Panic safety:
+        //
+        // If `is_less` panics at any point during the process, `hole` will get dropped and
+        // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
+        // initially held exactly once.
+        let mut hole = InsertionHole {
+            src: &*tmp,
+            dest: tail_elem_ptr,
+        };
+
+        for _ in 0..tail_elem_pos {
+            let current_ptr = hole.dest;
+            hole.dest = hole.dest.sub(1);
+            let is_l = is_less(&*tmp, &*hole.dest);
+            hole.dest = hole.dest.add(!is_l as usize);
+            ptr::copy(hole.dest, current_ptr, 1);
+        }
+
+        // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
+    }
+}

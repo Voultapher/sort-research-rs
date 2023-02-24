@@ -55,5 +55,5 @@ if __name__ == "__main__":
     for len, run_dist in run_dists.items():
         run_dist_medians[len] = (statistics.median(run_dist), sum(run_dist, 0))
 
-    # pprint(run_dist_medians)
+    pprint(run_dist_medians)
 

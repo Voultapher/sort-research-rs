@@ -13,8 +13,8 @@ def get_cpu_info(name):
     elif "haswell" in name_lower:
         cpu_boost_ghz = 3.0
         cpu_arch = "Haswell"
-    elif "skylake" in name_lower:
+    elif "skylake" in name_lower or "cascade" in name_lower:
         cpu_boost_ghz = 4.8
-        cpu_arch = "skylake"
+        cpu_arch = "Skylake"
 
     return cpu_boost_ghz, cpu_arch
