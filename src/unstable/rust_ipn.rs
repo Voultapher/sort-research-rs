@@ -512,30 +512,31 @@ where
     }
 }
 
+struct FulcrumState<T> {
+    r_ptr: *mut T,
+    x_ptr: *mut T,
+    elem_i: usize,
+}
+
 #[inline(always)]
 unsafe fn fulcrum_rotate<T, F>(
-    l_ptr: *mut T,
-    mut r_ptr: *mut T,
-    mut x_ptr: *mut T,
-    mut elem_i: usize,
+    arr_ptr: *mut T,
+    state: &mut FulcrumState<T>,
     offset_val: isize,
     loop_len: usize,
     pivot: &T,
     is_less: &mut F,
-) -> (*mut T, *mut T, usize)
-where
+) where
     F: FnMut(&T, &T) -> bool,
 {
     for _ in 0..loop_len {
-        let is_l = is_less(&*x_ptr, pivot);
-        ptr::copy(x_ptr, r_ptr.add(elem_i), 1);
-        ptr::copy(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
-        elem_i += is_l as usize;
-        x_ptr = x_ptr.wrapping_offset(offset_val);
-        r_ptr = r_ptr.wrapping_sub(1);
+        let is_l = is_less(&*state.x_ptr, pivot);
+        ptr::copy(state.x_ptr, state.r_ptr.add(state.elem_i), 1);
+        ptr::copy(state.r_ptr.add(state.elem_i), arr_ptr.add(state.elem_i), 1);
+        state.elem_i += is_l as usize;
+        state.x_ptr = state.x_ptr.wrapping_offset(offset_val);
+        state.r_ptr = state.r_ptr.wrapping_sub(1);
     }
-
-    (r_ptr, x_ptr, elem_i)
 }
 
 // Disabled by default because it currently has panic safety issues.
@@ -553,9 +554,9 @@ where
     const ROTATION_ELEMS: usize = 16;
     assert!(len > (ROTATION_ELEMS * 2) && !has_direct_iterior_mutability::<T>());
 
-    let advance_left = |a_ptr: *const T, l_ptr: *const T, elem_i: usize| -> bool {
+    let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO
-        unsafe { (a_ptr.sub_ptr(l_ptr) - elem_i) <= ROTATION_ELEMS }
+        unsafe { (a_ptr.sub_ptr(arr_ptr) - elem_i) <= ROTATION_ELEMS }
     };
 
     let mut swap = mem::MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
@@ -572,39 +573,42 @@ where
             ROTATION_ELEMS,
         );
 
-        let l_ptr = arr_ptr;
-        let mut r_ptr = arr_ptr.add(len - 1);
+        let mut state = FulcrumState {
+            r_ptr: arr_ptr.add(len - 1),
+            x_ptr: ptr::null_mut(),
+            elem_i: 0,
+        };
 
         let mut a_ptr = arr_ptr.add(ROTATION_ELEMS);
         let mut t_ptr = arr_ptr.add(len - (ROTATION_ELEMS + 1));
 
-        let mut elem_i = 0;
-
         for _ in 0..((len / ROTATION_ELEMS) - 2) {
             let loop_len = ROTATION_ELEMS;
-            if advance_left(a_ptr, l_ptr, elem_i) {
-                (r_ptr, a_ptr, elem_i) =
-                    fulcrum_rotate(l_ptr, r_ptr, a_ptr, elem_i, 1, loop_len, pivot, is_less);
+            if advance_left(a_ptr, arr_ptr, state.elem_i) {
+                state.x_ptr = a_ptr;
+                fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
+                a_ptr = state.x_ptr;
             } else {
-                (r_ptr, t_ptr, elem_i) =
-                    fulcrum_rotate(l_ptr, r_ptr, t_ptr, elem_i, -1, loop_len, pivot, is_less);
+                state.x_ptr = t_ptr;
+                fulcrum_rotate(arr_ptr, &mut state, -1, loop_len, pivot, is_less);
+                t_ptr = state.x_ptr;
             }
         }
 
         let loop_len = len % ROTATION_ELEMS;
-        if advance_left(a_ptr, l_ptr, elem_i) {
-            (r_ptr, _, elem_i) =
-                fulcrum_rotate(l_ptr, r_ptr, a_ptr, elem_i, 1, loop_len, pivot, is_less);
+        if advance_left(a_ptr, arr_ptr, state.elem_i) {
+            state.x_ptr = a_ptr;
+            fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
         } else {
-            (r_ptr, _, elem_i) =
-                fulcrum_rotate(l_ptr, r_ptr, t_ptr, elem_i, -1, loop_len, pivot, is_less);
+            state.x_ptr = t_ptr;
+            fulcrum_rotate(arr_ptr, &mut state, -1, loop_len, pivot, is_less);
         }
 
         let loop_len = ROTATION_ELEMS * 2;
-        (_, _, elem_i) =
-            fulcrum_rotate(l_ptr, r_ptr, swap_ptr, elem_i, 1, loop_len, pivot, is_less);
+        state.x_ptr = swap_ptr;
+        fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
 
-        elem_i
+        state.elem_i
     }
 }
 
