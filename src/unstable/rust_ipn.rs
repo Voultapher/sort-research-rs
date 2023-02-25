@@ -528,8 +528,8 @@ where
 {
     for _ in 0..loop_len {
         let is_l = is_less(&*x_ptr, pivot);
-        ptr::copy_nonoverlapping(x_ptr, r_ptr.add(elem_i), 1);
-        ptr::copy_nonoverlapping(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
+        ptr::copy(x_ptr, r_ptr.add(elem_i), 1);
+        ptr::copy(r_ptr.add(elem_i), l_ptr.add(elem_i), 1);
         elem_i += is_l as usize;
         x_ptr = x_ptr.wrapping_offset(offset_val);
         r_ptr = r_ptr.wrapping_sub(1);
