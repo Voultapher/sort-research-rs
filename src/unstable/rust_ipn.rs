@@ -1146,8 +1146,8 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
                     let arr_ptr = v.as_mut_ptr();
                     // SAFETY: TODO
                     unsafe {
-                        ptr::copy_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
-                        ptr::copy_nonoverlapping(
+                        ptr::swap_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
+                        ptr::swap_nonoverlapping(
                             arr_ptr.add(near_end + 1),
                             arr_ptr.add(start + 6),
                             3,
