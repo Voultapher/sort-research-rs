@@ -49,6 +49,18 @@ cargo bench hot-u64-random-10000
 cargo bench random
 ```
 
+You can also set a custom regex to filter the benchmarks you want to run:
+
+```
+CUSTOM_BENCH_REGEX="std.*i32-random-8$" cargo bench
+```
+
+If you want to collect a set of results that can then later be used to create graphs, you can use the `run_benchmarks.py` utility script:
+
+```
+CUSTOM_BENCH_REGEX="stable.*random-" python util/run_benchmarks.py my_test_zen3
+```
+
 ## Fuzzing
 
 You'll need to install cargo fuzz and cargo afl respectively.
