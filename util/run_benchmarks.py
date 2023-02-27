@@ -44,6 +44,8 @@ def run_benchmarks(test_name):
         [
             "cargo",
             "bench",
+            "--features",
+            "cold_benchmarks",
             "--bench",
             "bench",
             "--",
