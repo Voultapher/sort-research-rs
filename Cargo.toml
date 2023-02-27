@@ -21,6 +21,7 @@ glidesort = { version = "0.1.2", features = ["unstable"], optional = true }
 [dev-dependencies]
 criterion = { version = "0.3", features = ["html_reports"] }
 core_affinity = { version = "0.7" }
+regex = { version = "^1" }
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }

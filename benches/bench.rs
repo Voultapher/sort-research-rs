@@ -4,6 +4,10 @@ use std::cell::RefCell;
 use std::env;
 use std::rc::Rc;
 
+use regex::Regex;
+
+use once_cell::sync::OnceCell;
+
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 #[allow(unused_imports)]
@@ -58,47 +62,65 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
         BatchSize::SmallInput
     };
 
-    c.bench_function(
-        &format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}"),
-        |b| {
+    static FILTER_REGEX: OnceCell<Option<regex::Regex>> = OnceCell::new();
+
+    let is_bench_name_ok = |name: &str| -> bool {
+        let filter_regex = FILTER_REGEX.get_or_init(|| {
+            env::var("CUSTOM_BENCH_REGEX")
+                .ok()
+                .map(|filter_regex| Regex::new(&filter_regex).unwrap())
+        });
+
+        filter_regex
+            .as_ref()
+            .map(|reg| reg.is_match(name))
+            .unwrap_or(true)
+    };
+
+    let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}");
+    if is_bench_name_ok(&bench_name_hot) {
+        c.bench_function(&bench_name_hot, |b| {
             b.iter_batched(
                 || transform(pattern_provider(test_size)),
                 |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
                 batch_size,
             )
-        },
-    );
+        });
+    }
 
     #[cfg(feature = "cold_benchmarks")]
-    c.bench_function(
-        &format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_size}"),
-        |b| {
-            b.iter_batched(
-                || {
-                    let mut test_ints = pattern_provider(test_size);
+    {
+        let bench_name_cold =
+            format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_size}");
+        if is_bench_name_ok(&bench_name_cold) {
+            c.bench_function(&bench_name_cold, |b| {
+                b.iter_batched(
+                    || {
+                        let mut test_ints = pattern_provider(test_size);
 
-                    if test_ints.len() == 0 {
-                        return vec![];
-                    }
+                        if test_ints.len() == 0 {
+                            return vec![];
+                        }
 
-                    // Try as best as possible to trash all prediction state in the CPU, to simulate
-                    // calling the benchmark function as part of a larger program. Caveat, memory
-                    // caches. We don't want to benchmark how expensive it is to load something from
-                    // main memory.
-                    let first_val =
-                        black_box(trash_prediction::trash_prediction_state(test_ints[0]));
+                        // Try as best as possible to trash all prediction state in the CPU, to
+                        // simulate calling the benchmark function as part of a larger program.
+                        // Caveat, memory caches. We don't want to benchmark how expensive it is to
+                        // load something from main memory.
+                        let first_val =
+                            black_box(trash_prediction::trash_prediction_state(test_ints[0]));
 
-                    // Limit the optimizer in getting rid of trash_prediction_state,
-                    // by tying its output to the test input.
-                    test_ints[0] = first_val;
+                        // Limit the optimizer in getting rid of trash_prediction_state,
+                        // by tying its output to the test input.
+                        test_ints[0] = first_val;
 
-                    transform(test_ints)
-                },
-                |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
-                BatchSize::PerIteration,
-            )
-        },
-    );
+                        transform(test_ints)
+                    },
+                    |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
+                    BatchSize::PerIteration,
+                )
+            });
+        }
+    }
 }
 
 fn measure_comp_count(
