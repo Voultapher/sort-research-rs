@@ -94,7 +94,7 @@ Properties:
 | cpp_std_msvc_stable        | ✅         | ✅      | ?      | ?     | C          | 🚫               | 1. ✅ 2. 🚫     | -    |
 | cpp_powersort_stable       | ✅         | ⚠️ (1)  | ?      | N     | O          | 🚫               | 1. ✅ 2. 🚫     | -    |
 | cpp_powersort_4way_stable  | ✅         | ⚠️ (2)  | ?      | N     | O          | 🚫               | 1. ✅ 2. 🚫     | -    |
-| c_fluxsort_stable          | ✅         | ⚠️ (3)  | 32     | N     | C          | 🚫 (8)           | 1. 🚫 2. 🚫     | -    |
+| c_fluxsort_stable          | ✅         | ⚠️ (3)  | 32     | N     | C          | 🚫 (9)           | 1. 🚫 2. 🚫     | -    |
 | rust_std_unstable          | ✅         | ✅      | 1      | -     | O          | ✅               | 1. ✅ 2. ✅     | ✅   |
 | rust_ipn_unstable          | ✅         | ✅      | 40 (7) | -     | O or E     | ✅               | 1. ✅ 2. ✅     | ✅   |
 | rust_dmsort_unstable       | ✅         | ✅      | ?      | -     | O          | ✅               | 1. ✅ 2. 🚫     | 🚫   |
@@ -104,10 +104,10 @@ Properties:
 | cpp_pdqsort_unstable       | ✅         | ✅      | 1      | -     | H or C     | 🚫               | 1. ✅ 2. 🚫     | -    |
 | cpp_ips4o_unstable         | ✅         | ✅      | ?      | -     | C          | 🚫               | 1. 🚫 2. 🚫     | -    |
 | cpp_blockquicksort         | ✅         | ✅      | ?      | -     | C          | 🚫               | 1. ✅ 2. 🚫     | -    |
-| c_crumsort_unstable        | ✅         | ⚠️ (4)  | 512    | -     | C          | 🚫 (8)           | 1. 🚫 2. 🚫     | -    |
+| c_crumsort_unstable        | ✅         | ⚠️ (4)  | 512    | N (8) | C          | 🚫 (9)           | 1. 🚫 2. 🚫     | -    |
 | rust_radsort               | ✅         | 🚫      | ?      | N     | -          | -                | -               | -    |
 | cpp_simdsort_unstable      | ✅         | 🚫      | ?      | -     | -          | -                | -               | -    | 
-| cpp_vqsort_unstable   | ✅         | 🚫      | ?      | -     | -          | -                | -               | -    | 
+| cpp_vqsort_unstable        | ✅         | 🚫      | ?      | -     | -          | -                | -               | -    | 
 
 Footnotes:
 1. cpp_powersort_stable uses `vector::resize` for it's buffer, requiring that `T` is default constructible.
@@ -117,7 +117,8 @@ Footnotes:
 5. rust_ipn_stable will only use a 32 element stack array if `T` is at most 4 times the size of a pointer, limiting the upper end stack usage. Otherwise falling back to only using a single stack element.
 6. rust_ipn_stable will try to allocate a buffer of size of N and fall back to using a buffer of size N/2 if the allocation fails. Incurring some slowdown.
 7. rust_ipn_unstable will only use a 40 element stack array if `T` is at most 4 times the size of a pointer, limiting the upper end stack usage. Otherwise falling back to only using a single stack element.
-8. c_fluxsort_stable and c_crumsort_unstable are developed as C based sorts. C has no concept of exceptions, or stack unwinding. So this property would only be relevant if compiled as C++ code.
+8. c_crumsort_unstable does an initial analysis and switches to quadsort a merge sort that uses up to N memory making it not in-place, it can fall back to in-place merging if the allocation fails.
+9. c_fluxsort_stable and c_crumsort_unstable are developed as C based sorts. C has no concept of exceptions, or stack unwinding. So this property would only be relevant if compiled as C++ code.
 
 ### Failure modes
 

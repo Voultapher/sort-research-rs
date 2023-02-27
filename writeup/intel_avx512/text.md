@@ -52,21 +52,22 @@ A selection of high-performance in-place sort implementations.
 - rust_ipn_unstable          | https://github.com/Voultapher/sort-research-rs (2)
 - cpp_std_msvc_unstable      | MSVC `std::sort` (3)
 - cpp_pdqsort_unstable       | https://github.com/orlp/pdqsort (3)
-- c_crumsort_unstable        | https://github.com/scandum/crumsort (4)
+- c_crumsort_unstable        | https://github.com/scandum/crumsort (4) (5)
 ```
 
 #### Manually vectorized 
 
 ```
-- cpp_vqsort                 | https://github.com/google/highway/tree/master/hwy/contrib/sort (5)
-- cpp_intel_avx512           | https://github.com/intel/x86-simd-sort (5)
+- cpp_vqsort                 | https://github.com/google/highway/tree/master/hwy/contrib/sort (6)
+- cpp_intel_avx512           | https://github.com/intel/x86-simd-sort (6)
 ```
 
 1. Vendored ca. mid 2022.
 2. Still WIP and these are only preliminary results.
 3. Build with msvc.
 4. Compiled with `#define cmp(a, b) (*(a) > *(b))`. This is required to be competitive, the regular way of providing a comparison function is problematic because of C language limitations.
-5. Build with clang and `-march=native`. Compiled with static dispatch, this would not be portable. Any CPU without AVX-512 support would fail to run the binary. It's unknown what the overhead of dynamic dispatch would be.
+5. c_crumsort_unstable does an initial analysis and switches to quadsort a merge sort that uses up to N memory making it not in-place ⚠️, it can fall back to in-place merging if the allocation fails. These tests were performed with allocations possible.
+6. Build with clang and `-march=native`. Compiled with static dispatch, this would not be portable. Any CPU without AVX-512 support would fail to run the binary. It's unknown what the overhead of dynamic dispatch would be.
 
 ### Results `u64`
 
