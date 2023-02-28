@@ -571,8 +571,12 @@ unsafe fn fulcrum_rotate<T, F>(
 {
     for _ in 0..loop_len {
         let is_l = is_less(&*state.x_ptr, pivot);
-        ptr::copy(state.x_ptr, state.r_ptr.add(state.elem_i), 1);
-        ptr::copy(state.r_ptr.add(state.elem_i), arr_ptr.add(state.elem_i), 1);
+        let target_ptr = if is_l {
+            arr_ptr.add(state.elem_i)
+        } else {
+            state.r_ptr.add(state.elem_i)
+        };
+        ptr::copy(state.x_ptr, target_ptr, 1);
         state.elem_i += is_l as usize;
         state.x_ptr = state.x_ptr.wrapping_offset(offset_val);
         state.r_ptr = state.r_ptr.wrapping_sub(1);
