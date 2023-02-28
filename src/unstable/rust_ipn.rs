@@ -137,75 +137,60 @@ where
         insertion_sort_shift_left(v, 1, &mut is_less);
 
         return;
-    } else if partial_insertion_sort(v, &mut is_less) {
-        // Try identifying several out-of-order elements and shifting them to correct
-        // positions. If the slice ends up being completely sorted, we're done.
+    }
 
-        // The pdqsort implementation, does partial_insertion_sort as part of every recurse call.
-        // However whatever ascending or descending input pattern there used to be, is most likely
-        // destroyed via partitioning. Even more so because partitioning changes the input order
-        // while performing it's cyclic permutation. As a consequence this check is only really
-        // useful for nearly fully ascending or descending inputs.
+    let (streak_end, was_reversed) = find_streak(v, &mut is_less);
+    if streak_end == len {
+        if was_reversed {
+            v.reverse();
+        }
+
+        // TODO if streak_end >= len / 2 | quicksort the rest and merge via rotation merge.
+
         return;
     }
 
     // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
-    let limit = usize::BITS - len.leading_zeros();
+    let limit = usize::BITS - v.len().leading_zeros();
 
     recurse(v, &mut is_less, None, limit);
 }
 
-/// Partially sorts a slice by shifting several out-of-order elements around.
-///
-/// Returns `true` if the slice is sorted at the end. This function is *O*(*n*) worst-case.
-#[cold]
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partial_insertion_sort<T, F>(v: &mut [T], is_less: &mut F) -> bool
+/// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
+/// value that is not part of said streak, and a bool denoting wether the streak was reversed.
+/// Streaks can be increasing or decreasing.
+fn find_streak<T, F>(v: &[T], is_less: &mut F) -> (usize, bool)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // Maximum number of adjacent out-of-order pairs that will get shifted.
-    const MAX_STEPS: usize = 5;
-    // If the slice is shorter than this, don't shift any elements.
-    const SHORTEST_SHIFTING: usize = 50;
-
     let len = v.len();
-    let mut i = 1;
 
-    for _ in 0..MAX_STEPS {
-        // SAFETY: We already explicitly did the bound checking with `i < len`.
-        // All our subsequent indexing is only in the range `0 <= index < len`
-        unsafe {
-            // Find the next pair of adjacent out-of-order elements.
-            while i < len && !is_less(v.get_unchecked(i), v.get_unchecked(i - 1)) {
-                i += 1;
-            }
-        }
-
-        // Are we done?
-        if i == len {
-            return true;
-        }
-
-        // Don't shift elements on short arrays, that has a performance cost.
-        if len < SHORTEST_SHIFTING {
-            return false;
-        }
-
-        // Swap the found pair of elements. This puts them in correct order.
-        v.swap(i - 1, i);
-
-        if i >= 2 {
-            // Shift the smaller element to the left.
-            insertion_sort_shift_left(&mut v[..i], i - 1, is_less);
-
-            // Shift the greater element to the right.
-            insertion_sort_shift_right(&mut v[..i], 1, is_less);
-        }
+    if len < 2 {
+        return (len, false);
     }
 
-    // Didn't manage to sort the slice in the limited number of steps.
-    false
+    let mut end = 2;
+
+    // SAFETY: See below specific.
+    unsafe {
+        // SAFETY: We checked that len >= 2, so 0 and 1 are valid indices.
+        let assume_reverse = is_less(v.get_unchecked(1), v.get_unchecked(0));
+
+        // SAFETY: We know end >= 2 and check end < len.
+        // From that follows that accessing v at end and end - 1 is safe.
+        if assume_reverse {
+            while end < len && is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
+                end += 1;
+            }
+
+            (end, true)
+        } else {
+            while end < len && !is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
+                end += 1;
+            }
+            (end, false)
+        }
+    }
 }
 
 /// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
@@ -1028,9 +1013,9 @@ where
         let arr_ptr = v.as_ptr();
 
         let len_div_8 = len / 8;
-        let mut a = arr_ptr;
-        let mut b = arr_ptr.add(len_div_8 * 4);
-        let mut c = arr_ptr.add(len_div_8 * 7);
+        let a = arr_ptr;
+        let b = arr_ptr.add(len_div_8 * 4);
+        let c = arr_ptr.add(len_div_8 * 7);
 
         if len < PSEUDO_MEDIAN_REC_THRESHOLD {
             median3(a, b, c, is_less).sub_ptr(arr_ptr)
@@ -1311,66 +1296,6 @@ where
     }
 }
 
-/// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
-///
-/// This is the integral subroutine of insertion sort.
-unsafe fn insert_head<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    debug_assert!(v.len() >= 2);
-
-    unsafe {
-        if is_less(v.get_unchecked(1), v.get_unchecked(0)) {
-            let arr_ptr = v.as_mut_ptr();
-
-            // There are three ways to implement insertion here:
-            //
-            // 1. Swap adjacent elements until the first one gets to its final destination.
-            //    However, this way we copy data around more than is necessary. If elements are big
-            //    structures (costly to copy), this method will be slow.
-            //
-            // 2. Iterate until the right place for the first element is found. Then shift the
-            //    elements succeeding it to make room for it and finally place it into the
-            //    remaining hole. This is a good method.
-            //
-            // 3. Copy the first element into a temporary variable. Iterate until the right place
-            //    for it is found. As we go along, copy every traversed element into the slot
-            //    preceding it. Finally, copy data from the temporary variable into the remaining
-            //    hole. This method is very good. Benchmarks demonstrated slightly better
-            //    performance than with the 2nd method.
-            //
-            // All methods were benchmarked, and the 3rd showed best results. So we chose that one.
-            let tmp = mem::ManuallyDrop::new(ptr::read(arr_ptr));
-
-            // Intermediate state of the insertion process is always tracked by `hole`, which
-            // serves two purposes:
-            // 1. Protects integrity of `v` from panics in `is_less`.
-            // 2. Fills the remaining hole in `v` in the end.
-            //
-            // Panic safety:
-            //
-            // If `is_less` panics at any point during the process, `hole` will get dropped and
-            // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
-            // initially held exactly once.
-            let mut hole = InsertionHole {
-                src: &*tmp,
-                dest: arr_ptr.add(1),
-            };
-            ptr::copy_nonoverlapping(arr_ptr.add(1), arr_ptr.add(0), 1);
-
-            for i in 2..v.len() {
-                if !is_less(&v.get_unchecked(i), &*tmp) {
-                    break;
-                }
-                ptr::copy_nonoverlapping(arr_ptr.add(i), arr_ptr.add(i - 1), 1);
-                hole.dest = arr_ptr.add(i);
-            }
-            // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
-        }
-    }
-}
-
 /// Sort `v` assuming `v[..offset]` is already sorted.
 fn insertion_sort_shift_left<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
 where
@@ -1387,27 +1312,6 @@ where
         // >= 2.
         unsafe {
             insert_tail(&mut v[..=i], is_less);
-        }
-    }
-}
-
-/// Sort `v` assuming `v[offset..]` is already sorted.
-fn insertion_sort_shift_right<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    // Using assert here improves performance.
-    assert!(offset != 0 && offset <= len && len >= 2);
-
-    // Shift each element of the unsorted region v[..i] as far left as is needed to make v sorted.
-    for i in (0..offset).rev() {
-        // We ensured that the slice length is always at least 2 long.
-        // We know that start_found will be at least one less than end,
-        // and the range is exclusive. Which gives us i always <= (end - 2).
-        unsafe {
-            insert_head(&mut v[i..len], is_less);
         }
     }
 }
