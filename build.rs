@@ -101,7 +101,8 @@ fn build_and_link_cpp_vqsort() {
             // Make an exception for march=native here because AVX2 will not work without it.
             builder.flag_if_supported("-march=native");
             builder.compiler("clang++"); // gcc yields terrible code here.
-            builder.cpp_set_stdlib("c++"); // Use libcxx
+
+            // builder.cpp_set_stdlib("c++"); // Use libcxx
 
             None
         }),
