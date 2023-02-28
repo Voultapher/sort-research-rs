@@ -1135,19 +1135,17 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
             } else {
                 let start = len_div_2 - 4;
 
-                // Improve pivot quality for larger slices, this is a delicate balance. This also
-                // helps mitigate pathological cases.
+                // Mitigate pathological cases that keep picking bad values. This works in
+                // conjunction with break_patterns and the heapsort fallback.
                 //
                 // This done in a way that allows the len_div_2 to remain the only value this
                 // functions returns.
-                if intrinsics::unlikely(len > 712) {
+                if intrinsics::unlikely(len > 256) {
                     let len_div_8 = len / 8;
-                    median5_optimal(&mut v[len_div_8..(len_div_8 + 5)], is_less);
-
                     let near_end = len_div_8 * 7;
-                    median5_optimal(&mut v[near_end..(near_end + 5)], is_less);
 
                     let arr_ptr = v.as_mut_ptr();
+
                     // SAFETY: TODO
                     unsafe {
                         ptr::swap_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
