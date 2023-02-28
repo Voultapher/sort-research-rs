@@ -100,6 +100,61 @@ where
 
 // --- IMPL ---
 
+/// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+pub fn quicksort<T, F>(v: &mut [T], mut is_less: F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Sorting has no meaningful behavior on zero-sized types.
+    if const { mem::size_of::<T>() == 0 } {
+        return;
+    }
+
+    let len = v.len();
+
+    // This path is critical for very small inputs. Always pick insertion sort for these inputs,
+    // without any other analysis. This is perf critical for small inputs, in cold code.
+    const MAX_LEN_ALWAYS_INSERTION_SORT: usize = 20;
+
+    // Instrumenting the standard library showed that 90+% of the calls to sort by rustc are either
+    // of size 0 or 1. Make this path extra fast by assuming the branch is likely.
+    if intrinsics::likely(len < 2) {
+        return;
+    }
+
+    // It's important to differentiate between small-sort performance for small slices and
+    // small-sort performance sorting small sub-slices as part of the main quicksort loop. For the
+    // former, testing showed that the representative benchmarks for real-world performance are cold
+    // CPU state and not single-size hot benchmarks. For the latter the CPU will call them many
+    // times, so hot benchmarks are fine and more realistic. And it's worth it to optimize sorting
+    // small sub-slices with more sophisticated solutions than insertion sort.
+
+    if intrinsics::likely(len <= MAX_LEN_ALWAYS_INSERTION_SORT) {
+        // More specialized and faster options, extending the range of allocation free sorting
+        // are possible but come at a great cost of additional code, which is problematic for
+        // compile-times.
+        insertion_sort_shift_left(v, 1, &mut is_less);
+
+        return;
+    } else if partial_insertion_sort(v, &mut is_less) {
+        // Try identifying several out-of-order elements and shifting them to correct
+        // positions. If the slice ends up being completely sorted, we're done.
+
+        // The pdqsort implementation, does partial_insertion_sort as part of every recurse call.
+        // However whatever ascending or descending input pattern there used to be, is most likely
+        // destroyed via partitioning. Even more so because partitioning changes the input order
+        // while performing it's cyclic permutation. As a consequence this check is only really
+        // useful for nearly fully ascending or descending inputs.
+        return;
+    }
+
+    // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
+    let limit = usize::BITS - len.leading_zeros();
+
+    recurse(v, &mut is_less, None, limit);
+}
+
 /// Partially sorts a slice by shifting several out-of-order elements around.
 ///
 /// Returns `true` if the slice is sorted at the end. This function is *O*(*n*) worst-case.
@@ -1181,61 +1236,6 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
             partition_in_blocks(v, pivot, is_less)
         }
     }
-}
-
-/// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-pub fn quicksort<T, F>(v: &mut [T], mut is_less: F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // Sorting has no meaningful behavior on zero-sized types.
-    if const { mem::size_of::<T>() == 0 } {
-        return;
-    }
-
-    let len = v.len();
-
-    // This path is critical for very small inputs. Always pick insertion sort for these inputs,
-    // without any other analysis. This is perf critical for small inputs, in cold code.
-    const MAX_LEN_ALWAYS_INSERTION_SORT: usize = 20;
-
-    // Instrumenting the standard library showed that 90+% of the calls to sort by rustc are either
-    // of size 0 or 1. Make this path extra fast by assuming the branch is likely.
-    if intrinsics::likely(len < 2) {
-        return;
-    }
-
-    // It's important to differentiate between small-sort performance for small slices and
-    // small-sort performance sorting small sub-slices as part of the main quicksort loop. For the
-    // former, testing showed that the representative benchmarks for real-world performance are cold
-    // CPU state and not single-size hot benchmarks. For the latter the CPU will call them many
-    // times, so hot benchmarks are fine and more realistic. And it's worth it to optimize sorting
-    // small sub-slices with more sophisticated solutions than insertion sort.
-
-    if intrinsics::likely(len <= MAX_LEN_ALWAYS_INSERTION_SORT) {
-        // More specialized and faster options, extending the range of allocation free sorting
-        // are possible but come at a great cost of additional code, which is problematic for
-        // compile-times.
-        insertion_sort_shift_left(v, 1, &mut is_less);
-
-        return;
-    } else if partial_insertion_sort(v, &mut is_less) {
-        // Try identifying several out-of-order elements and shifting them to correct
-        // positions. If the slice ends up being completely sorted, we're done.
-
-        // The pdqsort implementation, does partial_insertion_sort as part of every recurse call.
-        // However whatever ascending or descending input pattern there used to be, is most likely
-        // destroyed via partitioning. Even more so because partitioning changes the input order
-        // while performing it's cyclic permutation. As a consequence this check is only really
-        // useful for nearly fully ascending or descending inputs.
-        return;
-    }
-
-    // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
-    let limit = usize::BITS - len.leading_zeros();
-
-    recurse(v, &mut is_less, None, limit);
 }
 
 // --- Insertion sorts ---
