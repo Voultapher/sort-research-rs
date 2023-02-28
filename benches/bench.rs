@@ -258,16 +258,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_z1", |size| patterns::random_zipf(size, 1.0)),
         ("random_d20", |size| patterns::random_uniform(size, 0..20)),
         ("random_p5", |size| random_x_percent(size, 5.0)),
+        ("random_s95", |size| patterns::random_sorted(size, 95.0)),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
-        ("saws_long", |size| {
-            patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
-        }),
         ("saws_short", |size| patterns::saw_mixed_range(size, 20..70)),
     ];
 
     // Custom patterns designed to find worst case performance.
     let mut extra_pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
+        ("saws_long", |size| {
+            patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
+        }),
         ("90_one_10_zero", |size| {
             let (len_90, len_10) = split_len(size, 90.0);
             std::iter::repeat(1)
@@ -398,6 +399,14 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_z2", |size| patterns::random_zipf(size, 2.0)),
         ("random_z3", |size| patterns::random_zipf(size, 3.0)),
         ("random_z4", |size| patterns::random_zipf(size, 4.0)),
+        ("random_s5", |size| patterns::random_sorted(size, 95.0)),
+        ("random_s5", |size| patterns::random_sorted(size, 5.0)),
+        ("random_s10", |size| patterns::random_sorted(size, 10.0)),
+        ("random_s30", |size| patterns::random_sorted(size, 30.0)),
+        ("random_s50", |size| patterns::random_sorted(size, 50.0)),
+        ("random_s70", |size| patterns::random_sorted(size, 70.0)),
+        ("random_s90", |size| patterns::random_sorted(size, 90.0)),
+        ("random_s99", |size| patterns::random_sorted(size, 99.0)),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {

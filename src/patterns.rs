@@ -42,6 +42,26 @@ pub fn random_zipf(size: usize, exponent: f64) -> Vec<i32> {
     (0..size).map(|_| dist.sample(&mut rng) as i32).collect()
 }
 
+pub fn random_sorted(size: usize, sorted_percent: f64) -> Vec<i32> {
+    //     .:
+    //   .:::. :
+    // .::::::.::
+    // [----][--]
+    //  ^      ^
+    //  |      |
+    // sorted  |
+    //     unsorted
+
+    // Simulate pre-existing sorted slice, where len - sorted_percent are the new unsorted values
+    // and part of the overall distribution.
+    let mut v = random_vec(size);
+    let sorted_len = ((size as f64) * (sorted_percent / 100.0)).round() as usize;
+
+    v[0..sorted_len].sort_unstable();
+
+    v
+}
+
 pub fn random_random_size(max_size: usize) -> Vec<i32> {
     //     .
     // : . : :

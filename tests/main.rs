@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use sort_comp::ffi_util::{FFIOneKiloByte, FFIString, F128};
 use sort_comp::patterns;
 
-use sort_comp::stable::rust_ipn as test_sort;
+use sort_comp::unstable::rust_ipn as test_sort;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 24] = [
@@ -325,6 +325,30 @@ fn random_z2() {
     test_impl(|size| {
         if size > 3 {
             patterns::random_zipf(size, 2.0)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_s50() {
+    // Great for debugging.
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_sorted(size, 50.0)
+        } else {
+            Vec::new()
+        }
+    });
+}
+
+#[test]
+fn random_s95() {
+    // Great for debugging.
+    test_impl(|size| {
+        if size > 3 {
+            patterns::random_zipf(size, 95.0)
         } else {
             Vec::new()
         }
