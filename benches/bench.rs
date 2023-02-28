@@ -594,6 +594,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             unstable::cpp_blockquicksort::SortImpl,
         );
 
+        #[cfg(feature = "cpp_gerbens_qsort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            unstable::cpp_gerbens_qsort::SortImpl,
+        );
+
         #[cfg(feature = "c_crumsort")]
         bench_impl(
             c,

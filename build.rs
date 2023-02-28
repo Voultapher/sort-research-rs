@@ -99,9 +99,8 @@ fn build_and_link_cpp_vqsort() {
         "cpp_vqsort",
         Some(|builder: &mut cc::Build| {
             // Make an exception for march=native here because AVX2 will not work without it.
-            builder.flag_if_supported("-march=native");
+            builder.flag("-march=native");
             builder.compiler("clang++"); // gcc yields terrible code here.
-            builder.cpp_set_stdlib("c++"); // Use libcxx
 
             None
         }),
@@ -117,7 +116,7 @@ fn build_and_link_cpp_intel_avx512() {
         "cpp_intel_avx512",
         Some(|builder: &mut cc::Build| {
             // Make an exception for march=native here because AVX512 will not work without it.
-            builder.flag_if_supported("-march=native");
+            builder.flag("-march=native");
             builder.compiler("clang++"); // gcc yields terrible code here.
 
             None
@@ -138,6 +137,21 @@ fn build_and_link_cpp_blockquicksort() {
 
 #[cfg(not(feature = "cpp_blockquicksort"))]
 fn build_and_link_cpp_blockquicksort() {}
+
+#[cfg(feature = "cpp_gerbens_qsort")]
+fn build_and_link_cpp_gerbens_qsort() {
+    build_and_link_cpp_sort(
+        "cpp_gerbens_qsort",
+        Some(|builder: &mut cc::Build| {
+            builder.compiler("clang++"); // gcc yields terrible code here.
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_gerbens_qsort"))]
+fn build_and_link_cpp_gerbens_qsort() {}
 
 #[cfg(feature = "c_crumsort")]
 fn build_and_link_c_crumsort() {
@@ -225,6 +239,7 @@ fn main() {
     build_and_link_cpp_intel_avx512();
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
+    build_and_link_cpp_gerbens_qsort();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
     build_and_link_cpp_std_sys();

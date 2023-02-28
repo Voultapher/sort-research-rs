@@ -55,6 +55,7 @@ default = [
     # "cpp_intel_avx512",
     # "cpp_ips4o",
     # "cpp_blockquicksort",
+    "cpp_gerbens_qsort",
     # "c_crumsort",
     # "c_fluxsort",
     # "rust_wpwoodjr",
@@ -103,6 +104,9 @@ cpp_ips4o = []
 # Branch Mispredictions in Quicksort" (2016) paper.
 # Uses system C++ standard lib.
 cpp_blockquicksort = []
+
+# Enable Gerben Stavenga's QuickSort https://github.com/gerben-s/quicksort-blog-post
+cpp_gerbens_qsort = []
 
 # Enable support for c_crumsort.
 # Uses system C++ standard lib.
