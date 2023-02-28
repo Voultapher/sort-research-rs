@@ -65,8 +65,11 @@ def run_benchmarks(test_name):
 
     bench_results = critcmp_result.stdout.decode("utf-8")
 
-    with open(f"{test_name}.json", "w+") as result_file:
+    out_file_name = f"{test_name}.json"
+    with open(out_file_name, "w+") as result_file:
         result_file.write(bench_results)
+
+    print(f"\nWrote results to {out_file_name}")
 
 
 if __name__ == "__main__":
