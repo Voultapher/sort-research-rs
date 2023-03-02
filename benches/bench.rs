@@ -11,9 +11,12 @@ use once_cell::sync::OnceCell;
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 #[allow(unused_imports)]
-use sort_comp::{
-    ffi_util::FFIOneKiloByte, ffi_util::FFIString, ffi_util::F128, patterns, stable, unstable,
-};
+use sort_test_tools::ffi_types::{FFIOneKiloByte, FFIString, F128};
+
+use sort_test_tools::patterns;
+
+#[allow(unused_imports)]
+use sort_comp::{stable, unstable};
 
 #[cfg(feature = "cold_benchmarks")]
 mod trash_prediction;
@@ -82,7 +85,10 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
         c.bench_function(&bench_name_hot, |b| {
             b.iter_batched(
                 || transform(pattern_provider(test_size)),
-                |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
+                |mut test_data| {
+                    sort_func(black_box(test_data.as_mut_slice()));
+                    black_box(test_data); // side-effect
+                },
                 batch_size,
             )
         });
@@ -115,7 +121,10 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
 
                         transform(test_ints)
                     },
-                    |mut test_data| sort_func(black_box(test_data.as_mut_slice())),
+                    |mut test_data| {
+                        sort_func(black_box(test_data.as_mut_slice()));
+                        black_box(test_data); // side-effect
+                    },
                     BatchSize::PerIteration,
                 )
             });
@@ -153,7 +162,7 @@ fn measure_comp_count(
 }
 
 #[inline(never)]
-fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_comp::Sort>(
+fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_test_tools::Sort>(
     c: &mut Criterion,
     test_size: usize,
     transform_name: &str,

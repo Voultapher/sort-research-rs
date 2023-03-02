@@ -1,0 +1,10 @@
+[package]
+name = "sort_test_tools"
+version = "0.1.0"
+edition = "2021"
+authors = ["Lukas Bergdoll <lukas.bergdoll@gmail.com>"]
+
+[dependencies]
+rand = "0.8"
+once_cell = "1.15"
+zipf = "7.0.0"

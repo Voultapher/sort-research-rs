@@ -567,6 +567,16 @@ dependencies = [
  "radsort",
  "rand",
  "regex",
+ "sort_test_tools",
+ "zipf",
+]
+
+[[package]]
+name = "sort_test_tools"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "rand",
  "zipf",
 ]
 
