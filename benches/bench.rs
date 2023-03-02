@@ -269,6 +269,15 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("saws_long", |size| {
             patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
         }),
+        ("random_d20_start_block", |size| {
+            let mut v = patterns::random_uniform(size, 0..20);
+            let loop_end = std::cmp::min(size, 100);
+            for i in 0..loop_end {
+                v[i] = 0;
+            }
+
+            v
+        }),
         ("90_one_10_zero", |size| {
             let (len_90, len_10) = split_len(size, 90.0);
             std::iter::repeat(1)
