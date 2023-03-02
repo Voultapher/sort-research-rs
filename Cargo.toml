@@ -55,7 +55,7 @@ default = [
     # "cpp_intel_avx512",
     # "cpp_ips4o",
     # "cpp_blockquicksort",
-    "cpp_gerbens_qsort",
+    # "cpp_gerbens_qsort",
     # "c_crumsort",
     # "c_fluxsort",
     # "rust_wpwoodjr",
