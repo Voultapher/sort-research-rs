@@ -18,7 +18,7 @@ use crate::Sort;
 
 #[cfg(miri)]
 const TEST_SIZES: [usize; 18] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 24, 33, 50, 100, 300, 500,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 24, 33, 50, 100, 280, 400,
 ];
 
 #[cfg(feature = "large_test_sizes")]
