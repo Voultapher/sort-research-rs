@@ -8,3 +8,8 @@ authors = ["Lukas Bergdoll <lukas.bergdoll@gmail.com>"]
 rand = "0.8"
 once_cell = "1.15"
 zipf = "7.0.0"
+
+[features]
+default = ["large_test_sizes"]
+
+large_test_sizes = []

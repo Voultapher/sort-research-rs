@@ -16,7 +16,7 @@ zipf = "7.0.0"
 radsort = { version = "0.1", optional = true }
 dmsort = { version = "1.0", optional = true }
 glidesort = { version = "0.1.2", features = ["unstable"], optional = true }
-sort_test_tools = { path = "sort_test_tools" }
+sort_test_tools = { path = "sort_test_tools", default-features = false }
 
 [dev-dependencies]
 rand = "0.8"
@@ -45,6 +45,8 @@ harness = false
 
 [features]
 default = [
+    "large_test_sizes",
+
     # "cold_benchmarks",
     # "cpp_std_sys",
     # "cpp_std_libcxx",
@@ -144,3 +146,5 @@ no_inline_sub_functions = []
 
 # Cold benchmarks, enable cold benchmarks that clobber the btb and other CPU caches.
 cold_benchmarks = []
+
+large_test_sizes = ["sort_test_tools/large_test_sizes"]
