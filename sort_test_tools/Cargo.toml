@@ -12,4 +12,5 @@ zipf = "7.0.0"
 [features]
 default = ["large_test_sizes"]
 
+# Enable the largest test sizes, usually fine even for debug builds. May take a couple seconds.
 large_test_sizes = []
