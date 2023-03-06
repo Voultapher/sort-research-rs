@@ -17,9 +17,7 @@ use crate::Sort;
 // use sort_comp::unstable::rust_ipn as test_sort;
 
 #[cfg(miri)]
-const TEST_SIZES: [usize; 24] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500,
-];
+const TEST_SIZES: [usize; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 20, 24, 33, 50, 100, 300];
 
 #[cfg(feature = "large_test_sizes")]
 #[cfg(not(miri))]
@@ -1126,6 +1124,13 @@ pub fn violate_ord_retain_original_set<S: Sort>() {
         };
 
         test_impl_custom(test_fn);
+
+        if cfg!(miri) {
+            // This test is prohibitively expensive in miri, so only run one of the comparison
+            // functions. This test is not expected to yield direct UB, but rather surface potential
+            // UB by showing that the sum is different now.
+            break;
+        }
     }
 }
 
@@ -1186,13 +1191,33 @@ pub fn int_edge<S: Sort>() {
 
 #[doc(hidden)]
 #[macro_export]
+macro_rules! instantiate_sort_test_impl_inner {
+    ($sort_impl:ty, miri_yes, $sort_name:ident) => {
+        #[test]
+        fn $sort_name() {
+            sort_test_tools::tests::$sort_name::<$sort_impl>();
+        }
+    };
+    ($sort_impl:ty, miri_no, $sort_name:ident) => {
+        #[test]
+        #[cfg(not(miri))]
+        fn $sort_name() {
+            sort_test_tools::tests::$sort_name::<$sort_impl>();
+        }
+
+        #[test]
+        #[cfg(miri)]
+        #[ignore]
+        fn $sort_name() {}
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
 macro_rules! instantiate_sort_test_impl {
-    ($sort_impl:ty, $($sort_name:ident),*) => {
+    ($sort_impl:ty, $([$miri_use:ident, $sort_name:ident]),*) => {
         $(
-            #[test]
-            fn $sort_name() {
-                sort_test_tools::tests::$sort_name::<$sort_impl>();
-            }
+            sort_test_tools::instantiate_sort_test_impl_inner!($sort_impl, $miri_use, $sort_name);
         )*
     };
 }
@@ -1202,47 +1227,47 @@ macro_rules! instantiate_sort_tests {
     ($sort_impl:ty) => {
         sort_test_tools::instantiate_sort_test_impl!(
             $sort_impl,
-            all_equal,
-            ascending,
-            ascending_saw,
-            basic,
-            comp_panic,
-            descending,
-            descending_saw,
-            dyn_val,
-            fixed_seed,
-            int_edge,
-            observable_is_less,
-            observable_is_less_mut_ptr,
-            observable_is_less_u64,
-            panic_observable_is_less,
-            panic_retain_original_set,
-            pipe_organ,
-            random,
-            random_binary,
-            random_d1024,
-            random_d16,
-            random_d256,
-            random_d4,
-            random_d8,
-            random_f128,
-            random_ffi_str,
-            random_large_val,
-            random_narrow,
-            random_s50,
-            random_s95,
-            random_str,
-            random_u128,
-            random_type_u64,
-            random_z1,
-            random_z1_03,
-            random_z2,
-            saw_mixed,
-            saw_mixed_range,
-            sort_vs_sort_by,
-            stability,
-            stability_with_patterns,
-            violate_ord_retain_original_set
+            [miri_no, all_equal],
+            [miri_yes, ascending],
+            [miri_no, ascending_saw],
+            [miri_yes, basic],
+            [miri_yes, comp_panic],
+            [miri_yes, descending],
+            [miri_no, descending_saw],
+            [miri_yes, dyn_val],
+            [miri_yes, fixed_seed],
+            [miri_yes, int_edge],
+            [miri_yes, observable_is_less],
+            [miri_yes, observable_is_less_mut_ptr],
+            [miri_no, observable_is_less_u64],
+            [miri_yes, panic_observable_is_less],
+            [miri_yes, panic_retain_original_set],
+            [miri_yes, pipe_organ],
+            [miri_yes, random],
+            [miri_yes, random_binary],
+            [miri_no, random_d1024],
+            [miri_yes, random_d16],
+            [miri_yes, random_d256],
+            [miri_yes, random_d4],
+            [miri_no, random_d8],
+            [miri_yes, random_f128],
+            [miri_yes, random_ffi_str],
+            [miri_yes, random_large_val],
+            [miri_yes, random_narrow],
+            [miri_no, random_s50],
+            [miri_yes, random_s95],
+            [miri_yes, random_str],
+            [miri_yes, random_u128],
+            [miri_yes, random_type_u64],
+            [miri_yes, random_z1],
+            [miri_no, random_z1_03],
+            [miri_no, random_z2],
+            [miri_yes, saw_mixed],
+            [miri_yes, saw_mixed_range],
+            [miri_yes, sort_vs_sort_by],
+            [miri_yes, stability],
+            [miri_no, stability_with_patterns],
+            [miri_yes, violate_ord_retain_original_set]
         );
     };
 }
