@@ -1,3 +1,5 @@
+use std::env;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rand::prelude::*;
@@ -217,6 +219,18 @@ pub fn disable_fixed_seed() {
 }
 
 pub fn random_init_seed() -> u64 {
+    static OVERRIDE_SEED: OnceCell<Option<u64>> = OnceCell::new();
+
+    let override_seed = OVERRIDE_SEED.get_or_init(|| {
+        env::var("OVERRIDE_SEED")
+            .ok()
+            .map(|seed| u64::from_str(&seed).unwrap())
+    });
+
+    if let Some(seed) = override_seed {
+        return *seed;
+    }
+
     // return 360013155987181959;
     if USE_FIXED_SEED.load(Ordering::Acquire) {
         static SEED: OnceCell<u64> = OnceCell::new();
