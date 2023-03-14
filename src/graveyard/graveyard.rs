@@ -2680,3 +2680,29 @@ where
         // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
     }
 }
+
+trait CopyTypeImpl: Sized {
+    unsafe fn ptr_copy(src: *const Self, dest: *mut Self);
+    unsafe fn ptr_copy_nonoverlapping(src: *const Self, dest: *mut Self);
+}
+
+impl<T> CopyTypeImpl for T {
+    default unsafe fn ptr_copy(src: *const Self, dest: *mut Self) {
+        ptr::copy(src, dest, 1);
+    }
+
+    default unsafe fn ptr_copy_nonoverlapping(src: *const Self, dest: *mut Self) {
+        ptr::copy_nonoverlapping(src, dest, 1);
+    }
+}
+
+impl<T: Copy> CopyTypeImpl for T {
+    default unsafe fn ptr_copy(src: *const Self, dest: *mut Self) {
+        *dest = *src;
+    }
+
+    default unsafe fn ptr_copy_nonoverlapping(src: *const Self, dest: *mut Self) {
+        // TODO should we emit copy_nonoverlapping for release builds?
+        *dest = *src;
+    }
+}

@@ -2,11 +2,10 @@
 
 //! Instruction-Parallel-Network Unstable Sort by Lukas Bergdoll
 
+use core::cmp::{self, Ordering};
 use core::intrinsics;
-use std::cmp;
-use std::cmp::Ordering;
-use std::mem::{self, MaybeUninit};
-use std::ptr;
+use core::mem::{self, MaybeUninit};
+use core::ptr;
 
 sort_impl!("rust_ipn_unstable");
 
@@ -603,7 +602,7 @@ where
         unsafe { (a_ptr.sub_ptr(arr_ptr) - elem_i) <= ROTATION_ELEMS }
     };
 
-    let mut swap = mem::MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
+    let mut swap = MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
     let arr_ptr = v.as_mut_ptr();
@@ -693,7 +692,7 @@ where
 //         let mut l_ptr = arr_ptr;
 //         let mut r_ptr = arr_ptr.add(len - 1);
 
-//         let mut swap = mem::MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
+//         let mut swap = MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
 //         let swap_ptr = swap.as_mut_ptr() as *mut T;
 
 //         // l_ptr = fill_left(l_ptr, r_ptr);
@@ -1240,7 +1239,7 @@ struct InsertionHole<T> {
 impl<T> Drop for InsertionHole<T> {
     fn drop(&mut self) {
         unsafe {
-            std::ptr::copy_nonoverlapping(self.src, self.dest, 1);
+            ptr::copy_nonoverlapping(self.src, self.dest, 1);
         }
     }
 }
@@ -1502,7 +1501,7 @@ pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool
 
     // Give ourselves some scratch space to work with.
     // We do not have to worry about drops: `MaybeUninit` does nothing when dropped.
-    let mut tmp = mem::MaybeUninit::<T>::uninit();
+    let mut tmp = MaybeUninit::<T>::uninit();
 
     // The goal is to generate cmov instructions here.
     let a_swap_ptr = if should_swap { b_ptr } else { a_ptr };
@@ -1692,7 +1691,7 @@ where
     insertion_sort_shift_left(&mut v[0..len_div_2], mid, is_less);
     insertion_sort_shift_left(&mut v[len_div_2..], mid, is_less);
 
-    let mut swap = mem::MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
+    let mut swap = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
     // SAFETY: We checked that T is Copy and thus observation safe.
@@ -1730,7 +1729,7 @@ where
     insertion_sort_shift_left(&mut v[0..len_div_2], 1, is_less);
     insertion_sort_shift_left(&mut v[len_div_2..], 1, is_less);
 
-    let mut swap = mem::MaybeUninit::<[T; MAX_LEN]>::uninit();
+    let mut swap = MaybeUninit::<[T; MAX_LEN]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
     // SAFETY: We checked that T is Copy and thus observation safe.
