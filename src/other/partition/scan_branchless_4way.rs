@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 use core::ptr;
 
-partition_impl!("scan_branchless_2way");
+partition_impl!("scan_branchless_4way");
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline(always)]
@@ -36,7 +36,7 @@ where
     let len = v.len();
     let arr_ptr = v.as_mut_ptr();
 
-    const UNROLL_SIZE: usize = 2;
+    const UNROLL_SIZE: usize = 4;
     // assert!(UNROLL_SIZE.is_power_of_two());
 
     let len_mod = len % UNROLL_SIZE;
@@ -50,6 +50,12 @@ where
         let mut fill_ptr_b = arr_ptr.add(len_div_n);
         let mut elem_ptr_b = fill_ptr_b;
 
+        let mut fill_ptr_c = arr_ptr.add(len_div_n * 2);
+        let mut elem_ptr_c = fill_ptr_c;
+
+        let mut fill_ptr_d = arr_ptr.add(len_div_n * 3);
+        let mut elem_ptr_d = fill_ptr_d;
+
         for _ in 0..len_div_n {
             let elem_is_less_a = is_less(&*elem_ptr_a, pivot);
             branchless_swap_overlapping(fill_ptr_a, elem_ptr_a, elem_is_less_a);
@@ -60,18 +66,47 @@ where
             branchless_swap_overlapping(fill_ptr_b, elem_ptr_b, elem_is_less_b);
             fill_ptr_b = fill_ptr_b.add(elem_is_less_b as usize);
             elem_ptr_b = elem_ptr_b.add(1);
+
+            let elem_is_less_c = is_less(&*elem_ptr_c, pivot);
+            branchless_swap_overlapping(fill_ptr_c, elem_ptr_c, elem_is_less_c);
+            fill_ptr_c = fill_ptr_c.add(elem_is_less_c as usize);
+            elem_ptr_c = elem_ptr_c.add(1);
+
+            let elem_is_less_d = is_less(&*elem_ptr_d, pivot);
+            branchless_swap_overlapping(fill_ptr_d, elem_ptr_d, elem_is_less_d);
+            fill_ptr_d = fill_ptr_d.add(elem_is_less_d as usize);
+            elem_ptr_d = elem_ptr_d.add(1);
         }
 
         let is_less_count_a = fill_ptr_a.sub_ptr(arr_ptr);
         let is_less_count_b = fill_ptr_b.sub_ptr(arr_ptr) - len_div_n;
+        let is_less_count_c = fill_ptr_c.sub_ptr(arr_ptr) - (len_div_n * 2);
+        let is_less_count_d = fill_ptr_d.sub_ptr(arr_ptr) - (len_div_n * 3);
+
+        let mut is_less_count = is_less_count_a;
 
         ptr::swap_nonoverlapping(
-            arr_ptr.add(is_less_count_a),
+            arr_ptr.add(is_less_count),
             arr_ptr.add(len_div_n),
             is_less_count_b,
         );
+        is_less_count += is_less_count_b;
 
-        let mut fill_ptr = arr_ptr.add(is_less_count_a + is_less_count_b);
+        ptr::swap_nonoverlapping(
+            arr_ptr.add(is_less_count),
+            arr_ptr.add(len_div_n * 2),
+            is_less_count_c,
+        );
+        is_less_count += is_less_count_c;
+
+        ptr::swap_nonoverlapping(
+            arr_ptr.add(is_less_count),
+            arr_ptr.add(len_div_n * 3),
+            is_less_count_d,
+        );
+        is_less_count += is_less_count_d;
+
+        let mut fill_ptr = arr_ptr.add(is_less_count);
         for elem in &mut v[(len - len_mod)..] {
             let elem_is_less = is_less(elem, pivot);
             branchless_swap_overlapping(elem, fill_ptr, elem_is_less);
