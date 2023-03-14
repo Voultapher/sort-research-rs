@@ -12,6 +12,8 @@ use criterion::black_box;
 
 use sort_comp::other::partition::{self, Partition};
 
+use crate::util::pin_thread_to_core;
+
 fn cpu_max_freq_hz() -> Option<f64> {
     static MAX_FREQUENCY: OnceCell<Option<f64>> = OnceCell::new();
 
@@ -43,6 +45,11 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     pattern_provider: &fn(usize) -> Vec<i32>,
     _partition_impl: P,
 ) {
+    // Pin the benchmark to the same core to improve repeatability. Doing it this way allows
+    // criterion to do other stuff with other threads, which greatly impacts overall benchmark
+    // throughput.
+    pin_thread_to_core();
+
     let bench_name = format!(
         "{}-{}-{}-{}-",
         P::name(),
