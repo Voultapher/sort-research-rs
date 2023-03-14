@@ -1,3 +1,6 @@
+use core::mem;
+use core::ptr;
+
 partition_impl!("fulcrum_partition_simple");
 
 // Demonstrate ideas behind rotation based partitioning.
@@ -65,5 +68,19 @@ where
         mem::forget(drop_guard);
 
         l_ptr.sub_ptr(arr_ptr)
+    }
+}
+
+// When dropped, copies from `src` into `dest`.
+struct InsertionHole<T> {
+    src: *const T,
+    dest: *mut T,
+}
+
+impl<T> Drop for InsertionHole<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::copy_nonoverlapping(self.src, self.dest, 1);
+        }
     }
 }

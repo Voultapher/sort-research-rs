@@ -222,7 +222,7 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
     //     transform,
     //     pattern_name,
     //     pattern_provider,
-    //     partition::crumsort::PartitionImpl,
+    //     partition::fulcrum_partition_simple::PartitionImpl,
     // );
 
     bench_partition_impl(
@@ -232,8 +232,28 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
         transform,
         pattern_name,
         pattern_provider,
-        partition::new_block_quicksort::PartitionImpl,
+        partition::fulcrum_partition_scandum::PartitionImpl,
     );
+
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::crumsort::PartitionImpl,
+    // );
+
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::new_block_quicksort::PartitionImpl,
+    // );
 
     // bench_partition_impl(
     //     filter_arg,

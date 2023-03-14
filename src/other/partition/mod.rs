@@ -43,6 +43,8 @@ macro_rules! partition_impl {
 pub mod avx2;
 pub mod block_quicksort;
 pub mod crumsort;
+pub mod fulcrum_partition_scandum;
+pub mod fulcrum_partition_simple;
 pub mod ilp_partition;
 pub mod new_block_quicksort;
 pub mod simple_scan_branchless;
