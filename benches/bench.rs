@@ -51,7 +51,7 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
     transform: &fn(Vec<i32>) -> Vec<T>,
     pattern_name: &str,
     pattern_provider: &fn(usize) -> Vec<i32>,
-    bench_name: &str,
+    mut bench_name: &str,
     sort_func: impl Fn(&mut [T]),
 ) {
     // Pin the benchmark to the same core to improve repeatability. Doing it this way allows
@@ -79,6 +79,20 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
             .map(|reg| reg.is_match(name))
             .unwrap_or(true)
     };
+
+    static NAME_OVERWRITE: OnceCell<Option<String>> = OnceCell::new();
+
+    let name_overwrite = NAME_OVERWRITE.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
+
+    if let Some(name) = name_overwrite {
+        let split_pos = name.find(":").unwrap();
+        let match_name = &name[..split_pos];
+        if bench_name != match_name {
+            return;
+        }
+
+        bench_name = &name[(split_pos + 1)..];
+    }
 
     let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}");
     if is_bench_name_ok(&bench_name_hot) {
