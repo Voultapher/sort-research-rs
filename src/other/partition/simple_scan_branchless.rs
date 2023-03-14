@@ -16,15 +16,13 @@ where
         let mut l_ptr = arr_ptr;
         let mut r_ptr = arr_ptr.add(len - 1);
 
-        while l_ptr < r_ptr {
+        while l_ptr <= r_ptr {
             let elem_is_less = is_less(&*l_ptr, pivot);
             branchless_swap(l_ptr, r_ptr, !elem_is_less);
 
             l_ptr = l_ptr.add(elem_is_less as usize);
             r_ptr = r_ptr.offset(-(!elem_is_less as isize));
         }
-
-        // Some final cleanup is missing here.
 
         l_ptr.offset_from(arr_ptr) as usize
     }
