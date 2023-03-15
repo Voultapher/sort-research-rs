@@ -1329,3 +1329,86 @@ unsafe fn swap_elements_between_blocks<T>(
 
     // (l_offsets_ptr, r_offsets_ptr)
 }
+
+unsafe fn small_aux_partition<T, F>(
+    v: &mut [T],
+    swap_ptr: *mut T,
+    pivot: &T,
+    is_less: &mut F,
+) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: TODO
+    unsafe {
+        let len = v.len();
+        let even_len = len - (len % 2 != 0) as usize;
+        let len_div_2 = even_len / 2;
+
+        let arr_ptr = v.as_mut_ptr();
+
+        let mut swap_ptr_l_a = swap_ptr;
+        let mut swap_ptr_r_a = swap_ptr.add(len_div_2 - 1);
+
+        let mut swap_ptr_l_b = swap_ptr.add(len_div_2);
+        let mut swap_ptr_r_b = swap_ptr.add(even_len - 1);
+
+        // This could probably be sped-up by interleaving the two loops.
+        for i in 0..len_div_2 {
+            let elem_ptr_a = arr_ptr.add(i);
+            let is_l_a = is_less(&*elem_ptr_a, pivot);
+            let target_ptr_a = if is_l_a { swap_ptr_l_a } else { swap_ptr_r_a };
+            ptr::copy_nonoverlapping(elem_ptr_a, target_ptr_a, 1);
+            swap_ptr_l_a = swap_ptr_l_a.add(is_l_a as usize);
+            swap_ptr_r_a = swap_ptr_r_a.sub(!is_l_a as usize);
+
+            let elem_ptr_b = arr_ptr.add(i);
+            let is_l_b = is_less(&*elem_ptr_b, pivot);
+            let target_ptr_b = if is_l_b { swap_ptr_l_b } else { swap_ptr_r_b };
+            ptr::copy_nonoverlapping(elem_ptr_b, target_ptr_b, 1);
+            swap_ptr_l_b = swap_ptr_l_b.add(is_l_b as usize);
+            swap_ptr_r_b = swap_ptr_r_b.sub(!is_l_b as usize);
+        }
+
+        // Swap now contains [l_values_a, r_values_a, l_values_b, r_values_b]
+        let is_l_count_a = swap_ptr_l_a.sub_ptr(swap_ptr);
+        let is_l_count_b = swap_ptr_l_b.sub_ptr(swap_ptr) - len_div_2;
+
+        let mut is_l_count = is_l_count_a + is_l_count_b;
+
+        // Copy swap into v in correct order.
+
+        // l_values_a
+        ptr::copy_nonoverlapping(swap_ptr, arr_ptr, is_l_count_a);
+
+        // l_values_b
+        ptr::copy_nonoverlapping(
+            swap_ptr.add(len_div_2),
+            arr_ptr.add(is_l_count_a),
+            is_l_count_b,
+        );
+
+        // r_values_a
+        ptr::copy_nonoverlapping(
+            swap_ptr.add(is_l_count_a),
+            arr_ptr.add(is_l_count),
+            len_div_2 - is_l_count_a,
+        );
+
+        // r_values_b
+        ptr::copy_nonoverlapping(
+            swap_ptr.add(len_div_2 + is_l_count_b),
+            arr_ptr.add(is_l_count + (len_div_2 - is_l_count_a)),
+            len_div_2 - is_l_count_b,
+        );
+
+        if even_len != len {
+            if is_less(&v[even_len], pivot) {
+                v.swap(is_l_count, even_len);
+                is_l_count += 1;
+            }
+        }
+
+        is_l_count
+    }
+}
