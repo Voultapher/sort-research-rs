@@ -655,79 +655,6 @@ where
     }
 }
 
-// pub fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-// where
-//     F: FnMut(&T, &T) -> bool,
-// {
-//     const ROTATION_ELEMS: usize = 16;
-
-//     // TODO explain ideas. and panic safety. cleanup.
-//     let len = v.len();
-//     assert!(len > (ROTATION_ELEMS * 2));
-
-//     // SAFETY: TODO
-//     unsafe {
-//         let fill_left =
-//             |mut l_ptr: *mut T, r_ptr: *mut T, swap_ptr: *mut T, is_less: &mut F| -> *mut T {
-//                 let mut i = 0;
-
-//                 while (l_ptr < r_ptr) && i < ROTATION_ELEMS {
-//                     panic!();
-//                 }
-
-//                 l_ptr
-//             };
-
-//         let next_right = |l_ptr: *mut T, mut r_ptr: *mut T, is_less: &mut F| -> *mut T {
-//             // Find next value on the right side that needs to go on the left side.
-//             while (l_ptr < r_ptr) && !is_less(&*r_ptr, pivot) {
-//                 r_ptr = r_ptr.sub(1);
-//             }
-
-//             r_ptr
-//         };
-
-//         let arr_ptr = v.as_mut_ptr();
-
-//         let mut l_ptr = arr_ptr;
-//         let mut r_ptr = arr_ptr.add(len - 1);
-
-//         let mut swap = MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
-//         let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-//         // l_ptr = fill_left(l_ptr, r_ptr);
-//         // l_ptr = next_left(l_ptr, r_ptr, is_less);
-//         // r_ptr = next_right(l_ptr, r_ptr, is_less);
-
-//         // let mut drop_guard = InsertionHole {
-//         //     src: &tmp,
-//         //     dest: r_ptr,
-//         // };
-
-//         while l_ptr < r_ptr {
-//             // l_ptr = next_left(l_ptr, r_ptr, is_less);
-
-//             // Copy left wrong side element into right side wrong side element.
-//             ptr::copy_nonoverlapping(l_ptr, r_ptr, 1);
-
-//             // The drop_guard also participates in the rotation logic. Only requiring one update per
-//             // loop. The two places that could panic are next_left and next_right, If either of them
-//             // panics, drop_guard.dest will hold a spot that contains a duplicate element. Which
-//             // will be overwritten with the temporary value.
-//             // drop_guard.dest = l_ptr;
-
-//             r_ptr = next_right(l_ptr, r_ptr, is_less);
-//             // Copy right wrong side element into left side wrong side element.
-//             ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
-//         }
-
-//         // ptr::copy_nonoverlapping(&tmp, r_ptr, 1);
-//         // mem::forget(drop_guard);
-
-//         l_ptr.sub_ptr(arr_ptr)
-//     }
-// }
-
 /// Partitions `v` into elements smaller than `v[pivot]`, followed by elements greater than or
 /// equal to `v[pivot]`.
 ///
@@ -757,7 +684,22 @@ where
         };
         let pivot = &*tmp;
 
-        // let is_less_count = <crate::other::partition::block_quicksort::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut v[l..r], pivot, is_less);
+        // type DebugT = i32;
+        // let v_as_x = unsafe { mem::transmute::<&[T], &[DebugT]>(v) };
+        // let pivot_as_x = unsafe { mem::transmute::<&T, &DebugT>(pivot) };
+
+        // println!("pivot: {}", pivot_as_x);
+        // println!("before: {v_as_x:?}");
+        // let is_less_count = <crate::other::partition::scan_branchless_2way::PartitionImpl as crate::other::partition::Partition>::partition_by(v, pivot, is_less);
+        // println!("after:  {v_as_x:?}");
+        // println!("sub: {:?}\n", &v_as_x[..is_less_count]);
+
+        // for val in &v_as_x[is_less_count..] {
+        //     if val < pivot_as_x {
+        //         println!("wrong val: {val}");
+        //         panic!();
+        //     }
+        // }
 
         let is_less_count = <T as UnstableSortTypeImpl>::partition(v, pivot, is_less);
 
@@ -855,7 +797,7 @@ where
 
         // println!("len: {len}");
 
-        if sort_small(v, is_less) {
+        if <T as UnstableSortTypeImpl>::small_sort(v, is_less) {
             return;
         }
 
@@ -917,28 +859,11 @@ where
     }
 }
 
-/// Sorts `v` using strategies optimized for small sizes.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn sort_small<T, F>(v: &mut [T], is_less: &mut F) -> bool
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    if intrinsics::unlikely(len > max_len_small_sort::<T>()) {
-        return false;
-    }
-
-    <T as UnstableSortTypeImpl>::small_sort(v, is_less);
-
-    true
-}
-
 // Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
 // LLVM-IR for the sorting-network and median-networks for types that don't qualify.
 trait UnstableSortTypeImpl: Sized {
     /// Sorts `v` using strategies optimized for small sizes.
-    fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
     where
         F: FnMut(&Self, &Self) -> bool;
 
@@ -960,11 +885,11 @@ trait UnstableSortTypeImpl: Sized {
 }
 
 impl<T> UnstableSortTypeImpl for T {
-    default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    default fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
     where
         F: FnMut(&Self, &Self) -> bool,
     {
-        small_sort_default(v, is_less);
+        small_sort_default(v, is_less)
     }
 
     default fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
@@ -982,14 +907,22 @@ impl<T> UnstableSortTypeImpl for T {
     }
 }
 
-fn small_sort_default<T, F>(v: &mut [T], is_less: &mut F)
+fn small_sort_default<T, F>(v: &mut [T], is_less: &mut F) -> bool
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
 
-    if intrinsics::likely(len >= 2) {
-        insertion_sort_shift_left(v, 1, is_less);
+    const MAX_LEN_INSERTION_SORT: usize = max_len_small_sort::<String>();
+
+    if intrinsics::likely(len <= MAX_LEN_INSERTION_SORT) {
+        if intrinsics::likely(len >= 2) {
+            insertion_sort_shift_left(v, 1, is_less);
+        }
+
+        true
+    } else {
+        false
     }
 }
 
@@ -1091,52 +1024,20 @@ where
     }
 }
 
-// Some types like String have no direct interior mutability and can benefit from specialized logic,
-// even without sorting-networks which would be too expensive to compile for such types.
-impl<T: Freeze> UnstableSortTypeImpl for T {
-    default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        if intrinsics::unlikely(v.len() < 2) {
-            return;
-        }
-
-        if const { is_cheap_to_move::<T>() } {
-            insertion_merge(v, is_less);
-        } else {
-            small_sort_default(v, is_less);
-        }
-    }
-
-    default fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        choose_pivot_default(v, is_less)
-    }
-
-    default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        if const { FULCRUM_ENABLED && is_cheap_to_move::<T>() } {
-            fulcrum_partition(v, pivot, is_less)
-        } else {
-            partition_in_blocks(v, pivot, is_less)
-        }
-    }
-}
-
 // Limit this code-gen to Copy types, to limit emitted LLVM-IR.
 // The sorting-networks will have the best effect for types like integers.
 impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
-    fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
     where
         F: FnMut(&Self, &Self) -> bool,
     {
         if const { is_cheap_to_move::<T>() } {
             let len = v.len();
+
+            const MAX_LEN_NETWORK: usize = max_len_small_sort::<i32>();
+            if intrinsics::unlikely(len > MAX_LEN_NETWORK) {
+                return false;
+            }
 
             // Always sort assuming somewhat random distribution.
             // Patterns should have already been found by the other analysis steps.
@@ -1150,8 +1051,10 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
             } else if len >= 2 {
                 insertion_sort_shift_left(v, 1, is_less);
             }
+
+            true
         } else {
-            small_sort_default(v, is_less);
+            small_sort_default(v, is_less)
         }
     }
 
@@ -1421,17 +1324,34 @@ where
 
 // Slices of up to this length get sorted using optimized sorting for small slices.
 const fn max_len_small_sort<T>() -> usize {
-    if is_cheap_to_move::<T>() && !has_direct_iterior_mutability::<T>() {
+    if is_cheap_to_move::<T>() && is_copy::<T>() {
         36
-    } else if !has_direct_iterior_mutability::<T>() {
-        34
     } else {
         20
     }
 }
 
 // // #[rustc_unsafe_specialization_marker]
-// trait IsCopyMarker {}
+#[const_trait]
+trait IsCopy {
+    fn value() -> bool;
+}
+
+impl<T> const IsCopy for T {
+    default fn value() -> bool {
+        false
+    }
+}
+
+impl<T: Copy> const IsCopy for T {
+    fn value() -> bool {
+        true
+    }
+}
+
+const fn is_copy<T>() -> bool {
+    <T as IsCopy>::value()
+}
 
 // impl<T: Copy> IsCopyMarker for T {}
 
@@ -1692,44 +1612,6 @@ where
     insertion_sort_shift_left(&mut v[len_div_2..], mid, is_less);
 
     let mut swap = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
-    let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-    // SAFETY: We checked that T is Copy and thus observation safe.
-    // Should is_less panic v was not modified in parity_merge and retains it's original input.
-    // swap and v must not alias and swap has v.len() space.
-    unsafe {
-        parity_merge(&mut v[..even_len], swap_ptr, is_less);
-        ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
-    }
-
-    if len != even_len {
-        // SAFETY: We know len >= 2.
-        unsafe {
-            insert_tail(v, is_less);
-        }
-    }
-}
-
-/// Sort a small slice by doing two insertion sorts and merging the result.
-/// This can be faster than just doing an insertion sort up to 20 elements.
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn insertion_merge<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    const MAX_LEN: usize = max_len_small_sort::<String>();
-
-    let len = v.len();
-    assert!(len >= 2 && len <= MAX_LEN && !has_direct_iterior_mutability::<T>());
-
-    // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
-    let even_len = len - (len % 2 != 0) as usize;
-    let len_div_2 = even_len / 2;
-
-    insertion_sort_shift_left(&mut v[0..len_div_2], 1, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..], 1, is_less);
-
-    let mut swap = MaybeUninit::<[T; MAX_LEN]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
     // SAFETY: We checked that T is Copy and thus observation safe.
