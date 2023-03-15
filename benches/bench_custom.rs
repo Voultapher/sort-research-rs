@@ -311,4 +311,24 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
     //     pattern_provider,
     //     partition::scan_branchless_4way::PartitionImpl,
     // );
+
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::rotate_branchless_2way::PartitionImpl,
+    // );
+
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::fulcrum_partition_revised::PartitionImpl,
+    // );
 }
