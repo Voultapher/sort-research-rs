@@ -149,8 +149,9 @@ where
         return;
     }
 
-    // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
-    let limit = usize::BITS - v.len().leading_zeros();
+    // Limit the number of imbalanced partitions to `2 * floor(log2(len))`.
+    // The binary OR by one is used to eliminate the zero-check in the logarithm.
+    let limit = 2 * (v.len() | 1).ilog2();
 
     recurse(v, &mut is_less, None, limit);
 }
@@ -781,53 +782,6 @@ where
     partition(v, pivot, &mut |a, b| !is_less(b, a))
 }
 
-/// Scatters some elements around in an attempt to break patterns that might cause imbalanced
-/// partitions in quicksort.
-#[cold]
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn break_patterns<T>(v: &mut [T]) {
-    let len = v.len();
-    if len >= 8 {
-        // Pseudorandom number generator from the "Xorshift RNGs" paper by George Marsaglia.
-        let mut random = len as u32;
-        let mut gen_u32 = || {
-            random ^= random << 13;
-            random ^= random >> 17;
-            random ^= random << 5;
-            random
-        };
-        let mut gen_usize = || {
-            if usize::BITS <= 32 {
-                gen_u32() as usize
-            } else {
-                (((gen_u32() as u64) << 32) | (gen_u32() as u64)) as usize
-            }
-        };
-
-        // Take random numbers modulo this number.
-        // The number fits into `usize` because `len` is not greater than `isize::MAX`.
-        let modulus = len.next_power_of_two();
-
-        // Some pivot candidates will be in the nearby of this index. Let's randomize them.
-        let pos = len / 2;
-
-        // Swap in in 5 values to pick a better median of nine done in the middle next time.
-        for i in 0..5 {
-            // Generate a random number modulo `len`. However, in order to avoid costly operations
-            // we first take it modulo a power of two, and then decrease by `len` until it fits
-            // into the range `[0, len - 1]`.
-            let mut other = gen_usize() & (modulus - 1);
-
-            // `other` is guaranteed to be less than `2 * len`.
-            if other >= len {
-                other -= len;
-            }
-
-            v.swap((pos - 2) + i, other);
-        }
-    }
-}
-
 /// Sorts `v` recursively.
 ///
 /// If the slice had a predecessor in the original array, it is specified as `pred`.
@@ -839,9 +793,6 @@ fn recurse<'a, T, F>(mut v: &'a mut [T], is_less: &mut F, mut pred: Option<&'a T
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // True if the last partitioning was reasonably balanced.
-    let mut was_good_partition = true;
-
     loop {
         let len = v.len();
 
@@ -858,14 +809,7 @@ where
             return;
         }
 
-        // If the last partitioning was imbalanced, try breaking patterns in the slice by shuffling
-        // some elements around. Hopefully we'll choose a better pivot this time.
-        if !was_good_partition {
-            if len >= 54 {
-                break_patterns(v);
-            }
-            limit -= 1;
-        }
+        limit -= 1;
 
         // Choose a pivot and try guessing whether the slice is already sorted.
         let pivot = <T as UnstableSortTypeImpl>::choose_pivot(v, is_less);
@@ -888,7 +832,6 @@ where
 
         // Partition the slice.
         let mid = partition(v, pivot, is_less);
-        was_good_partition = cmp::min(mid, len - mid) >= len / 8;
 
         // Split the slice into `left`, `pivot`, and `right`.
         let (left, right) = v.split_at_mut(mid);
@@ -1132,11 +1075,11 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
                 let start = len_div_2 - 4;
 
                 // Mitigate pathological cases that keep picking bad values. This works in
-                // conjunction with break_patterns and the heapsort fallback.
+                // with the heapsort fallback.
                 //
                 // This done in a way that allows the len_div_2 to remain the only value this
                 // functions returns.
-                if intrinsics::unlikely(len > 256) {
+                if intrinsics::unlikely(len >= 256) {
                     let len_div_8 = len / 8;
                     let near_end = len_div_8 * 7;
 
@@ -1153,10 +1096,8 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
                     }
                 }
 
-                // This only samples the middle, `break_patterns` will randomize this area if it
-                // picked a bad partition. Additionally the cyclic permutation of
-                // `partition_in_blocks` will further randomize the original pattern, avoiding even
-                // more situations where this would be a problem.
+                // The cyclic permutation of `partition_in_blocks` will further randomize the
+                // original pattern, avoiding even more situations where this would be a problem.
                 median9_optimal(&mut v[start..(start + 9)], is_less);
             }
 
