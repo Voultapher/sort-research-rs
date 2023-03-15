@@ -1068,32 +1068,26 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
 
             let len_div_2 = len / 2;
 
-            if intrinsics::likely(len < 54) {
+            if len < 48 {
                 let start = len_div_2 - 2;
                 median5_optimal(&mut v[start..(start + 5)], is_less);
             } else {
                 let start = len_div_2 - 4;
 
                 // Mitigate pathological cases that keep picking bad values. This works in
-                // with the heapsort fallback.
+                // conjunction with the heapsort fallback.
                 //
                 // This done in a way that allows the len_div_2 to remain the only value this
                 // functions returns.
-                if intrinsics::unlikely(len >= 256) {
-                    let len_div_8 = len / 8;
-                    let near_end = len_div_8 * 7;
+                let arr_ptr = v.as_mut_ptr();
 
-                    let arr_ptr = v.as_mut_ptr();
+                let len_div_8 = len / 8;
+                let near_end = len_div_8 * 7;
 
-                    // SAFETY: TODO
-                    unsafe {
-                        ptr::swap_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
-                        ptr::swap_nonoverlapping(
-                            arr_ptr.add(near_end + 1),
-                            arr_ptr.add(start + 6),
-                            3,
-                        );
-                    }
+                // SAFETY: TODO
+                unsafe {
+                    ptr::swap_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
+                    ptr::swap_nonoverlapping(arr_ptr.add(near_end + 1), arr_ptr.add(start + 6), 3);
                 }
 
                 // The cyclic permutation of `partition_in_blocks` will further randomize the
