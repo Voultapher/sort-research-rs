@@ -12,7 +12,26 @@ use criterion::black_box;
 
 use sort_comp::other::partition::{self, Partition};
 
-use crate::util::pin_thread_to_core;
+pub fn pin_thread_to_core() {
+    use std::cell::Cell;
+    let pin_core_id: usize = 2;
+
+    thread_local! {static AFFINITY_ALREADY_SET: Cell<bool> = Cell::new(false); }
+
+    // Set affinity only once per thread.
+    AFFINITY_ALREADY_SET.with(|affinity_already_set| {
+        if !affinity_already_set.get() {
+            if let Some(core_id_2) = core_affinity::get_core_ids()
+                .as_ref()
+                .and_then(|ids| ids.get(pin_core_id))
+            {
+                core_affinity::set_for_current(*core_id_2);
+            }
+
+            affinity_already_set.set(true);
+        }
+    });
+}
 
 fn cpu_max_freq_hz() -> Option<f64> {
     static MAX_FREQUENCY: OnceCell<Option<f64>> = OnceCell::new();

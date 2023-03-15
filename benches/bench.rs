@@ -1,5 +1,3 @@
-#![feature(local_key_cell_methods)]
-
 use std::cell::RefCell;
 use std::env;
 use std::rc::Rc;
@@ -22,10 +20,8 @@ use sort_comp::{stable, unstable};
 mod trash_prediction;
 
 mod bench_custom;
-mod util;
 
-use crate::bench_custom::bench_custom;
-use crate::util::pin_thread_to_core;
+use crate::bench_custom::{bench_custom, pin_thread_to_core};
 
 #[inline(never)]
 fn bench_sort<T: Ord + std::fmt::Debug>(
