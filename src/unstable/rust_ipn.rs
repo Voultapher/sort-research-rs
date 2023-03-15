@@ -1038,11 +1038,15 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
             // Small total slices are handled separately, see function quicksort.
             if len >= 14 {
                 sort14_plus(v, is_less);
-            } else if len >= 10 {
-                sort10_optimal(&mut v[0..10], is_less);
-                insertion_sort_shift_left(v, 10, is_less);
             } else if len >= 2 {
-                insertion_sort_shift_left(v, 1, is_less);
+                let end = if len >= 10 {
+                    sort10_optimal(&mut v[0..10], is_less);
+                    10
+                } else {
+                    1
+                };
+
+                insertion_sort_shift_left(v, end, is_less);
             }
 
             true
