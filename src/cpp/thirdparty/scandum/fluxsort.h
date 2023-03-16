@@ -24,65 +24,38 @@
 */
 
 /*
-	fluxsort 1.1.5.2
+	fluxsort 1.2.1.1
 */
 
 #ifndef FLUXSORT_H
 #define FLUXSORT_H
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <errno.h>
+#include <float.h>
+
+typedef int CMPFUNC (const void *a, const void *b);
+
+//#define cmp(a,b) (*(a) > *(b))
+
 #ifndef QUADSORT_H
   #include "quadsort.h"
 #endif
 
-#include <assert.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+// When sorting an array of 32/64 bit pointers, like a string array, QUAD_CACHE
+// needs to be adjusted in quadsort.h and here for proper performance when
+// sorting large arrays.
 
-typedef int CMPFUNC (const void *a, const void *b);
-
-//////////////////////////////////////////////////////////
-//┌────────────────────────────────────────────────────┐//
-//│                █████┐    ██████┐ ██████┐████████┐  │//
-//│               ██┌──██┐   ██┌──██┐└─██┌─┘└──██┌──┘  │//
-//│               └█████┌┘   ██████┌┘  ██│     ██│     │//
-//│               ██┌──██┐   ██┌──██┐  ██│     ██│     │//
-//│               └█████┌┘   ██████┌┘██████┐   ██│     │//
-//│                └────┘    └─────┘ └─────┘   └─┘     │//
-//└────────────────────────────────────────────────────┘//
-//////////////////////////////////////////////////////////
-
-#undef VAR
-#undef FUNC
-#undef STRUCT
-
-#define VAR char
-#define FUNC(NAME) NAME##8
-#define STRUCT(NAME) struct NAME##8
-
-#include "fluxsort.c"
-
-//////////////////////////////////////////////////////////
-//┌────────────────────────────────────────────────────┐//
-//│           ▄██┐   █████┐    ██████┐ ██████┐████████┐│//
-//│          ████│  ██┌───┘    ██┌──██┐└─██┌─┘└──██┌──┘│//
-//│          └─██│  ██████┐    ██████┌┘  ██│     ██│   │//
-//│            ██│  ██┌──██┐   ██┌──██┐  ██│     ██│   │//
-//│          ██████┐└█████┌┘   ██████┌┘██████┐   ██│   │//
-//│          └─────┘ └────┘    └─────┘ └─────┘   └─┘   │//
-//└────────────────────────────────────────────────────┘//
-//////////////////////////////////////////////////////////
-
-#undef VAR
-#undef FUNC
-#undef STRUCT
-
-#define VAR short
-#define FUNC(NAME) NAME##16
-#define STRUCT(NAME) struct NAME##16
-
-#include "fluxsort.c"
+#ifdef cmp
+  #define QUAD_CACHE 4294967295
+#else
+//#define QUAD_CACHE 131072
+  #define QUAD_CACHE 262144
+//#define QUAD_CACHE 524288
+//#define QUAD_CACHE 4294967295
+#endif
 
 //////////////////////////////////////////////////////////
 // ┌───────────────────────────────────────────────────┐//
@@ -95,15 +68,39 @@ typedef int CMPFUNC (const void *a, const void *b);
 // └───────────────────────────────────────────────────┘//
 //////////////////////////////////////////////////////////
 
-#undef VAR
-#undef FUNC
-#undef STRUCT
-
 #define VAR int
 #define FUNC(NAME) NAME##32
-#define STRUCT(NAME) struct NAME##32
 
 #include "fluxsort.c"
+
+#undef VAR
+#undef FUNC
+
+// fluxsort_prim
+
+#define VAR int
+#define FUNC(NAME) NAME##_int32
+#ifndef cmp
+  #define cmp(a,b) (*(a) > *(b))
+  #include "fluxsort.c"
+  #undef cmp
+#else
+  #include "fluxsort.c"
+#endif
+#undef VAR
+#undef FUNC
+
+#define VAR unsigned int
+#define FUNC(NAME) NAME##_uint32
+#ifndef cmp
+  #define cmp(a,b) (*(a) > *(b))
+  #include "fluxsort.c"
+  #undef cmp
+#else
+  #include "fluxsort.c"
+#endif
+#undef VAR
+#undef FUNC
 
 //////////////////////////////////////////////////////////
 // ┌───────────────────────────────────────────────────┐//
@@ -116,15 +113,85 @@ typedef int CMPFUNC (const void *a, const void *b);
 // └───────────────────────────────────────────────────┘//
 //////////////////////////////////////////////////////////
 
-#undef VAR
-#undef FUNC
-#undef STRUCT
-
 #define VAR long long
 #define FUNC(NAME) NAME##64
-#define STRUCT(NAME) struct NAME##64
 
 #include "fluxsort.c"
+
+#undef VAR
+#undef FUNC
+
+// fluxsort_prim
+
+#define VAR long long
+#define FUNC(NAME) NAME##_int64
+#ifndef cmp
+  #define cmp(a,b) (*(a) > *(b))
+  #include "fluxsort.c"
+  #undef cmp
+#else
+  #include "fluxsort.c"
+#endif
+#undef VAR
+#undef FUNC
+
+#define VAR unsigned long long
+#define FUNC(NAME) NAME##_uint64
+#ifndef cmp
+  #define cmp(a,b) (*(a) > *(b))
+  #include "fluxsort.c"
+  #undef cmp
+#else
+  #include "fluxsort.c"
+#endif
+#undef VAR
+#undef FUNC
+
+// This section is outside of 32/64 bit pointer territory, so no cache checks
+// necessary, unless sorting 32+ byte structures.
+
+#undef QUAD_CACHE
+#define QUAD_CACHE 4294967295
+
+//////////////////////////////////////////////////////////
+//┌────────────────────────────────────────────────────┐//
+//│                █████┐    ██████┐ ██████┐████████┐  │//
+//│               ██┌──██┐   ██┌──██┐└─██┌─┘└──██┌──┘  │//
+//│               └█████┌┘   ██████┌┘  ██│     ██│     │//
+//│               ██┌──██┐   ██┌──██┐  ██│     ██│     │//
+//│               └█████┌┘   ██████┌┘██████┐   ██│     │//
+//│                └────┘    └─────┘ └─────┘   └─┘     │//
+//└────────────────────────────────────────────────────┘//
+//////////////////////////////////////////////////////////
+
+#define VAR char
+#define FUNC(NAME) NAME##8
+
+#include "fluxsort.c"
+
+#undef VAR
+#undef FUNC
+
+//////////////////////////////////////////////////////////
+//┌────────────────────────────────────────────────────┐//
+//│           ▄██┐   █████┐    ██████┐ ██████┐████████┐│//
+//│          ████│  ██┌───┘    ██┌──██┐└─██┌─┘└──██┌──┘│//
+//│          └─██│  ██████┐    ██████┌┘  ██│     ██│   │//
+//│            ██│  ██┌──██┐   ██┌──██┐  ██│     ██│   │//
+//│          ██████┐└█████┌┘   ██████┌┘██████┐   ██│   │//
+//│          └─────┘ └────┘    └─────┘ └─────┘   └─┘   │//
+//└────────────────────────────────────────────────────┘//
+//////////////////////////////////////////////////////////
+
+#define VAR short
+#define FUNC(NAME) NAME##16
+
+#include "fluxsort.c"
+
+#undef VAR
+#undef FUNC
+
+
 
 //////////////////////////////////////////////////////////
 //┌────────────────────────────────────────────────────┐//
@@ -137,15 +204,13 @@ typedef int CMPFUNC (const void *a, const void *b);
 //└────────────────────────────────────────────────────┘//
 //////////////////////////////////////////////////////////
 
-#undef VAR
-#undef FUNC
-#undef STRUCT
-
-#define VAR long double
-#define FUNC(NAME) NAME##128
-#define STRUCT(NAME) struct NAME##128
-
-#include "fluxsort.c"
+#if (DBL_MANT_DIG < LDBL_MANT_DIG)
+  #define VAR long double
+  #define FUNC(NAME) NAME##128
+    #include "fluxsort.c"
+  #undef VAR
+  #undef FUNC
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 //┌────────────────────────────────────────────────────────────────────┐//
@@ -168,27 +233,64 @@ void fluxsort(void *array, size_t nmemb, size_t size, CMPFUNC *cmp)
 	switch (size)
 	{
 		case sizeof(char):
-			return fluxsort8(static_cast<char*>(array), nmemb, cmp);
+			fluxsort8((char*)array, nmemb, cmp);
+			return;
 
 		case sizeof(short):
-			return fluxsort16(static_cast<short*>(array), nmemb, cmp);
+			fluxsort16((short*)array, nmemb, cmp);
+			return;
 
 		case sizeof(int):
-			return fluxsort32(static_cast<int*>(array), nmemb, cmp);
+			fluxsort32((int*)array, nmemb, cmp);
+			return;
 
 		case sizeof(long long):
-			return fluxsort64(static_cast<long long*>(array), nmemb, cmp);
-
-		// case sizeof(long double):
-		// 	return fluxsort128(static_cast<long double*>(array), nmemb, cmp);
+			fluxsort64((long long*)array, nmemb, cmp);
+			return;
+#if (DBL_MANT_DIG < LDBL_MANT_DIG)
+		case sizeof(long double):
+			fluxsort128((long double*)array, nmemb, cmp);
+			return;
+#endif
 
 		default:
-			return assert(size == sizeof(char) || size == sizeof(short) || size == sizeof(int) || size == sizeof(long long) || size == sizeof(long double));
+#if (DBL_MANT_DIG < LDBL_MANT_DIG)
+			assert(size == sizeof(char) || size == sizeof(short) || size == sizeof(int) || size == sizeof(long long) || size == sizeof(long double));
+#else
+			assert(size == sizeof(char) || size == sizeof(short) || size == sizeof(int) || size == sizeof(long long));
+#endif
 	}
 }
 
-#undef VAR
-#undef FUNC
-#undef STRUCT
+// This must match quadsort_prim()
+
+void fluxsort_prim(void *array, size_t nmemb, size_t size)
+{
+	if (nmemb < 2)
+	{
+		return;
+	}
+
+	switch (size)
+	{
+		case 4:
+			fluxsort_int32((int*)array, nmemb, NULL);
+			return;
+		case 5:
+			fluxsort_uint32((unsigned int*)array, nmemb, NULL);
+			return;
+		case 8:
+			fluxsort_int64((long long*)array, nmemb, NULL);
+			return;
+		case 9:
+			fluxsort_uint64((unsigned long long*)array, nmemb, NULL);
+			return;
+		default:
+			assert(size == sizeof(int) || size == sizeof(int) + 1 || size == sizeof(long long) || size == sizeof(long long) + 1);
+			return;
+	}
+}
+
+#undef QUAD_CACHE
 
 #endif

@@ -1,7 +1,4 @@
-// Enable this line for fair benchmark comparison to C++ and Rust sorts.
-// #define cmp(a, b) (*(a) > *(b))
-
-#include "thirdparty/crumsort/crumsort.h"
+#include "thirdparty/scandum/crumsort.h"
 
 #include <stdint.h>
 #include <stdexcept>
@@ -27,10 +24,7 @@ extern "C" {
 // --- i32 ---
 
 void crumsort_unstable_i32(int32_t* data, size_t len) {
-  crumsort(static_cast<void*>(data), len, sizeof(int32_t),
-           [](const void* a_ptr, const void* b_ptr) {
-             return int_cmp_func<int32_t>(a_ptr, b_ptr);
-           });
+  crumsort_prim(static_cast<void*>(data), len, /*signed int*/ 4);
 }
 
 uint32_t crumsort_unstable_i32_by(int32_t* data,
@@ -45,10 +39,7 @@ uint32_t crumsort_unstable_i32_by(int32_t* data,
 // --- u64 ---
 
 void crumsort_unstable_u64(uint64_t* data, size_t len) {
-  crumsort(static_cast<void*>(data), len, sizeof(uint64_t),
-           [](const void* a_ptr, const void* b_ptr) {
-             return int_cmp_func<uint64_t>(a_ptr, b_ptr);
-           });
+  crumsort_prim(static_cast<void*>(data), len, /*unsigned long long*/ 9);
 }
 
 uint32_t crumsort_unstable_u64_by(uint64_t* data,

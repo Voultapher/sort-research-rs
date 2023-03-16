@@ -159,7 +159,14 @@ fn build_and_link_cpp_gerbens_qsort() {}
 
 #[cfg(feature = "c_crumsort")]
 fn build_and_link_c_crumsort() {
-    build_and_link_cpp_sort("c_crumsort", None);
+    build_and_link_cpp_sort(
+        "c_crumsort",
+        Some(|builder: &mut cc::Build| {
+            builder.compiler(CLANG_PATH); // clang can generate cmov which yields better perf.
+
+            None
+        }),
+    );
 }
 
 #[cfg(not(feature = "c_crumsort"))]
@@ -167,7 +174,14 @@ fn build_and_link_c_crumsort() {}
 
 #[cfg(feature = "c_fluxsort")]
 fn build_and_link_c_fluxsort() {
-    build_and_link_cpp_sort("c_fluxsort", None);
+    build_and_link_cpp_sort(
+        "c_fluxsort",
+        Some(|builder: &mut cc::Build| {
+            builder.compiler(CLANG_PATH); // clang can generate cmov which yields better perf.
+
+            None
+        }),
+    );
 }
 
 #[cfg(not(feature = "c_fluxsort"))]
