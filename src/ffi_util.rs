@@ -38,7 +38,7 @@ macro_rules! make_cpp_sort_by {
             let ret_code = $name(
                 $data.as_mut_ptr(),
                 $data.len(),
-                rust_fn_cmp::<$type, F>,
+                crate::ffi_util::rust_fn_cmp::<$type, F>,
                 cmp_fn_ctx,
             );
 

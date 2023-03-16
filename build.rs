@@ -1,6 +1,10 @@
 use std::env;
 use std::path::PathBuf;
 
+// Adjust this if you have a custom clang build, or path.
+#[allow(unused)]
+const CLANG_PATH: &'static str = "clang++";
+
 #[allow(dead_code)]
 fn build_and_link_cpp_sort(
     file_name: &str,
@@ -100,7 +104,7 @@ fn build_and_link_cpp_vqsort() {
         Some(|builder: &mut cc::Build| {
             // Make an exception for march=native here because AVX2 will not work without it.
             builder.flag("-march=native");
-            builder.compiler("clang++"); // gcc yields terrible code here.
+            builder.compiler(CLANG_PATH); // gcc yields terrible code here.
 
             None
         }),
@@ -117,7 +121,7 @@ fn build_and_link_cpp_intel_avx512() {
         Some(|builder: &mut cc::Build| {
             // Make an exception for march=native here because AVX512 will not work without it.
             builder.flag("-march=native");
-            builder.compiler("clang++"); // gcc yields terrible code here.
+            builder.compiler(CLANG_PATH); // gcc yields terrible code here.
 
             None
         }),
@@ -143,7 +147,7 @@ fn build_and_link_cpp_gerbens_qsort() {
     build_and_link_cpp_sort(
         "cpp_gerbens_qsort",
         Some(|builder: &mut cc::Build| {
-            builder.compiler("clang++"); // gcc yields terrible code here.
+            builder.compiler(CLANG_PATH); // gcc yields terrible code here.
 
             None
         }),
@@ -191,7 +195,7 @@ fn build_and_link_cpp_std_libcxx() {
         Some(|builder| {
             builder
                 .define("STD_LIB_LIBCXX", None)
-                .compiler("clang++")
+                .compiler(CLANG_PATH)
                 .cpp_set_stdlib("c++"); // Use libcxx
 
             Some("cpp_std_sort_libcxx".into())
