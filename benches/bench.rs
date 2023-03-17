@@ -84,11 +84,9 @@ fn bench_sort<T: Ord + std::fmt::Debug>(
     if let Some(name) = name_overwrite {
         let split_pos = name.find(":").unwrap();
         let match_name = &name[..split_pos];
-        if bench_name != match_name {
-            return;
+        if bench_name == match_name {
+            bench_name = &name[(split_pos + 1)..];
         }
-
-        bench_name = &name[(split_pos + 1)..];
     }
 
     let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}");
