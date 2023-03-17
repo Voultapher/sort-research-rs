@@ -826,6 +826,7 @@ where
                 // remaining to-be-sorted slice `v`. Otherwise Ord violations could get this stuck
                 // loop forever.
                 v = &mut v[(mid + 1)..];
+                pred = None;
                 continue;
             }
         }
