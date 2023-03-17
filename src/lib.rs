@@ -13,7 +13,9 @@
     const_mut_refs,
     vec_into_raw_parts,
     inline_const,
-    const_trait_impl
+    const_trait_impl,
+    negative_impls,
+    auto_traits
 )]
 
 macro_rules! sort_impl {

@@ -1345,17 +1345,21 @@ const fn is_copy<T>() -> bool {
 
 // impl<T: Copy> IsCopyMarker for T {}
 
-// #[rustc_unsafe_specialization_marker]
-trait Freeze {}
+// // #[rustc_unsafe_specialization_marker]
+// trait Freeze {}
 
 // Can the type have interior mutability, this is checked by testing if T is Copy. If the type can
 // have interior mutability it may alter itself during comparison in a way that must be observed
 // after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
-// double free. FIXME use proper abstraction
-impl<T: Copy> Freeze for T {}
+// double free.
+unsafe auto trait Freeze {}
 
-// Enable for testing.
-// impl<T: Ord> Freeze for T {}
+impl<T: ?Sized> !Freeze for core::cell::UnsafeCell<T> {}
+unsafe impl<T: ?Sized> Freeze for core::marker::PhantomData<T> {}
+unsafe impl<T: ?Sized> Freeze for *const T {}
+unsafe impl<T: ?Sized> Freeze for *mut T {}
+unsafe impl<T: ?Sized> Freeze for &T {}
+unsafe impl<T: ?Sized> Freeze for &mut T {}
 
 #[const_trait]
 trait IsFreeze {
@@ -1392,6 +1396,23 @@ const fn is_cheap_to_move<T>() -> bool {
     //
     // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
     mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
+}
+
+#[test]
+fn type_info() {
+    assert!(is_copy::<i32>());
+    assert!(is_copy::<u64>());
+    assert!(!is_copy::<String>());
+
+    assert!(!has_direct_iterior_mutability::<i32>());
+    assert!(!has_direct_iterior_mutability::<u64>());
+    assert!(!has_direct_iterior_mutability::<String>());
+    assert!(has_direct_iterior_mutability::<core::cell::Cell<i32>>());
+
+    assert!(is_cheap_to_move::<i32>());
+    assert!(is_cheap_to_move::<u64>());
+    assert!(is_cheap_to_move::<String>());
+    assert!(!is_cheap_to_move::<[i32; 20]>());
 }
 
 // --- Branchless sorting (less branches not zero) ---
