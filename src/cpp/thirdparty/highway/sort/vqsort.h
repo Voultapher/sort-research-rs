@@ -99,7 +99,7 @@ class HWY_CONTRIB_DLLEXPORT Sorter {
 #endif  // VQSORT_STACK
 
 #if !VQSORT_STACK
-#include "hwy/aligned_allocator.h"
+#include "../aligned_allocator.h"
 #endif
 
 // Check if we have sys/random.h. First skip some systems on which the check
@@ -192,7 +192,7 @@ Sorter::Sorter() {
   // Determine the largest buffer size required for any type by trying them all.
   // (The capping of N in BaseCaseNum means that smaller N but larger sizeof_t
   // may require a larger buffer.)
-  const size_t vector_size = HWY_DYNAMIC_DISPATCH(VectorSize)();
+  const size_t vector_size = hwy::HWY_NAMESPACE::VectorSize();
   const size_t max_bytes =
       HWY_MAX(HWY_MAX(SortConstants::BufBytes<uint16_t>(vector_size),
                       SortConstants::BufBytes<uint32_t>(vector_size)),
