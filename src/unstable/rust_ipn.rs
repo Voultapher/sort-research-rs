@@ -793,9 +793,7 @@ where
                 let mid = partition_equal(v, pivot, is_less);
 
                 // Continue sorting elements greater than the pivot. We know that mid contains the
-                // pivot. So we can continue after mid. It's important that this shrinks the
-                // remaining to-be-sorted slice `v`. Otherwise Ord violations could get this stuck
-                // loop forever.
+                // pivot. So we can continue after mid.
                 v = &mut v[(mid + 1)..];
                 pred = None;
                 continue;
