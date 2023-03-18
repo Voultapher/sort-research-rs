@@ -371,6 +371,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
         }),
         ("random_d2", |size| patterns::random_uniform(size, 0..2)),
+        ("random_d3", |size| patterns::random_uniform(size, 0..3)),
         ("random_d4", |size| patterns::random_uniform(size, 0..4)),
         ("random_d8", |size| patterns::random_uniform(size, 0..8)),
         ("random_d10", |size| patterns::random_uniform(size, 0..10)),
