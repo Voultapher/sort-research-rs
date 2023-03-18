@@ -151,7 +151,7 @@ where
 
     // Limit the number of imbalanced partitions to `2 * floor(log2(len))`.
     // The binary OR by one is used to eliminate the zero-check in the logarithm.
-    let limit = 2 * (v.len() | 1).ilog2();
+    let limit = 2 * (len | 1).ilog2();
 
     recurse(v, &mut is_less, None, limit);
 }
@@ -755,13 +755,17 @@ where
 
 /// Sorts `v` recursively.
 ///
-/// If the slice had a predecessor in the original array, it is specified as `pred`.
+/// If the slice had a predecessor in the original array, it is specified as `ancestor_pivot`.
 ///
 /// `limit` is the number of allowed imbalanced partitions before switching to `heapsort`. If zero,
 /// this function will immediately switch to heapsort.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn recurse<'a, T, F>(mut v: &'a mut [T], is_less: &mut F, mut pred: Option<&'a T>, mut limit: u32)
-where
+fn recurse<'a, T, F>(
+    mut v: &'a mut [T],
+    is_less: &mut F,
+    mut ancestor_pivot: Option<&'a T>,
+    mut limit: u32,
+) where
     F: FnMut(&T, &T) -> bool,
 {
     loop {
@@ -788,14 +792,14 @@ where
         // If the chosen pivot is equal to the predecessor, then it's the smallest element in the
         // slice. Partition the slice into elements equal to and elements greater than the pivot.
         // This case is usually hit when the slice contains many duplicate elements.
-        if let Some(p) = pred {
+        if let Some(p) = ancestor_pivot {
             if !is_less(p, &v[pivot]) {
                 let mid = partition_equal(v, pivot, is_less);
 
                 // Continue sorting elements greater than the pivot. We know that mid contains the
                 // pivot. So we can continue after mid.
                 v = &mut v[(mid + 1)..];
-                pred = None;
+                ancestor_pivot = None;
                 continue;
             }
         }
@@ -812,9 +816,9 @@ where
         // calls and consume less stack space. Then just continue with the longer side (this is
         // akin to tail recursion).
         if left.len() < right.len() {
-            recurse(left, is_less, pred, limit);
+            recurse(left, is_less, ancestor_pivot, limit);
             v = right;
-            pred = Some(pivot);
+            ancestor_pivot = Some(pivot);
         } else {
             recurse(right, is_less, Some(pivot), limit);
             v = left;
