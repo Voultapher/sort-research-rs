@@ -24,7 +24,7 @@
 */
 
 /*
-	crumsort 1.1.5.4
+	crumsort 1.2.1.2
 */
 
 
@@ -261,23 +261,23 @@ void crumsort(void *array, size_t nmemb, size_t size, CMPFUNC *cmp)
 	switch (size)
 	{
 		case sizeof(char):
-			crumsort8((char*)array, nmemb, cmp);
+			crumsort8(array, nmemb, cmp);
 			return;
 
 		case sizeof(short):
-			crumsort16((short*)array, nmemb, cmp);
+			crumsort16(array, nmemb, cmp);
 			return;
 
 		case sizeof(int):
-			crumsort32((int*)array, nmemb, cmp);
+			crumsort32(array, nmemb, cmp);
 			return;
 
 		case sizeof(long long):
-			crumsort64((long long*)array, nmemb, cmp);
+			crumsort64(array, nmemb, cmp);
 			return;
 #if (DBL_MANT_DIG < LDBL_MANT_DIG)
 		case sizeof(long double):
-			crumsort128((long double*)array, nmemb, cmp);
+			crumsort128(array, nmemb, cmp);
 			return;
 #endif
 //		case sizeof(struct256):
@@ -318,16 +318,16 @@ void crumsort_prim(void *array, size_t nmemb, size_t size)
 	switch (size)
 	{
 		case 4:
-			crumsort_int32((int*)array, nmemb, NULL);
+			crumsort_int32(array, nmemb, NULL);
 			return;
 		case 5:
-			crumsort_uint32((unsigned int*)array, nmemb, NULL);
+			crumsort_uint32(array, nmemb, NULL);
 			return;
 		case 8:
-			crumsort_int64((long long*)array, nmemb, NULL);
+			crumsort_int64(array, nmemb, NULL);
 			return;
 		case 9:
-			crumsort_uint64((unsigned long long*)array, nmemb, NULL);
+			crumsort_uint64(array, nmemb, NULL);
 			return;
 		default:
 			assert(size == sizeof(int) || size == sizeof(int) + 1 || size == sizeof(long long) || size == sizeof(long long) + 1);
