@@ -104,7 +104,7 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"a % faster than b | 100% == a 2x b symmetric | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"relative symmetric speedup | 100% == a 2x b | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
         y_range=(-200.0, 200.0),
         plot_width=800,
         plot_height=600,
