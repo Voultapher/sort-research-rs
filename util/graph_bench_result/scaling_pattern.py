@@ -3,22 +3,16 @@ Produce graphs that show the scaling nature of sort implementations.
 Special cases, that don't scale with size as parameter but with pattern.
 """
 
-import json
 import sys
 import os
-import math
-
-from collections import defaultdict
 
 from bokeh import models
-from bokeh.plotting import figure, ColumnDataSource, show
+from bokeh.plotting import figure, ColumnDataSource
 from bokeh.resources import CDN
 from bokeh.embed import file_html
-from bokeh.palettes import Colorblind
-from bokeh.models import FactorRange, LabelSet
 
-from single_size import parse_result, extract_groups, build_color_palette
 from cpu_info import get_cpu_info
+from util import parse_result, extract_groups, build_color_palette
 
 CPU_BOOST_GHZ = None
 CPU_ARCH = None
@@ -90,7 +84,7 @@ def plot_scaling(ty, prediction_state, prefix, test_size, values):
         title=plot_name,
         x_axis_label=f"{X_AXIS_LABEL} (log)",
         x_axis_type="log",
-        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
         y_axis_type="log",
         plot_width=800,
         plot_height=600,

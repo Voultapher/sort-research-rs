@@ -2,23 +2,19 @@
 Produce graphs that show the relative speedup and slowdown between two implementations.
 """
 
-import json
 import sys
 import os
-import math
 import itertools
 
-from collections import defaultdict
 
 from bokeh import models
-from bokeh.plotting import figure, ColumnDataSource, show
+from bokeh.plotting import figure, ColumnDataSource
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 from bokeh.palettes import Colorblind
-from bokeh.models import FactorRange, LabelSet
 
-from single_size import parse_result, extract_groups
 from cpu_info import get_cpu_info
+from util import parse_result, extract_groups
 
 CPU_BOOST_GHZ = None
 CPU_ARCH = None
@@ -108,7 +104,7 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"a % faster than b | 100% == a 2x b, -100% == b 2x a | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"a % faster than b | 100% == a 2x b symmetric | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
         y_range=(-200.0, 200.0),
         plot_width=800,
         plot_height=600,

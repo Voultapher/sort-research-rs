@@ -2,22 +2,17 @@
 Produce graphs that show the scaling nature of sort implementations.
 """
 
-import json
 import sys
 import os
-import math
 
-from collections import defaultdict
 
 from bokeh import models
-from bokeh.plotting import figure, ColumnDataSource, show
+from bokeh.plotting import figure, ColumnDataSource
 from bokeh.resources import CDN
 from bokeh.embed import file_html
-from bokeh.palettes import Colorblind
-from bokeh.models import FactorRange, LabelSet
 
-from single_size import parse_result, extract_groups, build_color_palette
 from cpu_info import get_cpu_info
+from util import parse_result, extract_groups, build_color_palette, type_size
 
 CPU_BOOST_GHZ = None
 CPU_ARCH = None
@@ -36,7 +31,7 @@ def init_tools():
         models.HoverTool(
             tooltips=[
                 ("Input Size", "@x"),
-                ("Elements per cycle", "@y"),
+                ("Throughput", "@y"),
                 ("Name", "@name"),
             ],
         ),
@@ -52,9 +47,12 @@ def add_tools_to_plot(plot):
     plot.toolbar.active_drag = TOOLS[1]
 
 
-def extract_line(sort_name, pattern, values):
+def extract_line(ty, sort_name, pattern, values):
     x = []
     y = []
+
+    type_size_bytes = type_size(ty)
+
     for test_size, val in sorted(values.items(), key=lambda x: x[0]):
         if test_size < 1:
             continue
@@ -68,9 +66,10 @@ def extract_line(sort_name, pattern, values):
                     continue
 
                 x.append(test_size)
-                elem_per_ns = test_size / bench_time_ns
-                elem_per_cycle = elem_per_ns / CPU_BOOST_GHZ
-                y.append(elem_per_cycle)
+                input_size_mb = (test_size * type_size_bytes) / 1e6
+                bench_time_s = bench_time_ns / 1e9
+                mb_per_s = input_size_mb / bench_time_s
+                y.append(mb_per_s)
 
     return x, y
 
@@ -81,8 +80,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_ARCH}@{CPU_BOOST_GHZ}GHz",
-        y_axis_type="log",
+        y_axis_label=f"Throughput MB/s | Higher is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
         plot_width=800,
         plot_height=600,
         tools="",
@@ -94,7 +92,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
     sort_names = sorted(list(list(values.values())[0].values())[0].keys())
 
     for sort_name in sort_names:
-        x, y = extract_line(sort_name, pattern, values)
+        x, y = extract_line(ty, sort_name, pattern, values)
         color = COLOR_PALETTE[sort_name]
 
         data = {"x": x, "y": y, "name": [sort_name] * len(x)}
