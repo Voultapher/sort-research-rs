@@ -702,7 +702,7 @@ pub fn observable_is_less_u64<S: Sort>() {
             .map(|val| CompCount::new(val).to_u64())
             .collect::<Vec<_>>();
 
-        let mut comp_count_gloabl = 0;
+        let mut comp_count_global = 0;
 
         <S as Sort>::sort_by(&mut test_input, |a_u64, b_u64| {
             let a = CompCount::from_u64(a_u64);
@@ -710,7 +710,7 @@ pub fn observable_is_less_u64<S: Sort>() {
 
             a.comp_count.replace(a.comp_count.get() + 1);
             b.comp_count.replace(b.comp_count.get() + 1);
-            comp_count_gloabl += 1;
+            comp_count_global += 1;
 
             a.val.cmp(&b.val)
         });
@@ -720,7 +720,7 @@ pub fn observable_is_less_u64<S: Sort>() {
             .map(|c| CompCount::from_u64(c).comp_count.get() as u64)
             .sum();
 
-        assert_eq!(total_inner, comp_count_gloabl * 2);
+        assert_eq!(total_inner, comp_count_global * 2);
     };
 
     test_impl_custom(test_fn);
@@ -759,19 +759,19 @@ pub fn observable_is_less<S: Sort>() {
             .map(|val| CompCount::new(val))
             .collect::<Vec<_>>();
 
-        let mut comp_count_gloabl = 0;
+        let mut comp_count_global = 0;
 
         <S as Sort>::sort_by(&mut test_input, |a, b| {
             a.comp_count.replace(a.comp_count.get() + 1);
             b.comp_count.replace(b.comp_count.get() + 1);
-            comp_count_gloabl += 1;
+            comp_count_global += 1;
 
             a.val.cmp(&b.val)
         });
 
         let total_inner: u64 = test_input.iter().map(|c| c.comp_count.get() as u64).sum();
 
-        assert_eq!(total_inner, comp_count_gloabl * 2);
+        assert_eq!(total_inner, comp_count_global * 2);
     };
 
     test_impl_custom(test_fn);
@@ -804,17 +804,26 @@ pub fn observable_is_less_mut_ptr<S: Sort>() {
             .map(|val| Box::into_raw(Box::new(CompCount::new(val))))
             .collect::<Vec<_>>();
 
-        let mut comp_count_gloabl = 0;
+        let mut comp_count_global = 0;
 
         <S as Sort>::sort_by(&mut test_input, |a_ptr, b_ptr| {
-            let a: &mut CompCount = unsafe { &mut **a_ptr };
-            let b: &mut CompCount = unsafe { &mut **b_ptr };
+            let const_a: &CompCount = unsafe { &**a_ptr };
+            let const_b: &CompCount = unsafe { &**b_ptr };
 
-            a.comp_count += 1;
-            b.comp_count += 1;
-            comp_count_gloabl += 1;
+            let comp_result = const_a.val.cmp(&const_b.val);
 
-            a.val.cmp(&b.val)
+            // Avoid potential for two mutable references to the same thing.
+            {
+                let mut_a: &mut CompCount = unsafe { &mut **a_ptr };
+                mut_a.comp_count += 1;
+            }
+            {
+                let mut_b: &mut CompCount = unsafe { &mut **b_ptr };
+                mut_b.comp_count += 1;
+            }
+            comp_count_global += 1;
+
+            comp_result
         });
 
         let total_inner: u64 = test_input
@@ -829,7 +838,7 @@ pub fn observable_is_less_mut_ptr<S: Sort>() {
             }
         }
 
-        assert_eq!(total_inner, comp_count_gloabl * 2);
+        assert_eq!(total_inner, comp_count_global * 2);
     };
 
     test_impl_custom(test_fn);
@@ -936,11 +945,11 @@ pub fn panic_observable_is_less<S: Sort>() {
 
         let panic_threshold = patterns::random_uniform(1, 1..=required_comps as i32)[0] as u64 - 1;
 
-        let mut comp_count_gloabl = 0;
+        let mut comp_count_global = 0;
 
         let res = panic::catch_unwind(AssertUnwindSafe(|| {
             <S as Sort>::sort_by(&mut test_input, |a, b| {
-                if comp_count_gloabl == panic_threshold {
+                if comp_count_global == panic_threshold {
                     // Make the panic dependent on the test size and some random factor. We want to
                     // make sure that panicking may also happen when comparing elements a second
                     // time.
@@ -949,18 +958,17 @@ pub fn panic_observable_is_less<S: Sort>() {
 
                 a.comp_count.replace(a.comp_count.get() + 1);
                 b.comp_count.replace(b.comp_count.get() + 1);
-                comp_count_gloabl += 1;
+                comp_count_global += 1;
 
                 a.val.cmp(&b.val)
             });
         }));
 
-        dbg!(comp_count_gloabl);
         assert!(res.is_err());
 
         let total_inner: u64 = test_input.iter().map(|c| c.comp_count.get() as u64).sum();
 
-        assert_eq!(total_inner, comp_count_gloabl * 2);
+        assert_eq!(total_inner, comp_count_global * 2);
 
         // If the sum before and after don't match, it means the set of elements hasn't remained the
         // same.
