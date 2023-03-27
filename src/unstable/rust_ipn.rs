@@ -540,7 +540,7 @@ unsafe fn fulcrum_rotate<T, F>(
 }
 
 // Disabled by default because it currently has panic safety issues.
-const FULCRUM_ENABLED: bool = false;
+const FULCRUM_ENABLED: bool = true;
 
 // Inspired by Igor van den Hoven and his work in quadsort/crumsort.
 // TODO document.
