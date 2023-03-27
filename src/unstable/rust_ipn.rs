@@ -8,7 +8,7 @@ use std::cmp::Ordering;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 
-sort_impl!("rust_ipn_unstable");
+sort_impl!("rust_ipnsort_unstable");
 
 /// Sorts the slice, but might not preserve the order of equal elements.
 ///
