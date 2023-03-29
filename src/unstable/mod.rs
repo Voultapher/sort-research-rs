@@ -1,4 +1,4 @@
-pub mod rust_ipn;
+pub mod rust_ipnsort;
 pub mod rust_std;
 
 #[cfg(feature = "rust_dmsort")]

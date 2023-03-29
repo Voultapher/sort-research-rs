@@ -1,13 +1,13 @@
 #![allow(unused)]
 
-//! Instruction-Parallel-Network Unstable Sort by Lukas Bergdoll
+//! Instruction-Parallel-Network Unstable Sort, ipnsort by Lukas Bergdoll
 
 use core::cmp::{self, Ordering};
 use core::intrinsics;
 use core::mem::{self, MaybeUninit};
 use core::ptr;
 
-sort_impl!("rust_ipn_unstable");
+sort_impl!("rust_ipnsort_unstable");
 
 /// Sorts the slice, but might not preserve the order of equal elements.
 ///

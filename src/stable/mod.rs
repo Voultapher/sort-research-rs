@@ -1,4 +1,3 @@
-pub mod rust_ipn;
 pub mod rust_std;
 
 #[cfg(feature = "rust_wpwoodjr")]

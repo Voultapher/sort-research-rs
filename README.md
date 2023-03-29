@@ -8,7 +8,7 @@ This repository contains:
 * An exhaustive test suite, including properties not commonly checked or upheld
 * An extensive benchmark suite, abstracting over types, patterns and sizes
 * A fuzzing harness
-* Novel sort implementations ipn_stable and ipn_unstable (Instruction-Parallel-Network)
+* Novel sort implementation [ipnsort](src/unstable/rust_ipnsort.rs) (Instruction-Parallel-Network)
 * Vendored sort implementations (Rust, C++, C), eg. cpp_pdqsort, rust_std_stable
 
 Most tests and benchmarks can be applied to non Rust implementations.

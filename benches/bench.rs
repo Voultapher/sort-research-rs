@@ -548,7 +548,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             &transform,
             pattern_name,
             pattern_provider,
-            unstable::rust_ipn::SortImpl,
+            unstable::rust_ipnsort::SortImpl,
         );
 
         bench_impl(
