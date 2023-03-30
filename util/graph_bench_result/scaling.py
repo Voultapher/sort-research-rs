@@ -51,7 +51,7 @@ def extract_line(ty, sort_name, pattern, values):
     x = []
     y = []
 
-    type_size_bytes = type_size(ty)
+    # type_size_bytes = type_size(ty)
 
     for test_size, val in sorted(values.items(), key=lambda x: x[0]):
         if test_size < 1:
@@ -66,10 +66,10 @@ def extract_line(ty, sort_name, pattern, values):
                     continue
 
                 x.append(test_size)
-                input_size_mb = (test_size * type_size_bytes) / 1e6
+                input_size_mil = (test_size) / 1e6
                 bench_time_s = bench_time_ns / 1e9
-                mb_per_s = input_size_mb / bench_time_s
-                y.append(mb_per_s)
+                million_elem_per_s = input_size_mil / bench_time_s
+                y.append(million_elem_per_s)
 
     return x, y
 
@@ -80,8 +80,8 @@ def plot_scaling(ty, prediction_state, pattern, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"Throughput MB/s | Higher is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
-        plot_width=800,
+        y_axis_label=f"Million elements per second | Higher is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        plot_width=1000,
         plot_height=600,
         tools="",
     )

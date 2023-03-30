@@ -69,10 +69,10 @@ def add_tools_to_plot(plot):
 def relative_speedup(time_a, time_b):
     if time_a <= time_b:
         # time_a is faster.
-        return ((time_b / time_a) - 1) * 100
+        return ((time_b / time_a) - 1)
     else:
         # time_b is faster
-        return -(((time_a / time_b) - 1) * 100)
+        return -(((time_a / time_b) - 1))
 
 
 def extract_line(sort_name_a, sort_name_b, pattern, values):
@@ -104,9 +104,9 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"relative symmetric speedup | 100% == a 2x b | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
-        y_range=(-200.0, 200.0),
-        plot_width=800,
+        y_axis_label=f"relative symmetric speedup | 0.7 == a 1.7x b | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        y_range=(-2.0, 2.0),
+        plot_width=1000,
         plot_height=600,
         tools="",
     )
