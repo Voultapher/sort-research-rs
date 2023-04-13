@@ -90,9 +90,12 @@ def plot_scaling(ty, prediction_state, pattern, values):
 
     sort_names = sorted(list(list(values.values())[0].values())[0].keys())
 
+    max_y_val = 0
     for sort_name in sort_names:
         x, y = extract_line(ty, sort_name, pattern, values)
         color = COLOR_PALETTE[sort_name]
+
+        max_y_val = max(max_y_val, max(y))
 
         data = {"x": x, "y": y, "name": [sort_name] * len(x)}
         source = ColumnDataSource(data=data)
@@ -110,6 +113,11 @@ def plot_scaling(ty, prediction_state, pattern, values):
             fill_color=None,
             line_color=color,
         )
+
+    if max_y_val < 400:
+        step_size = 10 if max_y_val <= 200 else 20
+        top_line = int(round(max_y_val, -1)) + step_size
+        plot.yaxis.ticker = list(range(0, top_line, step_size))
 
     return plot_name, plot
 

@@ -68,7 +68,7 @@ def add_tools_to_plot(plot):
 def relative_speedup(time_a, time_b):
     if time_a <= time_b:
         # time_a is faster.
-        return ((time_b / time_a) - 1)
+        return (time_b / time_a) - 1
     else:
         # time_b is faster
         return -(((time_a / time_b) - 1))
@@ -103,7 +103,7 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"relative symmetric speedup | 0.7 == a 1.7x b | {CPU_INFO}",
+        y_axis_label=f"Relative symmetric speedup | > 0, a x b | < 0, b x a | {CPU_INFO}",
         y_range=(-2.0, 2.0),
         plot_width=1000,
         plot_height=600,
@@ -140,6 +140,17 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
             fill_color=None,
             line_color=color,
         )
+
+    plot.yaxis.ticker = [x / 10.0 for x in range(-20, 30, 2)]
+
+    format_code_js = """
+        const tick_int = parseFloat(tick);
+        const adjusted_tick_val = tick_int >= 0.0
+            ? tick_int + 1.0
+            : tick_int - 1.0;
+        return `${adjusted_tick_val.toFixed(1)}x`;
+    """
+    plot.yaxis.formatter = models.FuncTickFormatter(code=format_code_js)
 
     return plot_name, plot
 
