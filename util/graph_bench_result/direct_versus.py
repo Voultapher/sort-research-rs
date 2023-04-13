@@ -16,8 +16,7 @@ from bokeh.palettes import Colorblind
 from cpu_info import get_cpu_info
 from util import parse_result, extract_groups
 
-CPU_BOOST_GHZ = None
-CPU_ARCH = None
+CPU_INFO = None
 
 
 def map_pattern_to_color(patterns, pattern):
@@ -104,7 +103,7 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"relative symmetric speedup | 0.7 == a 1.7x b | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"relative symmetric speedup | 0.7 == a 1.7x b | {CPU_INFO}",
         y_range=(-2.0, 2.0),
         plot_width=1000,
         plot_height=600,
@@ -179,5 +178,5 @@ if __name__ == "__main__":
             continue
 
         name = os.path.basename(sys.argv[1]).partition(".")[0]
-        CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
+        CPU_INFO = get_cpu_info(name)
         plot_types(sort_name_a, sort_name_b, name, groups)

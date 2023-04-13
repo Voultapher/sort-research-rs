@@ -14,8 +14,7 @@ from bokeh.embed import file_html
 from cpu_info import get_cpu_info
 from util import parse_result, extract_groups, build_color_palette
 
-CPU_BOOST_GHZ = None
-CPU_ARCH = None
+CPU_INFO = None
 
 # Adjust for pattern
 X_AXIS_LABEL = """% of input that is random, rest is zero"""
@@ -84,7 +83,7 @@ def plot_scaling(ty, prediction_state, prefix, test_size, values):
         title=plot_name,
         x_axis_label=f"{X_AXIS_LABEL} (log)",
         x_axis_type="log",
-        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"Elements per cycle (log) | Higher is better | {CPU_INFO}",
         y_axis_type="log",
         plot_width=800,
         plot_height=600,
@@ -147,5 +146,5 @@ if __name__ == "__main__":
     groups = extract_groups(combined_result)
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
-    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
+    CPU_INFO = get_cpu_info(name)
     plot_patterns(name, groups)

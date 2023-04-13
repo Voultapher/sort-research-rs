@@ -15,8 +15,7 @@ from bokeh.models import FactorRange, LabelSet
 from cpu_info import get_cpu_info
 from util import parse_result, extract_groups, build_color_palette
 
-CPU_BOOST_GHZ = None
-CPU_ARCH = None
+CPU_INFO = None
 
 
 # Needs to be shared instance :/
@@ -99,7 +98,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
 
     plot_name = f"{prediction_state}-{ty}-{test_size}"
     plot = figure(
-        x_axis_label=f"Time ({time_unit}) | Lower is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        x_axis_label=f"Time ({time_unit}) | Lower is better | {CPU_INFO}",
         x_range=(0, max_time * 1.1),
         y_range=FactorRange(*y),
         y_axis_label="Pattern",
@@ -165,5 +164,5 @@ if __name__ == "__main__":
     groups = extract_groups(combined_result)
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
-    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
+    CPU_INFO = get_cpu_info(name)
     plot_sizes(name, groups)

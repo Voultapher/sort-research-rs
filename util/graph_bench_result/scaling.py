@@ -14,8 +14,7 @@ from bokeh.embed import file_html
 from cpu_info import get_cpu_info
 from util import parse_result, extract_groups, build_color_palette, type_size
 
-CPU_BOOST_GHZ = None
-CPU_ARCH = None
+CPU_INFO = None
 
 # Needs to be shared instance :/
 TOOLS = None
@@ -80,7 +79,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
         title=plot_name,
         x_axis_label="Input Size (log)",
         x_axis_type="log",
-        y_axis_label=f"Million elements per second | Higher is better | {CPU_ARCH} max {CPU_BOOST_GHZ}GHz",
+        y_axis_label=f"Million elements per second | Higher is better | {CPU_INFO}",
         plot_width=1000,
         plot_height=600,
         tools="",
@@ -140,5 +139,5 @@ if __name__ == "__main__":
     groups = extract_groups(combined_result)
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
-    CPU_BOOST_GHZ, CPU_ARCH = get_cpu_info(name)
+    CPU_INFO = get_cpu_info(name)
     plot_patterns(name, groups)
