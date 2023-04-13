@@ -116,7 +116,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
 
     if max_y_val < 400:
         step_size = 10 if max_y_val <= 200 else 20
-        top_line = int(round(max_y_val, -1)) + step_size
+        top_line = 500
         plot.yaxis.ticker = list(range(0, top_line, step_size))
 
     return plot_name, plot
