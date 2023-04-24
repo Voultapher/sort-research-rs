@@ -431,15 +431,15 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
         // --- Stable sorts ---
 
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::rust_ipn::SortImpl,
-        );
+        // bench_impl(
+        //     c,
+        //     test_size,
+        //     transform_name,
+        //     &transform,
+        //     pattern_name,
+        //     pattern_provider,
+        //     stable::rust_ipn::SortImpl,
+        // );
 
         bench_impl(
             c,
