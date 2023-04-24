@@ -825,6 +825,16 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             &transform,
             pattern_name,
             pattern_provider,
+            sort_comp::other::small_sort::sort10_unstable_experimental::SortImpl,
+        );
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
             sort_comp::other::small_sort::sort10_unstable_ptr_select::SortImpl,
         );
     }
@@ -843,7 +853,7 @@ fn ensure_true_random() {
 fn criterion_benchmark(c: &mut Criterion) {
     // Distribute points somewhat evenly up to 1e7 in log10 space.
     let test_sizes = [
-        0, 1, 2, 3, 4, 6, 8, 12, 17, 24, 35, 49, 70, 100, 200, 400, 900, 2_048, 4_833, 10_000,
+        0, 1, 2, 3, 4, 6, 8, 10, 12, 17, 24, 35, 49, 70, 100, 200, 400, 900, 2_048, 4_833, 10_000,
         22_367, 50_000, 100_000, 183_845, 400_000, 1_000_000, 2_000_000, 4_281_332, 10_000_000,
     ];
 

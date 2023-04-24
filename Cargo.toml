@@ -51,6 +51,8 @@ harness = false
 [features]
 default = [
     "large_test_sizes",
+    # "evolution",
+    # "small_sort",
 
     # "cold_benchmarks",
     # "cpp_std_sys",
@@ -141,6 +143,9 @@ rust_glidesort = ["glidesort"]
 # Enable the sort evolution code.
 # Demonstrates various stages and optimizations of stable and unstable sorts.
 evolution = []
+
+# Enable explicit small-sort benchmarks.
+small_sort = []
 
 # --- Other ---
 
