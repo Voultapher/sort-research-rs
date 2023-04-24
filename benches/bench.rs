@@ -762,6 +762,71 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             pattern_provider,
             sort_comp::other::sort_evolution::stable::timsort_evo4::SortImpl,
         );
+
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::small_sort::sort4_unstable_cmp_swap::SortImpl,
+        );
+
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::small_sort::sort4_unstable_ptr_select::SortImpl,
+        );
+
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::small_sort::sort4_unstable_branchy::SortImpl,
+        );
+
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::small_sort::sort4_stable_orson::SortImpl,
+        );
+
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::small_sort::sort10_unstable_cmp_swaps::SortImpl,
+        );
+        #[cfg(feature = "small_sort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::small_sort::sort10_unstable_ptr_select::SortImpl,
+        );
     }
 }
 

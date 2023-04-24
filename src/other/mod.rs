@@ -16,4 +16,7 @@ pub mod cpp_intel_avx512;
 #[cfg(feature = "evolution")]
 pub mod sort_evolution;
 
+#[cfg(feature = "small_sort")]
+pub mod small_sort;
+
 pub mod partition;
