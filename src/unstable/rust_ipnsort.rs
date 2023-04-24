@@ -769,9 +769,7 @@ fn recurse<'a, T, F>(
     F: FnMut(&T, &T) -> bool,
 {
     loop {
-        let len = v.len();
-
-        // println!("len: {len}");
+        // println!("len: {}", v.len());
 
         if <T as UnstableSortTypeImpl>::small_sort(v, is_less) {
             return;
@@ -787,7 +785,7 @@ fn recurse<'a, T, F>(
         limit -= 1;
 
         // Choose a pivot and try guessing whether the slice is already sorted.
-        let pivot = <T as UnstableSortTypeImpl>::choose_pivot(v, is_less);
+        let pivot = choose_pivot(v, is_less);
 
         // If the chosen pivot is equal to the predecessor, then it's the smallest element in the
         // slice. Partition the slice into elements equal to and elements greater than the pivot.
@@ -834,14 +832,6 @@ trait UnstableSortTypeImpl: Sized {
     where
         F: FnMut(&Self, &Self) -> bool;
 
-    /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already
-    /// sorted.
-    ///
-    /// Elements in `v` might be reordered in the process.
-    fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool;
-
     /// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or
     /// equal to `pivot`.
     ///
@@ -857,13 +847,6 @@ impl<T> UnstableSortTypeImpl for T {
         F: FnMut(&Self, &Self) -> bool,
     {
         small_sort_default(v, is_less)
-    }
-
-    default fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        choose_pivot_default(v, is_less)
     }
 
     default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
@@ -893,7 +876,6 @@ where
     }
 }
 
-// Recursively select a pseudomedian if above this threshold.
 const PSEUDO_MEDIAN_REC_THRESHOLD: usize = 64;
 
 /// Selects a pivot from left, right.
@@ -902,29 +884,57 @@ const PSEUDO_MEDIAN_REC_THRESHOLD: usize = 64;
 ///
 /// This chooses a pivot by sampling an adaptive amount of points, mimicking the median quality of
 /// median of square root.
-fn choose_pivot_default<T, F>(v: &[T], is_less: &mut F) -> usize
+fn choose_pivot<T, F>(v: &[T], is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
 
-    // SAFETY: TODO
-    unsafe {
-        // We use unsafe code and raw pointers here because we're dealing with
-        // two non-contiguous buffers and heavy recursion. Passing safe slices
-        // around would involve a lot of branches and function call overhead.
-        let arr_ptr = v.as_ptr();
+    // It's a logic bug if this get's called on slice that would be small-sorted.
+    debug_assert!(len > max_len_small_sort::<T>());
 
-        let len_div_8 = len / 8;
-        let a = arr_ptr;
-        let b = arr_ptr.add(len_div_8 * 4);
-        let c = arr_ptr.add(len_div_8 * 7);
+    let len_div_2 = len / 2;
+    let arr_ptr = v.as_ptr();
 
-        if len < PSEUDO_MEDIAN_REC_THRESHOLD {
-            median3(a, b, c, is_less).sub_ptr(arr_ptr)
-        } else {
-            median3_rec(a, b, c, len_div_8, is_less).sub_ptr(arr_ptr)
+    let median_guess_ptr = if len < PSEUDO_MEDIAN_REC_THRESHOLD {
+        // For small sizes it's crucial to pick a good median, just doing median3 is not great.
+        let start = len_div_2 - 3;
+        median7_approx(&v[start..(start + 7)], is_less)
+    } else {
+        // SAFETY: TODO
+        unsafe {
+            let len_div_8 = len / 8;
+            let a = arr_ptr;
+            let b = arr_ptr.add(len_div_8 * 4);
+            let c = arr_ptr.add(len_div_8 * 7);
+
+            median3_rec(a, b, c, len_div_8, is_less)
         }
+    };
+
+    // SAFETY: median_guess_ptr is part of v if median7_approx and median3_rec work as expected.
+    unsafe { median_guess_ptr.sub_ptr(arr_ptr) }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn median7_approx<T, F>(v: &[T], is_less: &mut F) -> *const T
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 7.
+    assert!(v.len() == 7);
+
+    let arr_ptr = v.as_ptr();
+
+    // We checked the len.
+    unsafe {
+        let lower_median3 = median3(arr_ptr.add(0), arr_ptr.add(1), arr_ptr.add(2), is_less);
+        let upper_median3 = median3(arr_ptr.add(4), arr_ptr.add(5), arr_ptr.add(6), is_less);
+
+        let median_approx_ptr = median3(lower_median3, arr_ptr.add(3), upper_median3, is_less);
+        median_approx_ptr
     }
 }
 
@@ -961,7 +971,6 @@ where
 /// Calculates the median of 3 elements.
 ///
 /// SAFETY: a, b, c must be valid initialized elements.
-#[inline(always)]
 unsafe fn median3<T, F>(a: *const T, b: *const T, c: *const T, is_less: &mut F) -> *const T
 where
     F: FnMut(&T, &T) -> bool,
@@ -1026,57 +1035,6 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
             true
         } else {
             small_sort_default(v, is_less)
-        }
-    }
-
-    fn choose_pivot<F>(v: &mut [Self], is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        if const { is_cheap_to_move::<T>() } {
-            // Collecting values + sorting network is cheaper than swapping via indirection, even if
-            // it does more comparisons. See https://godbolt.org/z/qqoThxEP1 and
-            // https://godbolt.org/z/bh16s3Wfh. In addition this only access 1, at most 2
-            // cache-lines.
-
-            let len = v.len();
-
-            // It's a logic bug if this get's called on slice that would be small-sorted.
-            assert!(len > max_len_small_sort::<T>());
-
-            let len_div_2 = len / 2;
-
-            if len < 54 {
-                let start = len_div_2 - 2;
-                median5_optimal(&mut v[start..(start + 5)], is_less);
-            } else {
-                let start = len_div_2 - 4;
-
-                // Mitigate pathological cases that keep picking bad values. This works in
-                // conjunction with the heapsort fallback.
-                //
-                // This done in a way that allows the len_div_2 to remain the only value this
-                // functions returns.
-                let arr_ptr = v.as_mut_ptr();
-
-                let len_div_8 = len / 8;
-                let near_end = len_div_8 * 7;
-
-                // SAFETY: TODO
-                unsafe {
-                    ptr::swap_nonoverlapping(arr_ptr.add(len_div_8 + 1), arr_ptr.add(start), 3);
-                    ptr::swap_nonoverlapping(arr_ptr.add(near_end + 1), arr_ptr.add(start + 6), 3);
-                }
-
-                // The cyclic permutation of `partition_in_blocks` will further randomize the
-                // original pattern, avoiding even more situations where this would be a problem.
-                median9_optimal(&mut v[start..(start + 9)], is_less);
-            }
-
-            // It's important for the perf that this always returns the same value.
-            len_div_2
-        } else {
-            choose_pivot_default(v, is_less)
         }
     }
 
@@ -1618,72 +1576,4 @@ where
 #[inline(never)]
 fn panic_on_ord_violation() -> ! {
     panic!("Ord violation");
-}
-
-// --- Branchless median selection ---
-
-// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-// performance impact.
-#[inline(never)]
-fn median5_optimal<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 5.
-    assert!(v.len() == 5);
-
-    let arr_ptr = v.as_mut_ptr();
-
-    // Optimal median network see:
-    // https://bertdobbelaere.github.io/median_networks.html.
-
-    // We checked the len.
-    unsafe {
-        swap_if_less(arr_ptr, 0, 1, is_less);
-        swap_if_less(arr_ptr, 2, 3, is_less);
-        swap_if_less(arr_ptr, 0, 2, is_less);
-        swap_if_less(arr_ptr, 1, 3, is_less);
-        swap_if_less(arr_ptr, 2, 4, is_less);
-        swap_if_less(arr_ptr, 1, 2, is_less);
-        swap_if_less(arr_ptr, 2, 4, is_less);
-    }
-}
-
-// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-// performance impact.
-#[inline(never)]
-fn median9_optimal<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 9.
-    assert!(v.len() == 9);
-
-    let arr_ptr = v.as_mut_ptr();
-
-    // Optimal median network see:
-    // https://bertdobbelaere.github.io/median_networks.html.
-
-    // SAFETY: We checked the len.
-    unsafe {
-        swap_if_less(arr_ptr, 0, 7, is_less);
-        swap_if_less(arr_ptr, 1, 2, is_less);
-        swap_if_less(arr_ptr, 3, 5, is_less);
-        swap_if_less(arr_ptr, 4, 8, is_less);
-        swap_if_less(arr_ptr, 0, 2, is_less);
-        swap_if_less(arr_ptr, 1, 5, is_less);
-        swap_if_less(arr_ptr, 3, 8, is_less);
-        swap_if_less(arr_ptr, 4, 7, is_less);
-        swap_if_less(arr_ptr, 0, 3, is_less);
-        swap_if_less(arr_ptr, 1, 4, is_less);
-        swap_if_less(arr_ptr, 2, 8, is_less);
-        swap_if_less(arr_ptr, 5, 7, is_less);
-        swap_if_less(arr_ptr, 3, 4, is_less);
-        swap_if_less(arr_ptr, 5, 6, is_less);
-        swap_if_less(arr_ptr, 2, 5, is_less);
-        swap_if_less(arr_ptr, 4, 6, is_less);
-        swap_if_less(arr_ptr, 2, 3, is_less);
-        swap_if_less(arr_ptr, 4, 5, is_less);
-        swap_if_less(arr_ptr, 3, 4, is_less);
-    }
 }
