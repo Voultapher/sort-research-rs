@@ -78,6 +78,7 @@ def build_color_palette():
         # Stable
         "c_fluxsort_stable": palette[0],
         "cpp_std_sys_stable": palette[1],
+        "cpp_std_gnu_stable": palette[1],
         "cpp_std_msvc_stable": palette[1],
         "rust_std_stable": palette[2],
         "rust_glidesort_stable": palette[3],
@@ -89,6 +90,7 @@ def build_color_palette():
         # Unstable
         "c_crumsort_unstable": palette[0],
         "cpp_std_sys_unstable": palette[1],
+        "cpp_std_gnu_unstable": palette[1],
         "cpp_std_msvc_unstable": palette[1],
         "rust_std_unstable": palette[2],
         "cpp_pdqsort_unstable": palette[3],
