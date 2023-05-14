@@ -94,6 +94,7 @@ def build_color_palette():
         "cpp_pdqsort_unstable": palette[3],
         "cpp_std_libcxx_unstable": palette[4],
         "rust_ipn_unstable": palette[5],
+        "rust_ipnsort_unstable": palette[5],
         "cpp_ips4o_unstable": palette[6],
         "cpp_blockquicksort": palette[7],
         # There are more sorts but they don't really fit the graph or colors at
