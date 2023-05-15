@@ -17,28 +17,15 @@
 #ifndef HIGHWAY_HWY_CONTRIB_SORT_VQSORT_INL_H_
 #define HIGHWAY_HWY_CONTRIB_SORT_VQSORT_INL_H_
 
-#ifndef VQSORT_PRINT
-#define VQSORT_PRINT 0
-#endif
-
-// Makes it harder for adversaries to predict our sampling locations, at the
-// cost of 1-2% increased runtime.
-#ifndef VQSORT_SECURE_RNG
-#define VQSORT_SECURE_RNG 0
-#endif
-
-#if VQSORT_SECURE_RNG
-#include "third_party/absl/random/random.h"
-#endif
-
 #include <stdio.h>   // unconditional #include so we can use if(VQSORT_PRINT).
 #include <string.h>  // memcpy
 
+#include "../base.h"
 #include "../cache_control.h"  // Prefetch
 #include "vqsort.h"            // Fill24Bytes
 
-#if HWY_IS_MSAN
-#include <sanitizer/msan_interface.h>
+#ifndef VQSORT_PRINT
+#define VQSORT_PRINT 0
 #endif
 
 #endif  // HIGHWAY_HWY_CONTRIB_SORT_VQSORT_INL_H_
@@ -53,7 +40,7 @@
 #endif
 
 #if VQSORT_PRINT
-#include "../print-inl.h"
+#include "hwy/print-inl.h"
 #endif
 
 #include "shared-inl.h"
@@ -68,17 +55,7 @@ namespace detail {
 
 using Constants = hwy::SortConstants;
 
-// Wrappers to avoid #if in user code (interferes with code folding)
-
-HWY_INLINE void UnpoisonIfMemorySanitizer(void* p, size_t bytes) {
-#if HWY_IS_MSAN
-  __msan_unpoison(p, bytes);
-#else
-  (void)p;
-  (void)bytes;
-#endif
-}
-
+// Wrapper avoids #if in user code (interferes with code folding)
 template <class D>
 HWY_INLINE void MaybePrintVector(D d,
                                  const char* label,
@@ -155,65 +132,707 @@ void HeapSort(Traits st, T* HWY_RESTRICT lanes, const size_t num_lanes) {
 
 // ------------------------------ BaseCase
 
-// Sorts `keys` within the range [0, num) via sorting network.
-template <class D, class Traits, typename T>
-HWY_INLINE void BaseCase(D d,
-                         Traits st,
+// Special cases where `num_lanes` is in the specified range (inclusive).
+template <class Traits, typename T>
+HWY_INLINE void Sort0To8(Traits st,
                          T* HWY_RESTRICT keys,
-                         T* HWY_RESTRICT keys_end,
-                         size_t num,
+                         size_t num_lanes,
                          T* HWY_RESTRICT buf) {
-  const size_t N = Lanes(d);
-  using V = decltype(Zero(d));
+  constexpr size_t kLPK = st.LanesPerKey();
+  const size_t num_keys = num_lanes / kLPK;
+  HWY_DASSERT(num_keys <= 8);
+  HWY_ASSUME(num_keys <= 8);  // reduces branches
 
-  // _Nonzero32 requires num - 1 != 0.
-  if (HWY_UNLIKELY(num <= 1))
-    return;
+  // Copy into buffer so we only require a single masked load. Prevent using
+  // unnecessarily large vectors by capping - this sorting network only handles
+  // eight keys, so it does not make sense to load more.
+  const CappedTagIfFixed<T, 8 * kLPK> dmax;
+  const size_t Nmax = Lanes(dmax);
 
-  // Reshape into a matrix with kMaxRows rows, and columns limited by the
-  // 1D `num`, which is upper-bounded by the vector width (see BaseCaseNum).
-  const size_t num_pow2 = size_t{1}
-                          << (32 - Num0BitsAboveMS1Bit_Nonzero32(
-                                       static_cast<uint32_t>(num - 1)));
-  HWY_DASSERT(num <= num_pow2 && num_pow2 <= Constants::BaseCaseNum(N));
-  const size_t cols =
-      HWY_MAX(st.LanesPerKey(), num_pow2 >> Constants::kMaxRowsLog2);
-  HWY_DASSERT(cols <= N);
+  // Unless num_keys == 8, we pad the input because the sorting network is
+  // fixed-size.
+  const Vec<decltype(dmax)> kPadding = st.LastValue(dmax);
 
-  // We can avoid padding and load/store directly to `keys` after checking the
-  // original input array has enough space. Except at the right border, it's OK
-  // to sort more than the current sub-array. Even if we sort across a previous
-  // partition point, we know that keys will not migrate across it. However, we
-  // must use the maximum size of the sorting network, because the StoreU of its
-  // last vector would otherwise write invalid data starting at kMaxRows * cols.
-  const size_t N_sn = Lanes(CappedTag<T, Constants::kMaxCols>());
-  if (HWY_LIKELY(keys + N_sn * Constants::kMaxRows <= keys_end)) {
-    SortingNetwork(st, keys, N_sn);
-    return;
+  // Values to sort, and where to store the sorted output. This may point to
+  // buf, in which case it must be copied back to `keys`.
+  T* HWY_RESTRICT in_out = keys;
+  // Valid lanes in the last vector (only used if num_keys != 8).
+  Mask<decltype(dmax)> mask;
+
+  // Not all of the sorting network will be used. May require padding.
+  if (HWY_UNLIKELY(num_keys != 8)) {
+    // Done if there are zero or one keys to sort.
+    if (HWY_UNLIKELY(num_keys <= 1))
+      return;
+
+    in_out = buf;
+    // Copy whole vectors(s)
+    size_t i = 0;
+    for (; i + Nmax <= num_lanes; i += Nmax) {
+      Store(LoadU(dmax, keys + i), dmax, buf + i);
+    }
+
+    // Last iteration: copy partial vector.
+    const size_t remaining = num_lanes - i;
+    HWY_ASSUME(remaining < 256);  // helps FirstN
+    mask = FirstN(dmax, remaining);
+#if HWY_MEM_OPS_MIGHT_FAULT
+    SafeCopyN(remaining, dmax, keys + i, buf + i);
+    i = num_lanes;
+#else
+    Store(MaskedLoadOr(kPadding, mask, dmax, keys + i), dmax, buf + i);
+    i += Nmax;
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+    // If `d` is for exactly one key, we initialize 8 * kLPK lanes, and not just
+    // for MSAN: padding prevents invalid values from influencing the sort.
+    // But for 16-bit keys, loading a single lane may be inefficient, so we
+    // allow larger vectors than necessary. Only the first lane is used; the
+    // next lane is usually loaded from the next valid keys, but we require one
+    // more padding for the last vector loaded.
+    constexpr size_t extra = sizeof(T) == 2 ? 1 : 0;
+    for (; i < 8 * kLPK + extra; i += Nmax) {
+      StoreU(kPadding, dmax, buf + i);  // unaligned if HWY_MEM_OPS_MIGHT_FAULT
+    }
   }
 
-  // Copy `keys` to `buf`.
-  size_t i;
-  for (i = 0; i + N <= num; i += N) {
-    Store(LoadU(d, keys + i), d, buf + i);
+  // One key per vector (32.. 2x64 bit), or two for 16-bit (see above).
+  const CappedTag<T, HWY_MAX(kLPK, 4 / sizeof(T))> d;
+  using V = Vec<decltype(d)>;
+
+  V v0 = LoadU(d, in_out + 0x0 * kLPK);
+  V v1 = LoadU(d, in_out + 0x1 * kLPK);
+  V v2 = LoadU(d, in_out + 0x2 * kLPK);
+  V v3 = LoadU(d, in_out + 0x3 * kLPK);
+  V v4 = LoadU(d, in_out + 0x4 * kLPK);
+  V v5 = LoadU(d, in_out + 0x5 * kLPK);
+  V v6 = LoadU(d, in_out + 0x6 * kLPK);
+  V v7 = LoadU(d, in_out + 0x7 * kLPK);
+
+  Sort8(d, st, v0, v1, v2, v3, v4, v5, v6, v7);
+
+  StoreU(v0, d, in_out + 0x0 * kLPK);
+  StoreU(v1, d, in_out + 0x1 * kLPK);
+  StoreU(v2, d, in_out + 0x2 * kLPK);
+  StoreU(v3, d, in_out + 0x3 * kLPK);
+  StoreU(v4, d, in_out + 0x4 * kLPK);
+  StoreU(v5, d, in_out + 0x5 * kLPK);
+  StoreU(v6, d, in_out + 0x6 * kLPK);
+  StoreU(v7, d, in_out + 0x7 * kLPK);
+
+  // in_out == buf, so copy back to `keys`.
+  if (HWY_UNLIKELY(num_keys != 8)) {
+    size_t i = 0;
+    // Copy whole vectors(s).
+    for (; i + Nmax <= num_lanes; i += Nmax) {
+      StoreU(Load(dmax, buf + i), dmax, keys + i);
+    }
+    // Copy partial vector.
+    BlendedStore(Load(dmax, buf + i), mask, dmax, keys + i);
   }
-  SafeCopyN(num - i, d, keys + i, buf + i);
-  i = num;
+}
+
+template <size_t kVectors,
+          size_t kLPK,
+          size_t kLanesPerRow,
+          class D,
+          class Traits,
+          typename T = TFromD<D>>
+HWY_INLINE void CopyHalfToPaddedBuf(D d,
+                                    Traits st,
+                                    T* HWY_RESTRICT keys,
+                                    size_t num_lanes,
+                                    T* HWY_RESTRICT buf) {
+  constexpr size_t kMinLanes = kVectors / 2 * kLanesPerRow;
+  // Must cap for correctness: we will load up to the last valid lane, so
+  // Lanes(dmax) must not exceed `num_lanes` (known to be at least kMinLanes).
+  const CappedTag<T, kMinLanes> dmax;
+  const size_t Nmax = Lanes(dmax);
+  HWY_DASSERT(Nmax < num_lanes);
+  HWY_ASSUME(Nmax <= kMinLanes);
+
+  // Fill with padding - last in sort order, not copied to keys.
+  const Vec<decltype(dmax)> kPadding = st.LastValue(dmax);
+
+  // Rounding down allows aligned stores, which are typically faster.
+  size_t i = num_lanes & ~(Nmax - 1);
+  HWY_ASSUME(i != 0);  // because Nmax <= num_lanes; avoids branch
+  do {
+    Store(kPadding, dmax, buf + i);
+    i += Nmax;
+    // Initialize enough for the last vector even if Lanes > lanes_per_row.
+  } while (i < (kVectors - 1) * kLanesPerRow + Lanes(d));
+
+  // Ensure buf contains all we will read, and perhaps more before.
+  ptrdiff_t end = static_cast<ptrdiff_t>(num_lanes);
+  do {
+    end -= static_cast<ptrdiff_t>(Nmax);
+    StoreU(LoadU(dmax, keys + end), dmax, buf + end);
+  } while (end > static_cast<ptrdiff_t>(kVectors / 2 * kLanesPerRow));
+}
+
+// Stores all vectors into buf and copies them into keys without exceeding
+// `num_lanes`.
+template <size_t kLanesPerRow, class D, typename T = TFromD<D>>
+HWY_INLINE void SafeStore(D d,
+                          Vec<D> v4,
+                          Vec<D> v5,
+                          Vec<D> v6,
+                          Vec<D> v7,
+                          T* HWY_RESTRICT keys,
+                          size_t num_lanes,
+                          T* HWY_RESTRICT buf) {
+  StoreU(v4, d, buf + 0x4 * kLanesPerRow);
+  StoreU(v5, d, buf + 0x5 * kLanesPerRow);
+  StoreU(v6, d, buf + 0x6 * kLanesPerRow);
+  StoreU(v7, d, buf + 0x7 * kLanesPerRow);
+
+  const ScalableTag<T> dmax;
+  const size_t Nmax = Lanes(dmax);
+
+  // The first four vectors have already been stored unconditionally into
+  // `keys`, so we do not copy them.
+  size_t i = 4 * kLanesPerRow;
+  HWY_UNROLL(1)
+  for (; i + Nmax <= num_lanes; i += Nmax) {
+    StoreU(LoadU(dmax, buf + i), dmax, keys + i);
+  }
+
+  // Last iteration: copy partial vector
+  const size_t remaining = num_lanes - i;
+  HWY_ASSUME(remaining < 256);  // helps FirstN
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeCopyN(remaining, dmax, buf + i, keys + i);
+#else
+  Mask<decltype(dmax)> mask = FirstN(dmax, remaining);
+  BlendedStore(LoadU(dmax, buf + i), mask, dmax, keys + i);
+#endif
+}
+
+template <size_t kLanesPerRow, class D, typename T = TFromD<D>>
+HWY_INLINE void SafeStore(D d,
+                          Vec<D> v8,
+                          Vec<D> v9,
+                          Vec<D> va,
+                          Vec<D> vb,
+                          Vec<D> vc,
+                          Vec<D> vd,
+                          Vec<D> ve,
+                          Vec<D> vf,
+                          T* HWY_RESTRICT keys,
+                          size_t num_lanes,
+                          T* HWY_RESTRICT buf) {
+  StoreU(v8, d, buf + 0x8 * kLanesPerRow);
+  StoreU(v9, d, buf + 0x9 * kLanesPerRow);
+  StoreU(va, d, buf + 0xa * kLanesPerRow);
+  StoreU(vb, d, buf + 0xb * kLanesPerRow);
+  StoreU(vc, d, buf + 0xc * kLanesPerRow);
+  StoreU(vd, d, buf + 0xd * kLanesPerRow);
+  StoreU(ve, d, buf + 0xe * kLanesPerRow);
+  StoreU(vf, d, buf + 0xf * kLanesPerRow);
+
+  const ScalableTag<T> dmax;
+  const size_t Nmax = Lanes(dmax);
+
+  // The first eight vectors have already been stored unconditionally into
+  // `keys`, so we do not copy them.
+  size_t i = 8 * kLanesPerRow;
+  HWY_UNROLL(1)
+  for (; i + Nmax <= num_lanes; i += Nmax) {
+    StoreU(LoadU(dmax, buf + i), dmax, keys + i);
+  }
+
+  // Last iteration: copy partial vector
+  const size_t remaining = num_lanes - i;
+  HWY_ASSUME(remaining < 256);  // helps FirstN
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeCopyN(remaining, dmax, buf + i, keys + i);
+#else
+  Mask<decltype(dmax)> mask = FirstN(dmax, remaining);
+  BlendedStore(LoadU(dmax, buf + i), mask, dmax, keys + i);
+#endif
+}
+
+template <class Traits, typename T>
+HWY_INLINE void Sort9To16(Traits st,
+                          T* HWY_RESTRICT keys,
+                          size_t num_lanes,
+                          T* HWY_RESTRICT buf) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  const size_t num_keys = num_lanes / kLPK;
+  HWY_DASSERT(9 <= num_keys && num_keys <= 16);
+  HWY_ASSUME(num_keys <= 16);
+  // 16 keys divided by 8 rows equals 2 columns.
+  constexpr size_t kLanesPerRow = 2 * kLPK;
+
+  const CappedTag<T, kLanesPerRow> d;
+  using V = Vec<decltype(d)>;
+  V v0 = LoadU(d, keys + 0x0 * kLanesPerRow);
+  V v1 = LoadU(d, keys + 0x1 * kLanesPerRow);
+  V v2 = LoadU(d, keys + 0x2 * kLanesPerRow);
+  V v3 = LoadU(d, keys + 0x3 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  CopyHalfToPaddedBuf<8, kLPK, kLanesPerRow>(d, st, keys, num_lanes, buf);
+  V v4 = LoadU(d, buf + 0x4 * kLanesPerRow);
+  V v5 = LoadU(d, buf + 0x5 * kLanesPerRow);
+  V v6 = LoadU(d, buf + 0x6 * kLanesPerRow);
+  V v7 = LoadU(d, buf + 0x7 * kLanesPerRow);
+#else   // !HWY_MEM_OPS_MIGHT_FAULT
+  (void)buf;
+  // To prevent reading past the end, only activate the lanes corresponding to
+  // the first two keys (other lanes' masks will be false).
+  const V vnum_lanes = IfThenElseZero(FirstN(d, kLanesPerRow),
+                                      Set(d, static_cast<T>(num_lanes)));
+  const V kIota = Iota(d, T{8 * kLPK});
+  const V k2 = Set(d, T{kLanesPerRow});
+  const V k4 = Add(k2, k2);
+
+  using M = Mask<decltype(d)>;
+  const M m4 = Gt(vnum_lanes, kIota);
+  const M m5 = Gt(vnum_lanes, Add(kIota, k2));
+  const M m6 = Gt(vnum_lanes, Add(kIota, k4));
+  const M m7 = Gt(vnum_lanes, Add(kIota, Add(k4, k2)));
 
   // Fill with padding - last in sort order, not copied to keys.
   const V kPadding = st.LastValue(d);
-  // Initialize an extra vector because SortingNetwork loads full vectors,
-  // which may exceed cols*kMaxRows.
-  for (; i < (cols * Constants::kMaxRows + N); i += N) {
-    StoreU(kPadding, d, buf + i);
-  }
 
-  SortingNetwork(st, buf, cols);
+  V v4 = MaskedLoadOr(kPadding, m4, d, keys + 0x4 * kLanesPerRow);
+  V v5 = MaskedLoadOr(kPadding, m5, d, keys + 0x5 * kLanesPerRow);
+  V v6 = MaskedLoadOr(kPadding, m6, d, keys + 0x6 * kLanesPerRow);
+  V v7 = MaskedLoadOr(kPadding, m7, d, keys + 0x7 * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
 
-  for (i = 0; i + N <= num; i += N) {
-    StoreU(Load(d, buf + i), d, keys + i);
-  }
-  SafeCopyN(num - i, d, buf + i, keys + i);
+  Sort8(d, st, v0, v1, v2, v3, v4, v5, v6, v7);
+  Merge8x2(d, st, v0, v1, v2, v3, v4, v5, v6, v7);
+
+  StoreU(v0, d, keys + 0x0 * kLanesPerRow);
+  StoreU(v1, d, keys + 0x1 * kLanesPerRow);
+  StoreU(v2, d, keys + 0x2 * kLanesPerRow);
+  StoreU(v3, d, keys + 0x3 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeStore<kLanesPerRow>(d, v4, v5, v6, v7, keys, num_lanes, buf);
+#else
+  BlendedStore(v4, m4, d, keys + 0x4 * kLanesPerRow);
+  BlendedStore(v5, m5, d, keys + 0x5 * kLanesPerRow);
+  BlendedStore(v6, m6, d, keys + 0x6 * kLanesPerRow);
+  BlendedStore(v7, m7, d, keys + 0x7 * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+}
+
+template <class Traits, typename T>
+HWY_INLINE void Sort17To32(Traits st,
+                           T* HWY_RESTRICT keys,
+                           size_t num_lanes,
+                           T* HWY_RESTRICT buf) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  const size_t num_keys = num_lanes / kLPK;
+  HWY_DASSERT(17 <= num_keys && num_keys <= 32);
+  HWY_ASSUME(num_keys <= 32);
+  (void)num_keys;
+  // 32 keys divided by 8 rows equals 4 columns.
+  constexpr size_t kLanesPerRow = 4 * kLPK;
+
+  const CappedTag<T, kLanesPerRow> d;
+  using V = Vec<decltype(d)>;
+  V v0 = LoadU(d, keys + 0x0 * kLanesPerRow);
+  V v1 = LoadU(d, keys + 0x1 * kLanesPerRow);
+  V v2 = LoadU(d, keys + 0x2 * kLanesPerRow);
+  V v3 = LoadU(d, keys + 0x3 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  CopyHalfToPaddedBuf<8, kLPK, kLanesPerRow>(d, st, keys, num_lanes, buf);
+  V v4 = LoadU(d, buf + 0x4 * kLanesPerRow);
+  V v5 = LoadU(d, buf + 0x5 * kLanesPerRow);
+  V v6 = LoadU(d, buf + 0x6 * kLanesPerRow);
+  V v7 = LoadU(d, buf + 0x7 * kLanesPerRow);
+#else   // !HWY_MEM_OPS_MIGHT_FAULT
+  (void)buf;
+  // To prevent reading past the end, only activate the lanes corresponding to
+  // the first four keys (other lanes' masks will be false).
+  const V vnum_lanes = IfThenElseZero(FirstN(d, kLanesPerRow),
+                                      Set(d, static_cast<T>(num_lanes)));
+  const V kIota = Iota(d, T{16 * kLPK});
+  const V k4 = Set(d, T{kLanesPerRow});
+  const V k8 = Add(k4, k4);
+
+  using M = Mask<decltype(d)>;
+  const M m4 = Gt(vnum_lanes, kIota);
+  const M m5 = Gt(vnum_lanes, Add(kIota, k4));
+  const M m6 = Gt(vnum_lanes, Add(kIota, k8));
+  const M m7 = Gt(vnum_lanes, Add(kIota, Add(k8, k4)));
+
+  // Fill with padding - last in sort order, not copied to keys.
+  const V kPadding = st.LastValue(d);
+
+  V v4 = MaskedLoadOr(kPadding, m4, d, keys + 0x4 * kLanesPerRow);
+  V v5 = MaskedLoadOr(kPadding, m5, d, keys + 0x5 * kLanesPerRow);
+  V v6 = MaskedLoadOr(kPadding, m6, d, keys + 0x6 * kLanesPerRow);
+  V v7 = MaskedLoadOr(kPadding, m7, d, keys + 0x7 * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+
+  Sort8(d, st, v0, v1, v2, v3, v4, v5, v6, v7);
+  Merge8x2(d, st, v0, v1, v2, v3, v4, v5, v6, v7);
+  Merge8x4(d, st, v0, v1, v2, v3, v4, v5, v6, v7);
+
+  StoreU(v0, d, keys + 0x0 * kLanesPerRow);
+  StoreU(v1, d, keys + 0x1 * kLanesPerRow);
+  StoreU(v2, d, keys + 0x2 * kLanesPerRow);
+  StoreU(v3, d, keys + 0x3 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeStore<kLanesPerRow>(d, v4, v5, v6, v7, keys, num_lanes, buf);
+#else
+  BlendedStore(v4, m4, d, keys + 0x4 * kLanesPerRow);
+  BlendedStore(v5, m5, d, keys + 0x5 * kLanesPerRow);
+  BlendedStore(v6, m6, d, keys + 0x6 * kLanesPerRow);
+  BlendedStore(v7, m7, d, keys + 0x7 * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+}
+
+template <class Traits, typename T>
+HWY_INLINE void Sort33To64(Traits st,
+                           T* HWY_RESTRICT keys,
+                           size_t num_lanes,
+                           T* HWY_RESTRICT buf) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  HWY_DASSERT(33 * kLPK <= num_lanes && num_lanes <= 64 * kLPK);
+  // 64 keys divided by 16 rows equals 4 columns.
+  constexpr size_t kLanesPerRow = 4 * kLPK;
+
+  const CappedTag<T, kLanesPerRow> d;
+  using V = Vec<decltype(d)>;
+
+  // We know there are at least 32 keys (8 vectors), so load unconditionally.
+  V v0 = LoadU(d, keys + 0x0 * kLanesPerRow);
+  V v1 = LoadU(d, keys + 0x1 * kLanesPerRow);
+  V v2 = LoadU(d, keys + 0x2 * kLanesPerRow);
+  V v3 = LoadU(d, keys + 0x3 * kLanesPerRow);
+  V v4 = LoadU(d, keys + 0x4 * kLanesPerRow);
+  V v5 = LoadU(d, keys + 0x5 * kLanesPerRow);
+  V v6 = LoadU(d, keys + 0x6 * kLanesPerRow);
+  V v7 = LoadU(d, keys + 0x7 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  CopyHalfToPaddedBuf<16, kLPK, kLanesPerRow>(d, st, keys, num_lanes, buf);
+  V v8 = LoadU(d, buf + 0x8 * kLanesPerRow);
+  V v9 = LoadU(d, buf + 0x9 * kLanesPerRow);
+  V va = LoadU(d, buf + 0xa * kLanesPerRow);
+  V vb = LoadU(d, buf + 0xb * kLanesPerRow);
+  V vc = LoadU(d, buf + 0xc * kLanesPerRow);
+  V vd = LoadU(d, buf + 0xd * kLanesPerRow);
+  V ve = LoadU(d, buf + 0xe * kLanesPerRow);
+  V vf = LoadU(d, buf + 0xf * kLanesPerRow);
+#else   // !HWY_MEM_OPS_MIGHT_FAULT
+  (void)buf;
+
+  // To prevent reading past the end, only activate the lanes corresponding to
+  // the first four keys (other lanes' masks will be false).
+  const V vnum_lanes = IfThenElseZero(FirstN(d, kLanesPerRow),
+                                      Set(d, static_cast<T>(num_lanes)));
+  const V kIota = Iota(d, T{32 * kLPK});
+  const V k4 = Set(d, T{kLanesPerRow});
+  const V k8 = Add(k4, k4);
+  const V k16 = Add(k8, k8);
+  const V k32 = Add(k16, k16);
+
+  using M = Mask<decltype(d)>;
+  const M m8 = Gt(vnum_lanes, kIota);
+  const M m9 = Gt(vnum_lanes, Add(kIota, k4));
+  const M ma = Gt(vnum_lanes, Add(kIota, k8));
+  const M mb = Gt(vnum_lanes, Add(kIota, Add(k8, k4)));
+  const M mc = Gt(vnum_lanes, Add(kIota, k16));
+  const M md = Gt(vnum_lanes, Add(kIota, Add(k16, k4)));
+  const M me = Gt(vnum_lanes, Add(kIota, Add(k16, k8)));
+  const M mf = Gt(vnum_lanes, Add(kIota, Sub(k32, k4)));
+
+  // Fill with padding - last in sort order, not copied to keys.
+  const V kPadding = st.LastValue(d);
+
+  V v8 = MaskedLoadOr(kPadding, m8, d, keys + 0x8 * kLanesPerRow);
+  V v9 = MaskedLoadOr(kPadding, m9, d, keys + 0x9 * kLanesPerRow);
+  V va = MaskedLoadOr(kPadding, ma, d, keys + 0xa * kLanesPerRow);
+  V vb = MaskedLoadOr(kPadding, mb, d, keys + 0xb * kLanesPerRow);
+  V vc = MaskedLoadOr(kPadding, mc, d, keys + 0xc * kLanesPerRow);
+  V vd = MaskedLoadOr(kPadding, md, d, keys + 0xd * kLanesPerRow);
+  V ve = MaskedLoadOr(kPadding, me, d, keys + 0xe * kLanesPerRow);
+  V vf = MaskedLoadOr(kPadding, mf, d, keys + 0xf * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+
+  Sort16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve, vf);
+  Merge16x2(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+  Merge16x4(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+
+  StoreU(v0, d, keys + 0x0 * kLanesPerRow);
+  StoreU(v1, d, keys + 0x1 * kLanesPerRow);
+  StoreU(v2, d, keys + 0x2 * kLanesPerRow);
+  StoreU(v3, d, keys + 0x3 * kLanesPerRow);
+  StoreU(v4, d, keys + 0x4 * kLanesPerRow);
+  StoreU(v5, d, keys + 0x5 * kLanesPerRow);
+  StoreU(v6, d, keys + 0x6 * kLanesPerRow);
+  StoreU(v7, d, keys + 0x7 * kLanesPerRow);
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeStore<kLanesPerRow>(d, v8, v9, va, vb, vc, vd, ve, vf, keys, num_lanes,
+                          buf);
+#else
+  BlendedStore(v8, m8, d, keys + 0x8 * kLanesPerRow);
+  BlendedStore(v9, m9, d, keys + 0x9 * kLanesPerRow);
+  BlendedStore(va, ma, d, keys + 0xa * kLanesPerRow);
+  BlendedStore(vb, mb, d, keys + 0xb * kLanesPerRow);
+  BlendedStore(vc, mc, d, keys + 0xc * kLanesPerRow);
+  BlendedStore(vd, md, d, keys + 0xd * kLanesPerRow);
+  BlendedStore(ve, me, d, keys + 0xe * kLanesPerRow);
+  BlendedStore(vf, mf, d, keys + 0xf * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+}
+
+template <class Traits, typename T>
+HWY_INLINE void Sort65To128(Traits st,
+                            T* HWY_RESTRICT keys,
+                            size_t num_lanes,
+                            T* HWY_RESTRICT buf) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  HWY_DASSERT(65 * kLPK <= num_lanes && num_lanes <= 128 * kLPK);
+  // 128 keys divided by 16 rows equals 8 columns.
+  constexpr size_t kLanesPerRow = 8 * kLPK;
+
+  // Eight keys per vector (128..512 bit).
+  const CappedTag<T, kLanesPerRow> d;
+  using V = Vec<decltype(d)>;
+
+  // We know there are at least 64 keys (8 vectors), so load unconditionally.
+  V v0 = LoadU(d, keys + 0x0 * kLanesPerRow);
+  V v1 = LoadU(d, keys + 0x1 * kLanesPerRow);
+  V v2 = LoadU(d, keys + 0x2 * kLanesPerRow);
+  V v3 = LoadU(d, keys + 0x3 * kLanesPerRow);
+  V v4 = LoadU(d, keys + 0x4 * kLanesPerRow);
+  V v5 = LoadU(d, keys + 0x5 * kLanesPerRow);
+  V v6 = LoadU(d, keys + 0x6 * kLanesPerRow);
+  V v7 = LoadU(d, keys + 0x7 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  CopyHalfToPaddedBuf<16, kLPK, kLanesPerRow>(d, st, keys, num_lanes, buf);
+  V v8 = LoadU(d, buf + 0x8 * kLanesPerRow);
+  V v9 = LoadU(d, buf + 0x9 * kLanesPerRow);
+  V va = LoadU(d, buf + 0xa * kLanesPerRow);
+  V vb = LoadU(d, buf + 0xb * kLanesPerRow);
+  V vc = LoadU(d, buf + 0xc * kLanesPerRow);
+  V vd = LoadU(d, buf + 0xd * kLanesPerRow);
+  V ve = LoadU(d, buf + 0xe * kLanesPerRow);
+  V vf = LoadU(d, buf + 0xf * kLanesPerRow);
+#else
+  (void)buf;
+
+  // All lanes are now valid, so no need for FirstN.
+  const V vnum_lanes = Set(d, static_cast<T>(num_lanes));
+  const V kIota = Iota(d, T{64 * kLPK});
+  const V k8 = Set(d, T{kLanesPerRow});
+  const V k16 = Add(k8, k8);
+  const V k32 = Add(k16, k16);
+  const V k64 = Add(k32, k32);
+
+  using M = Mask<decltype(d)>;
+  const M m8 = Gt(vnum_lanes, kIota);
+  const M m9 = Gt(vnum_lanes, Add(kIota, k8));
+  const M ma = Gt(vnum_lanes, Add(kIota, k16));
+  const M mb = Gt(vnum_lanes, Add(kIota, Add(k16, k8)));
+  const M mc = Gt(vnum_lanes, Add(kIota, k32));
+  const M md = Gt(vnum_lanes, Add(kIota, Add(k32, k8)));
+  const M me = Gt(vnum_lanes, Add(kIota, Sub(k64, k16)));
+  const M mf = Gt(vnum_lanes, Add(kIota, Sub(k64, k8)));
+
+  // Fill with padding - last in sort order, not copied to keys.
+  const V kPadding = st.LastValue(d);
+  V v8 = MaskedLoadOr(kPadding, m8, d, keys + 0x8 * kLanesPerRow);
+  V v9 = MaskedLoadOr(kPadding, m9, d, keys + 0x9 * kLanesPerRow);
+  V va = MaskedLoadOr(kPadding, ma, d, keys + 0xa * kLanesPerRow);
+  V vb = MaskedLoadOr(kPadding, mb, d, keys + 0xb * kLanesPerRow);
+  V vc = MaskedLoadOr(kPadding, mc, d, keys + 0xc * kLanesPerRow);
+  V vd = MaskedLoadOr(kPadding, md, d, keys + 0xd * kLanesPerRow);
+  V ve = MaskedLoadOr(kPadding, me, d, keys + 0xe * kLanesPerRow);
+  V vf = MaskedLoadOr(kPadding, mf, d, keys + 0xf * kLanesPerRow);
+#endif  //  HWY_MEM_OPS_MIGHT_FAULT
+
+  Sort16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve, vf);
+  Merge16x2(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+  Merge16x4(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+  Merge16x8(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+
+  StoreU(v0, d, keys + 0x0 * kLanesPerRow);
+  StoreU(v1, d, keys + 0x1 * kLanesPerRow);
+  StoreU(v2, d, keys + 0x2 * kLanesPerRow);
+  StoreU(v3, d, keys + 0x3 * kLanesPerRow);
+  StoreU(v4, d, keys + 0x4 * kLanesPerRow);
+  StoreU(v5, d, keys + 0x5 * kLanesPerRow);
+  StoreU(v6, d, keys + 0x6 * kLanesPerRow);
+  StoreU(v7, d, keys + 0x7 * kLanesPerRow);
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeStore<kLanesPerRow>(d, v8, v9, va, vb, vc, vd, ve, vf, keys, num_lanes,
+                          buf);
+#else
+  BlendedStore(v8, m8, d, keys + 0x8 * kLanesPerRow);
+  BlendedStore(v9, m9, d, keys + 0x9 * kLanesPerRow);
+  BlendedStore(va, ma, d, keys + 0xa * kLanesPerRow);
+  BlendedStore(vb, mb, d, keys + 0xb * kLanesPerRow);
+  BlendedStore(vc, mc, d, keys + 0xc * kLanesPerRow);
+  BlendedStore(vd, md, d, keys + 0xd * kLanesPerRow);
+  BlendedStore(ve, me, d, keys + 0xe * kLanesPerRow);
+  BlendedStore(vf, mf, d, keys + 0xf * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+}
+
+#if !HWY_COMPILER_MSVC && !HWY_IS_DEBUG_BUILD
+
+template <class Traits, typename T>
+HWY_INLINE void Sort129To256(Traits st,
+                             T* HWY_RESTRICT keys,
+                             size_t num_lanes,
+                             T* HWY_RESTRICT buf) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  HWY_DASSERT(129 * kLPK <= num_lanes && num_lanes <= 256 * kLPK);
+  // 256 keys divided by 16 rows equals 16 columns.
+  constexpr size_t kLanesPerRow = 16 * kLPK;
+
+  // 16 keys per vector (256..512 bit).
+  const CappedTag<T, kLanesPerRow> d;
+  using V = Vec<decltype(d)>;
+
+  // We know there are at least 64 keys (8 vectors), so load unconditionally.
+  V v0 = LoadU(d, keys + 0x0 * kLanesPerRow);
+  V v1 = LoadU(d, keys + 0x1 * kLanesPerRow);
+  V v2 = LoadU(d, keys + 0x2 * kLanesPerRow);
+  V v3 = LoadU(d, keys + 0x3 * kLanesPerRow);
+  V v4 = LoadU(d, keys + 0x4 * kLanesPerRow);
+  V v5 = LoadU(d, keys + 0x5 * kLanesPerRow);
+  V v6 = LoadU(d, keys + 0x6 * kLanesPerRow);
+  V v7 = LoadU(d, keys + 0x7 * kLanesPerRow);
+
+#if HWY_MEM_OPS_MIGHT_FAULT
+  CopyHalfToPaddedBuf<16, kLPK, kLanesPerRow>(d, st, keys, num_lanes, buf);
+  V v8 = LoadU(d, buf + 0x8 * kLanesPerRow);
+  V v9 = LoadU(d, buf + 0x9 * kLanesPerRow);
+  V va = LoadU(d, buf + 0xa * kLanesPerRow);
+  V vb = LoadU(d, buf + 0xb * kLanesPerRow);
+  V vc = LoadU(d, buf + 0xc * kLanesPerRow);
+  V vd = LoadU(d, buf + 0xd * kLanesPerRow);
+  V ve = LoadU(d, buf + 0xe * kLanesPerRow);
+  V vf = LoadU(d, buf + 0xf * kLanesPerRow);
+#else
+  (void)buf;
+
+  // All lanes are now valid, so no need for FirstN.
+  const V vnum_lanes = Set(d, static_cast<T>(num_lanes));
+  const V kIota = Iota(d, T{128 * kLPK});
+  const V k16 = Set(d, T{kLanesPerRow});
+  const V k32 = Add(k16, k16);
+  const V k64 = Add(k32, k32);
+  const V k128 = Add(k64, k64);
+
+  using M = Mask<decltype(d)>;
+  const M m8 = Gt(vnum_lanes, kIota);
+  const M m9 = Gt(vnum_lanes, Add(kIota, k16));
+  const M ma = Gt(vnum_lanes, Add(kIota, k32));
+  const M mb = Gt(vnum_lanes, Add(kIota, Add(k32, k16)));
+  const M mc = Gt(vnum_lanes, Add(kIota, k64));
+  const M md = Gt(vnum_lanes, Add(kIota, Add(k64, k16)));
+  const M me = Gt(vnum_lanes, Add(kIota, Sub(k128, k32)));
+  const M mf = Gt(vnum_lanes, Add(kIota, Sub(k128, k16)));
+
+  // Fill with padding - last in sort order, not copied to keys.
+  const V kPadding = st.LastValue(d);
+  V v8 = MaskedLoadOr(kPadding, m8, d, keys + 0x8 * kLanesPerRow);
+  V v9 = MaskedLoadOr(kPadding, m9, d, keys + 0x9 * kLanesPerRow);
+  V va = MaskedLoadOr(kPadding, ma, d, keys + 0xa * kLanesPerRow);
+  V vb = MaskedLoadOr(kPadding, mb, d, keys + 0xb * kLanesPerRow);
+  V vc = MaskedLoadOr(kPadding, mc, d, keys + 0xc * kLanesPerRow);
+  V vd = MaskedLoadOr(kPadding, md, d, keys + 0xd * kLanesPerRow);
+  V ve = MaskedLoadOr(kPadding, me, d, keys + 0xe * kLanesPerRow);
+  V vf = MaskedLoadOr(kPadding, mf, d, keys + 0xf * kLanesPerRow);
+#endif  //  HWY_MEM_OPS_MIGHT_FAULT
+
+  Sort16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve, vf);
+  Merge16x2(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+  Merge16x4(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+  Merge16x8(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+  Merge16x16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+             vf);
+
+  StoreU(v0, d, keys + 0x0 * kLanesPerRow);
+  StoreU(v1, d, keys + 0x1 * kLanesPerRow);
+  StoreU(v2, d, keys + 0x2 * kLanesPerRow);
+  StoreU(v3, d, keys + 0x3 * kLanesPerRow);
+  StoreU(v4, d, keys + 0x4 * kLanesPerRow);
+  StoreU(v5, d, keys + 0x5 * kLanesPerRow);
+  StoreU(v6, d, keys + 0x6 * kLanesPerRow);
+  StoreU(v7, d, keys + 0x7 * kLanesPerRow);
+#if HWY_MEM_OPS_MIGHT_FAULT
+  SafeStore<kLanesPerRow>(d, v8, v9, va, vb, vc, vd, ve, vf, keys, num_lanes,
+                          buf);
+#else
+  BlendedStore(v8, m8, d, keys + 0x8 * kLanesPerRow);
+  BlendedStore(v9, m9, d, keys + 0x9 * kLanesPerRow);
+  BlendedStore(va, ma, d, keys + 0xa * kLanesPerRow);
+  BlendedStore(vb, mb, d, keys + 0xb * kLanesPerRow);
+  BlendedStore(vc, mc, d, keys + 0xc * kLanesPerRow);
+  BlendedStore(vd, md, d, keys + 0xd * kLanesPerRow);
+  BlendedStore(ve, me, d, keys + 0xe * kLanesPerRow);
+  BlendedStore(vf, mf, d, keys + 0xf * kLanesPerRow);
+#endif  // HWY_MEM_OPS_MIGHT_FAULT
+}
+
+#endif  // !HWY_COMPILER_MSVC && !HWY_IS_DEBUG_BUILD
+
+// Sorts `keys` within the range [0, num_lanes) via sorting network.
+// Reshapes into a matrix, sorts columns independently, and then merges
+// into a sorted 1D array without transposing.
+//
+// `st` is SharedTraits<Traits*<Order*>>. This abstraction layer bridges
+//   differences in sort order and single-lane vs 128-bit keys.
+//
+// See M. Blacher's thesis: https://github.com/mark-blacher/masterthesis
+template <class D, class Traits, typename T>
+HWY_NOINLINE void BaseCase(D d,
+                           Traits st,
+                           T* HWY_RESTRICT keys,
+                           size_t num_lanes,
+                           T* buf) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  HWY_DASSERT(num_lanes <= Constants::BaseCaseNumLanes<kLPK>(Lanes(d)));
+  // Checking kMaxKeys avoids generating unreachable HWY_ASSERT codepaths.
+  constexpr size_t kMaxKeys = MaxLanes(d) / kLPK;
+  const size_t num_keys = num_lanes / kLPK;
+
+  // Can be zero when called through HandleSpecialCases, but also 1 (in which
+  // case the array is already sorted). Also ensures num_lanes - 1 != 0.
+  if (HWY_UNLIKELY(num_keys <= 1))
+    return;
+
+  const size_t ceil_log2 =
+      32 - Num0BitsAboveMS1Bit_Nonzero32(static_cast<uint32_t>(num_keys - 1));
+  using FuncPtr = decltype(&Sort0To8<Traits, T>);
+  const FuncPtr funcs[9] = {
+    /* <= 1 */ nullptr,  // We ensured num_keys > 1.
+    /* <= 2 */ &Sort0To8<Traits, T>,
+    /* <= 4 */ &Sort0To8<Traits, T>,
+    /* <= 8 */ &Sort0To8<Traits, T>,
+    /* <= 16 */ kMaxKeys >= 2 ? &Sort9To16<Traits, T> : nullptr,
+    // 4 because this is an 8x4 network; everything after is 16x4..
+    /* <= 32 */ kMaxKeys >= 4 ? &Sort17To32<Traits, T> : nullptr,
+    /* <= 64 */ kMaxKeys >= 4 ? &Sort33To64<Traits, T> : nullptr,
+    /* <= 128 */ kMaxKeys >= 8 ? &Sort65To128<Traits, T> : nullptr,
+#if !HWY_COMPILER_MSVC && !HWY_IS_DEBUG_BUILD
+    /* <= 256 */ kMaxKeys >= 16 ? &Sort129To256<Traits, T> : nullptr,
+#endif
+  };
+  funcs[ceil_log2](st, keys, num_lanes, buf);
 }
 
 // ------------------------------ Partition
@@ -257,7 +876,7 @@ HWY_INLINE size_t PartitionToMultipleOfUnroll(D d,
   }
 
   // MSAN seems not to understand CompressStore. buf[0, bufR) are valid.
-  UnpoisonIfMemorySanitizer(buf, bufR * sizeof(T));
+  detail::MaybeUnpoison(buf, bufR);
 
   // Everything we loaded was put into buf, or behind the current `posL`, after
   // which there is space for bufR items. First move items from `keys + num` to
@@ -273,8 +892,7 @@ HWY_INLINE size_t PartitionToMultipleOfUnroll(D d,
 
 template <class V>
 V OrXor(const V o, const V x1, const V x2) {
-  // TODO(janwas): add op so we can benefit from AVX-512 ternlog?
-  return Or(o, Xor(x1, x2));
+  return Or(o, Xor(x1, x2));  // ternlog on AVX3
 }
 
 // Note: we could track the OrXor of v and pivot to see if the entire left
@@ -726,7 +1344,7 @@ HWY_INLINE bool PartitionIfTwoSamples(D d,
                                       T* HWY_RESTRICT keys,
                                       size_t num,
                                       T* HWY_RESTRICT samples) {
-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);
+  constexpr size_t kSampleLanes = Constants::SampleLanes<T>();
   constexpr size_t N1 = st.LanesPerKey();
   const Vec<D> valueL = st.SetKey(d, samples);
   const Vec<D> valueR = st.SetKey(d, samples + kSampleLanes - N1);
@@ -766,42 +1384,18 @@ HWY_INLINE V MedianOf3(Traits st, V v0, V v1, V v2) {
   return v1;
 }
 
-#if VQSORT_SECURE_RNG
-using Generator = absl::BitGen;
-#else
 // Based on https://github.com/numpy/numpy/issues/16313#issuecomment-641897028
-#pragma pack(push, 1)
-class Generator {
- public:
-  Generator(const void* heap, size_t num) {
-    Sorter::Fill24Bytes(heap, num, &a_);
-    k_ = 1;  // stream index: must be odd
-  }
-
-  explicit Generator(uint64_t seed) {
-    a_ = b_ = w_ = seed;
-    k_ = 1;
-  }
-
-  uint64_t operator()() {
-    const uint64_t b = b_;
-    w_ += k_;
-    const uint64_t next = a_ ^ w_;
-    a_ = (b + (b << 3)) ^ (b >> 11);
-    const uint64_t rot = (b << 24) | (b >> 40);
-    b_ = rot + next;
-    return next;
-  }
-
- private:
-  uint64_t a_;
-  uint64_t b_;
-  uint64_t w_;
-  uint64_t k_;  // increment
-};
-#pragma pack(pop)
-
-#endif  // !VQSORT_SECURE_RNG
+HWY_INLINE uint64_t RandomBits(uint64_t* HWY_RESTRICT state) {
+  const uint64_t a = state[0];
+  const uint64_t b = state[1];
+  const uint64_t w = state[2] + 1;
+  const uint64_t next = a ^ w;
+  state[0] = (b + (b << 3)) ^ (b >> 11);
+  const uint64_t rot = (b << 24) | (b >> 40);
+  state[1] = rot + next;
+  state[2] = w;
+  return next;
+}
 
 // Returns slightly biased random index of a chunk in [0, num_chunks).
 // See https://www.pcg-random.org/posts/bounded-rands.html.
@@ -818,16 +1412,16 @@ HWY_INLINE void DrawSamples(D d,
                             T* HWY_RESTRICT keys,
                             size_t num,
                             T* HWY_RESTRICT buf,
-                            Generator& rng) {
+                            uint64_t* HWY_RESTRICT state) {
   using V = decltype(Zero(d));
   const size_t N = Lanes(d);
 
   // Power of two
   constexpr size_t kLanesPerChunk = Constants::LanesPerChunk(sizeof(T));
 
-  // Align start of keys to chunks. We always have at least 2 chunks because the
-  // base case would have handled anything up to 16 vectors, i.e. >= 4 chunks.
-  HWY_DASSERT(num >= 2 * kLanesPerChunk);
+  // Align start of keys to chunks. We have at least 2 chunks (x 64 bytes)
+  // because the base case handles anything up to 8 vectors (x 16 bytes).
+  HWY_DASSERT(num >= Constants::SampleLanes<T>());
   const size_t misalign =
       (reinterpret_cast<uintptr_t>(keys) / sizeof(T)) & (kLanesPerChunk - 1);
   if (misalign != 0) {
@@ -836,12 +1430,12 @@ HWY_INLINE void DrawSamples(D d,
     num -= consume;
   }
 
-  // Generate enough random bits for 9 uint32
-  uint64_t* bits64 = reinterpret_cast<uint64_t*>(buf);
-  for (size_t i = 0; i < 5; ++i) {
-    bits64[i] = rng();
+  // Generate enough random bits for 6 uint32
+  uint32_t bits[6];
+  for (size_t i = 0; i < 6; i += 2) {
+    const uint64_t bits64 = RandomBits(state);
+    CopyBytes<8>(&bits64, bits + i);
   }
-  const uint32_t* bits = reinterpret_cast<const uint32_t*>(buf);
 
   const size_t num_chunks64 = num / kLanesPerChunk;
   // Clamp to uint32 for RandomChunkIndex
@@ -854,9 +1448,6 @@ HWY_INLINE void DrawSamples(D d,
   const size_t offset3 = RandomChunkIndex(num_chunks, bits[3]) * kLanesPerChunk;
   const size_t offset4 = RandomChunkIndex(num_chunks, bits[4]) * kLanesPerChunk;
   const size_t offset5 = RandomChunkIndex(num_chunks, bits[5]) * kLanesPerChunk;
-  const size_t offset6 = RandomChunkIndex(num_chunks, bits[6]) * kLanesPerChunk;
-  const size_t offset7 = RandomChunkIndex(num_chunks, bits[7]) * kLanesPerChunk;
-  const size_t offset8 = RandomChunkIndex(num_chunks, bits[8]) * kLanesPerChunk;
   for (size_t i = 0; i < kLanesPerChunk; i += N) {
     const V v0 = Load(d, keys + offset0 + i);
     const V v1 = Load(d, keys + offset1 + i);
@@ -869,12 +1460,6 @@ HWY_INLINE void DrawSamples(D d,
     const V v5 = Load(d, keys + offset5 + i);
     const V medians1 = MedianOf3(st, v3, v4, v5);
     Store(medians1, d, buf + i + kLanesPerChunk);
-
-    const V v6 = Load(d, keys + offset6 + i);
-    const V v7 = Load(d, keys + offset7 + i);
-    const V v8 = Load(d, keys + offset8 + i);
-    const V medians2 = MedianOf3(st, v6, v7, v8);
-    Store(medians2, d, buf + i + kLanesPerChunk * 2);
   }
 }
 
@@ -883,47 +1468,33 @@ template <class D, class Traits>
 HWY_INLINE bool UnsortedSampleEqual(D d,
                                     Traits st,
                                     const TFromD<D>* HWY_RESTRICT samples) {
-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(TFromD<D>);
+  constexpr size_t kSampleLanes = Constants::SampleLanes<TFromD<D>>();
   const size_t N = Lanes(d);
+  // Both are powers of two, so there will be no remainders.
+  HWY_DASSERT(N < kSampleLanes);
   using V = Vec<D>;
 
   const V first = st.SetKey(d, samples);
   // OR of XOR-difference may be faster than comparison.
   V diff = Zero(d);
-  size_t i = 0;
-  for (; i + N <= kSampleLanes; i += N) {
+  for (size_t i = 0; i < kSampleLanes; i += N) {
     const V v = Load(d, samples + i);
     diff = OrXor(diff, first, v);
   }
-  // Remainder, if any.
-  const V v = Load(d, samples + i);
-  const auto valid = FirstN(d, kSampleLanes - i);
-  diff = IfThenElse(valid, OrXor(diff, first, v), diff);
 
   return st.NoKeyDifference(d, diff);
 }
 
 template <class D, class Traits, typename T>
 HWY_INLINE void SortSamples(D d, Traits st, T* HWY_RESTRICT buf) {
-  // buf contains 192 bytes, so 16 128-bit vectors are necessary and sufficient.
-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);
-  const CappedTag<T, 16 / sizeof(T)> d128;
-  const size_t N128 = Lanes(d128);
-  constexpr size_t kCols = HWY_MIN(16 / sizeof(T), Constants::kMaxCols);
-  constexpr size_t kBytes = kCols * Constants::kMaxRows * sizeof(T);
-  static_assert(192 <= kBytes, "");
-  // Fill with padding - last in sort order.
-  const auto kPadding = st.LastValue(d128);
-  // Initialize an extra vector because SortingNetwork loads full vectors,
-  // which may exceed cols*kMaxRows.
-  for (size_t i = kSampleLanes; i <= kBytes / sizeof(T); i += N128) {
-    StoreU(kPadding, d128, buf + i);
-  }
+  const size_t N = Lanes(d);
+  constexpr size_t kSampleLanes = Constants::SampleLanes<T>();
+  // Network must be large enough to sort two chunks.
+  HWY_DASSERT(Constants::BaseCaseNumLanes<st.LanesPerKey()>(N) >= kSampleLanes);
 
-  SortingNetwork(st, buf, kCols);
+  BaseCase(d, st, buf, kSampleLanes, buf + kSampleLanes);
 
   if (VQSORT_PRINT >= 2) {
-    const size_t N = Lanes(d);
     fprintf(stderr, "Samples:\n");
     for (size_t i = 0; i < kSampleLanes; i += N) {
       MaybePrintVector(d, "", Load(d, buf + i), 0, N);
@@ -954,9 +1525,10 @@ HWY_INLINE const char* PivotResultString(PivotResult result) {
   return "unknown";
 }
 
+// (Could vectorize, but only 0.2% of total time)
 template <class Traits, typename T>
 HWY_INLINE size_t PivotRank(Traits st, const T* HWY_RESTRICT samples) {
-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);
+  constexpr size_t kSampleLanes = Constants::SampleLanes<T>();
   constexpr size_t N1 = st.LanesPerKey();
 
   constexpr size_t kRankMid = kSampleLanes / 2;
@@ -1001,7 +1573,7 @@ HWY_INLINE Vec<D> ChoosePivotByRank(D d,
             static_cast<double>(GetLane(pivot)));
   }
   // Verify pivot is not equal to the last sample.
-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);
+  constexpr size_t kSampleLanes = Constants::SampleLanes<T>();
   constexpr size_t N1 = st.LanesPerKey();
   const Vec<D> last = st.SetKey(d, samples + kSampleLanes - N1);
   const bool all_neq = AllTrue(d, st.NotEqualKeys(d, pivot, last));
@@ -1354,21 +1926,20 @@ HWY_NOINLINE void PrintMinMax(D d,
   }
 }
 
-// keys_end is the end of the entire user input, not just the current subarray
-// [keys, keys + num).
 template <class D, class Traits, typename T>
 HWY_NOINLINE void Recurse(D d,
                           Traits st,
                           T* HWY_RESTRICT keys,
-                          T* HWY_RESTRICT keys_end,
                           const size_t num,
                           T* HWY_RESTRICT buf,
-                          Generator& rng,
+                          uint64_t* HWY_RESTRICT state,
                           const size_t remaining_levels) {
   HWY_DASSERT(num != 0);
 
-  if (HWY_UNLIKELY(num <= Constants::BaseCaseNum(Lanes(d)))) {
-    BaseCase(d, st, keys, keys_end, num, buf);
+  const size_t N = Lanes(d);
+  constexpr size_t kLPK = st.LanesPerKey();
+  if (HWY_UNLIKELY(num <= Constants::BaseCaseNumLanes<kLPK>(N))) {
+    BaseCase(d, st, keys, num, buf);
     return;
   }
 
@@ -1379,7 +1950,7 @@ HWY_NOINLINE void Recurse(D d,
     PrintMinMax(d, st, keys, num, buf);
   }
 
-  DrawSamples(d, st, keys, num, buf, rng);
+  DrawSamples(d, st, keys, num, buf, state);
 
   Vec<D> pivot;
   PivotResult result = PivotResult::kNormal;
@@ -1444,15 +2015,16 @@ HWY_NOINLINE void Recurse(D d,
   // have at least one value <= pivot because AllEqual ruled out the case of
   // only one unique value, and there is exactly one value after pivot).
   HWY_DASSERT(bound != 0);
-  // ChoosePivot* ensure pivot != last, so the right partition is never empty.
-  HWY_DASSERT(bound != num);
+  // ChoosePivot* ensure pivot != last, so the right partition is never empty
+  // except in the rare case of the pivot matching the last-in-sort-order value,
+  // which implies we anyway skip the right partition due to kWasLast.
+  HWY_DASSERT(bound != num || result == PivotResult::kWasLast);
 
   if (HWY_LIKELY(result != PivotResult::kIsFirst)) {
-    Recurse(d, st, keys, keys_end, bound, buf, rng, remaining_levels - 1);
+    Recurse(d, st, keys, bound, buf, state, remaining_levels - 1);
   }
   if (HWY_LIKELY(result != PivotResult::kWasLast)) {
-    Recurse(d, st, keys + bound, keys_end, num - bound, buf, rng,
-            remaining_levels - 1);
+    Recurse(d, st, keys + bound, num - bound, buf, state, remaining_levels - 1);
   }
 }
 
@@ -1461,9 +2033,18 @@ template <class D, class Traits, typename T>
 HWY_INLINE bool HandleSpecialCases(D d,
                                    Traits st,
                                    T* HWY_RESTRICT keys,
-                                   size_t num) {
+                                   size_t num,
+                                   T* HWY_RESTRICT buf) {
   const size_t N = Lanes(d);
-  const size_t base_case_num = Constants::BaseCaseNum(N);
+  constexpr size_t kLPK = st.LanesPerKey();
+  const size_t base_case_num = Constants::BaseCaseNumLanes<kLPK>(N);
+
+  // Recurse will also check this, but doing so here first avoids setting up
+  // the random generator state.
+  if (HWY_UNLIKELY(num <= base_case_num)) {
+    BaseCase(d, st, keys, num, buf);
+    return true;
+  }
 
   // 128-bit keys require vectors with at least two u64 lanes, which is always
   // the case unless `d` requests partial vectors (e.g. fraction = 1/2) AND the
@@ -1485,8 +2066,6 @@ HWY_INLINE bool HandleSpecialCases(D d,
     return true;
   }
 
-  // Small arrays are already handled by Recurse.
-
   // We could also check for already sorted/reverse/equal, but that's probably
   // counterproductive if vqsort is used as a base case.
 
@@ -1495,6 +2074,45 @@ HWY_INLINE bool HandleSpecialCases(D d,
 
 #endif  // VQSORT_ENABLED
 }  // namespace detail
+
+// Old interface with user-specified buffer, retained for compatibility.
+// `buf` must be vector-aligned and hold at least
+// SortConstants::BufBytes(HWY_MAX_BYTES, st.LanesPerKey()).
+template <class D, class Traits, typename T>
+void Sort(D d,
+          Traits st,
+          T* HWY_RESTRICT keys,
+          size_t num,
+          T* HWY_RESTRICT buf) {
+  if (VQSORT_PRINT >= 1) {
+    fprintf(stderr, "=============== Sort num %zu\n", num);
+  }
+
+#if VQSORT_ENABLED || HWY_IDE
+  if (detail::HandleSpecialCases(d, st, keys, num, buf))
+    return;
+
+#if HWY_MAX_BYTES > 64
+  // sorting_networks-inl and traits assume no more than 512 bit vectors.
+  if (HWY_UNLIKELY(Lanes(d) > 64 / sizeof(T))) {
+    return Sort(CappedTag<T, 64 / sizeof(T)>(), st, keys, num, buf);
+  }
+#endif  // HWY_MAX_BYTES > 64
+
+  uint64_t* HWY_RESTRICT state = GetGeneratorState();
+  // Introspection: switch to worst-case N*logN heapsort after this many.
+  // Should never be reached, so computing log2 exactly does not help.
+  const size_t max_levels = 50;
+  detail::Recurse(d, st, keys, num, buf, state, max_levels);
+#else   // !VQSORT_ENABLED
+  (void)d;
+  (void)buf;
+  if (VQSORT_PRINT >= 1) {
+    fprintf(stderr, "WARNING: using slow HeapSort because vqsort disabled\n");
+  }
+  return detail::HeapSort(st, keys, num);
+#endif  // VQSORT_ENABLED
+}
 
 // Sorts `keys[0..num-1]` according to the order defined by `st.Compare`.
 // In-place i.e. O(1) additional storage. Worst-case N*logN comparisons.
@@ -1508,49 +2126,10 @@ HWY_INLINE bool HandleSpecialCases(D d,
 // `st` is SharedTraits<Traits*<Order*>>. This abstraction layer bridges
 //   differences in sort order and single-lane vs 128-bit keys.
 template <class D, class Traits, typename T>
-void Sort(D d,
-          Traits st,
-          T* HWY_RESTRICT keys,
-          size_t num,
-          T* HWY_RESTRICT buf) {
-  if (VQSORT_PRINT >= 1) {
-    fprintf(stderr, "=============== Sort num %zu\n", num);
-  }
-
-#if VQSORT_ENABLED || HWY_IDE
-#if !HWY_HAVE_SCALABLE
-  // On targets with fixed-size vectors, avoid _using_ the allocated memory.
-  // We avoid (potentially expensive for small input sizes) allocations on
-  // platforms where no targets are scalable. For 512-bit vectors, this fits on
-  // the stack (several KiB).
-  HWY_ALIGN T storage[SortConstants::BufNum<T>(HWY_LANES(T))] = {};
-  static_assert(sizeof(storage) <= 8192, "Unexpectedly large, check size");
-  buf = storage;
-#endif  // !HWY_HAVE_SCALABLE
-
-  if (detail::HandleSpecialCases(d, st, keys, num))
-    return;
-
-#if HWY_MAX_BYTES > 64
-  // sorting_networks-inl and traits assume no more than 512 bit vectors.
-  if (HWY_UNLIKELY(Lanes(d) > 64 / sizeof(T))) {
-    return Sort(CappedTag<T, 64 / sizeof(T)>(), st, keys, num, buf);
-  }
-#endif  // HWY_MAX_BYTES > 64
-
-  detail::Generator rng(keys, num);
-
-  // Introspection: switch to worst-case N*logN heapsort after this many.
-  const size_t max_levels = 2 * hwy::CeilLog2(num) + 4;
-  detail::Recurse(d, st, keys, keys + num, num, buf, rng, max_levels);
-#else
-  (void)d;
-  (void)buf;
-  if (VQSORT_PRINT >= 1) {
-    fprintf(stderr, "WARNING: using slow HeapSort because vqsort disabled\n");
-  }
-  return detail::HeapSort(st, keys, num);
-#endif  // VQSORT_ENABLED
+HWY_API void Sort(D d, Traits st, T* HWY_RESTRICT keys, size_t num) {
+  constexpr size_t kLPK = st.LanesPerKey();
+  HWY_ALIGN T buf[SortConstants::BufBytes<T, kLPK>(HWY_MAX_BYTES) / sizeof(T)];
+  return Sort(d, st, keys, num, buf);
 }
 
 // NOLINTNEXTLINE(google-readability-namespace-comments)

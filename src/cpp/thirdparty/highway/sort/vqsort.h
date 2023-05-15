@@ -35,72 +35,58 @@ struct SortDescending {
   constexpr bool IsAscending() const { return false; }
 };
 
-// Allocates O(1) space. Type-erased RAII wrapper over ../aligned_allocator.h.
-// This allows amortizing the allocation over multiple sorts.
+// User-level caching is no longer required, so this class is no longer
+// beneficial. We recommend using the simpler VQSort() interface instead, and
+// retain this class only for compatibility. It now just calls VQSort.
 class HWY_CONTRIB_DLLEXPORT Sorter {
  public:
-  Sorter();
-  ~Sorter() { Delete(); }
+  Sorter() {}
+  ~Sorter() {}
 
   // Move-only
   Sorter(const Sorter&) = delete;
   Sorter& operator=(const Sorter&) = delete;
-  Sorter(Sorter&& other) {
-    Delete();
-    ptr_ = other.ptr_;
-    other.ptr_ = nullptr;
-  }
-  Sorter& operator=(Sorter&& other) {
-    Delete();
-    ptr_ = other.ptr_;
-    other.ptr_ = nullptr;
-    return *this;
-  }
+  Sorter(Sorter&& /*other*/) {}
+  Sorter& operator=(Sorter&& /*other*/) { return *this; }
 
   // Sorts keys[0, n). Dispatches to the best available instruction set,
   // and does not allocate memory.
   void operator()(uint64_t* HWY_RESTRICT keys, size_t n, SortAscending) const;
   void operator()(int32_t* HWY_RESTRICT keys, size_t n, SortAscending) const;
 
-  // For internal use only
-  static void Fill24Bytes(const void* seed_heap, size_t seed_num, void* bytes);
-  static bool HaveFloat64() { return true; }
+  // Unused
+  static void Fill24Bytes(const void*, size_t, void*) {}
+  static bool HaveFloat64() { return false; }
 
  private:
-  void Delete();
+  void Delete() {}
 
   template <typename T>
   T* Get() const {
-    return static_cast<T*>(ptr_);
+    return nullptr;
   }
 
-  void* ptr_ = nullptr;
+#if HWY_COMPILER_CLANG
+  HWY_DIAGNOSTICS(push)
+  HWY_DIAGNOSTICS_OFF(disable : 4700, ignored "-Wunused-private-field")
+#endif
+  void* unused_ = nullptr;
+#if HWY_COMPILER_CLANG
+  HWY_DIAGNOSTICS(pop)
+#endif
 };
+
+// Internal use only
+HWY_CONTRIB_DLLEXPORT uint64_t* GetGeneratorState();
 
 }  // namespace hwy
 
-#include <string.h>  // memset
+#include <time.h>
 
-// #undef HWY_TARGET_INCLUDE
-// #define HWY_TARGET_INCLUDE "vqsort.cc"
-// #include "hwy/foreach_target.h"  // IWYU pragma: keep
+#include <cstdint>
 
-// After foreach_target
+#include "../base.h"
 #include "shared-inl.h"
-
-// Architectures for which we know HWY_HAVE_SCALABLE == 0. This opts into an
-// optimization that replaces dynamic allocation with stack storage.
-#ifndef VQSORT_STACK
-#if HWY_ARCH_X86 || HWY_ARCH_WASM
-#define VQSORT_STACK 1
-#else
-#define VQSORT_STACK 0
-#endif
-#endif  // VQSORT_STACK
-
-#if !VQSORT_STACK
-#include "../aligned_allocator.h"
-#endif
 
 // Check if we have sys/random.h. First skip some systems on which the check
 // itself (features.h) might be problematic.
@@ -134,8 +120,8 @@ class HWY_CONTRIB_DLLEXPORT Sorter {
 #define VQSORT_GETRANDOM 0
 #endif
 
-// Seed source for SFC generator: 1=getrandom, 2=CryptGenRandom
-// (not all Android support the getrandom wrapper)
+// Choose a seed source for SFC generator: 1=getrandom, 2=CryptGenRandom.
+// Allow user override - not all Android support the getrandom wrapper.
 #ifndef VQSORT_SECURE_SEED
 
 #if VQSORT_GETRANDOM
@@ -148,9 +134,7 @@ class HWY_CONTRIB_DLLEXPORT Sorter {
 
 #endif  // VQSORT_SECURE_SEED
 
-#if !VQSORT_SECURE_RNG
-
-#include <time.h>
+// Pull in dependencies of the chosen seed source.
 #if VQSORT_SECURE_SEED == 1
 #include <sys/random.h>
 #elif VQSORT_SECURE_SEED == 2
@@ -160,71 +144,21 @@ class HWY_CONTRIB_DLLEXPORT Sorter {
 #include <wincrypt.h>
 #endif  // VQSORT_SECURE_SEED
 
-#endif  // !VQSORT_SECURE_RNG
-
-// HWY_BEFORE_NAMESPACE();
 namespace hwy {
-namespace HWY_NAMESPACE {
+namespace {
 
-size_t VectorSize() {
-  return Lanes(ScalableTag<uint8_t, 3>());
-}
-bool HaveFloat64() {
-  return HWY_HAVE_FLOAT64;
-}
-
-}  // namespace HWY_NAMESPACE
-}  // namespace hwy
-// HWY_AFTER_NAMESPACE();
-
-// #if HWY_ONCE
-namespace hwy {
-// namespace {
-// HWY_EXPORT(VectorSize);
-// HWY_EXPORT(HaveFloat64);
-
-// }  // namespace
-
-Sorter::Sorter() {
-#if VQSORT_STACK
-  ptr_ = nullptr;  // Sort will use stack storage instead
-#else
-  // Determine the largest buffer size required for any type by trying them all.
-  // (The capping of N in BaseCaseNum means that smaller N but larger sizeof_t
-  // may require a larger buffer.)
-  const size_t vector_size = hwy::HWY_NAMESPACE::VectorSize();
-  const size_t max_bytes =
-      HWY_MAX(HWY_MAX(SortConstants::BufBytes<uint16_t>(vector_size),
-                      SortConstants::BufBytes<uint32_t>(vector_size)),
-              SortConstants::BufBytes<uint64_t>(vector_size));
-  ptr_ = hwy::AllocateAlignedBytes(max_bytes, nullptr, nullptr);
-
-  // Prevent msan errors by initializing.
-  memset(ptr_, 0, max_bytes);
-#endif
-}
-
-void Sorter::Delete() {
-#if !VQSORT_STACK
-  FreeAlignedBytes(ptr_, nullptr, nullptr);
-  ptr_ = nullptr;
-#endif
-}
-
-#if !VQSORT_SECURE_RNG
-
-void Sorter::Fill24Bytes(const void* seed_heap, size_t seed_num, void* bytes) {
+void Fill16Bytes(void* bytes) {
 #if VQSORT_SECURE_SEED == 1
   // May block if urandom is not yet initialized.
-  const ssize_t ret = getrandom(bytes, 24, /*flags=*/0);
-  if (ret == 24)
+  const ssize_t ret = getrandom(bytes, 16, /*flags=*/0);
+  if (ret == 16)
     return;
 #elif VQSORT_SECURE_SEED == 2
   HCRYPTPROV hProvider{};
   if (CryptAcquireContextA(&hProvider, nullptr, nullptr, PROV_RSA_FULL,
                            CRYPT_VERIFYCONTEXT)) {
     const BOOL ok =
-        CryptGenRandom(hProvider, 24, reinterpret_cast<BYTE*>(bytes));
+        CryptGenRandom(hProvider, 16, reinterpret_cast<BYTE*>(bytes));
     CryptReleaseContext(hProvider, 0);
     if (ok)
       return;
@@ -232,20 +166,28 @@ void Sorter::Fill24Bytes(const void* seed_heap, size_t seed_num, void* bytes) {
 #endif
 
   // VQSORT_SECURE_SEED == 0, or one of the above failed. Get some entropy from
-  // stack/heap/code addresses and the clock() timer.
+  // the address and the clock() timer.
   uint64_t* words = reinterpret_cast<uint64_t*>(bytes);
   uint64_t** seed_stack = &words;
-  void (*seed_code)(const void*, size_t, void*) = &Fill24Bytes;
+  void (*seed_code)(void*) = &Fill16Bytes;
   const uintptr_t bits_stack = reinterpret_cast<uintptr_t>(seed_stack);
-  const uintptr_t bits_heap = reinterpret_cast<uintptr_t>(seed_heap);
   const uintptr_t bits_code = reinterpret_cast<uintptr_t>(seed_code);
   const uint64_t bits_time = static_cast<uint64_t>(clock());
-  words[0] = bits_stack ^ bits_time ^ seed_num;
-  words[1] = bits_heap ^ bits_time ^ seed_num;
-  words[2] = bits_code ^ bits_time ^ seed_num;
+  words[0] = bits_stack ^ bits_time ^ 0xFEDCBA98;  // "Nothing up my sleeve"
+  words[1] = bits_code ^ bits_time ^ 0x01234567;   // constants.
 }
 
-#endif  // !VQSORT_SECURE_RNG
+}  // namespace
+
+uint64_t* GetGeneratorState() {
+  thread_local uint64_t state[3] = {0};
+  // This is a counter; zero indicates not yet initialized.
+  if (HWY_UNLIKELY(state[2] == 0)) {
+    Fill16Bytes(state);
+    state[2] = 1;
+  }
+  return state;
+}
 
 }  // namespace hwy
 
@@ -256,20 +198,16 @@ HWY_BEFORE_NAMESPACE();
 namespace hwy {
 namespace HWY_NAMESPACE {
 
-void SortI32Asc(int32_t* HWY_RESTRICT keys,
-                size_t num,
-                int32_t* HWY_RESTRICT buf) {
+void SortI32Asc(int32_t* HWY_RESTRICT keys, size_t num) {
   SortTag<int32_t> d;
   detail::SharedTraits<detail::TraitsLane<detail::OrderAscending<int32_t>>> st;
-  Sort(d, st, keys, num, buf);
+  Sort(d, st, keys, num);
 }
 
-void SortU64Asc(uint64_t* HWY_RESTRICT keys,
-                size_t num,
-                uint64_t* HWY_RESTRICT buf) {
+void SortU64Asc(uint64_t* HWY_RESTRICT keys, size_t num) {
   SortTag<uint64_t> d;
   detail::SharedTraits<detail::TraitsLane<detail::OrderAscending<uint64_t>>> st;
-  Sort(d, st, keys, num, buf);
+  Sort(d, st, keys, num);
 }
 
 // NOLINTNEXTLINE(google-readability-namespace-comments)
@@ -287,14 +225,14 @@ void Sorter::operator()(int32_t* HWY_RESTRICT keys,
                         size_t n,
                         SortAscending) const {
   // HWY_DYNAMIC_DISPATCH(SortI32Asc)(keys, n, Get<int32_t>());
-  hwy::HWY_NAMESPACE::SortI32Asc(keys, n, Get<int32_t>());
+  hwy::HWY_NAMESPACE::SortI32Asc(keys, n);
 }
 
 void Sorter::operator()(uint64_t* HWY_RESTRICT keys,
                         size_t n,
                         SortAscending) const {
   // HWY_DYNAMIC_DISPATCH(SortU64Asc)(keys, n, Get<uint64_t>());
-  hwy::HWY_NAMESPACE::SortU64Asc(keys, n, Get<uint64_t>());
+  hwy::HWY_NAMESPACE::SortU64Asc(keys, n);
 }
 
 }  // namespace hwy
