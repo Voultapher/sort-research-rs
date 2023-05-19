@@ -19,4 +19,8 @@ pub mod sort_evolution;
 #[cfg(feature = "small_sort")]
 pub mod small_sort;
 
+#[cfg(feature = "partition_point")]
+pub mod partition_point;
+
+#[cfg(feature = "partition")]
 pub mod partition;

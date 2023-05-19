@@ -1,53 +1,14 @@
 use std::collections::HashSet;
-use std::env;
 use std::mem;
 use std::ptr;
-use std::str::FromStr;
 use std::sync::Mutex;
 use std::time;
-
-use once_cell::sync::OnceCell;
 
 use criterion::black_box;
 
 use sort_comp::other::partition::{self, Partition};
 
-pub fn pin_thread_to_core() {
-    use std::cell::Cell;
-    let pin_core_id: usize = 2;
-
-    thread_local! {static AFFINITY_ALREADY_SET: Cell<bool> = Cell::new(false); }
-
-    // Set affinity only once per thread.
-    AFFINITY_ALREADY_SET.with(|affinity_already_set| {
-        if !affinity_already_set.get() {
-            if let Some(core_id_2) = core_affinity::get_core_ids()
-                .as_ref()
-                .and_then(|ids| ids.get(pin_core_id))
-            {
-                core_affinity::set_for_current(*core_id_2);
-            }
-
-            affinity_already_set.set(true);
-        }
-    });
-}
-
-fn cpu_max_freq_hz() -> Option<f64> {
-    static MAX_FREQUENCY: OnceCell<Option<f64>> = OnceCell::new();
-
-    MAX_FREQUENCY
-        .get_or_init(|| {
-            // I tried using heim-cpu but that introduced too many dependencies.
-            if let Ok(val) = env::var("CPU_MAX_FREQ_GHZ") {
-                Some(f64::from_str(&val).unwrap() * 1_000_000_000.0)
-            } else {
-                eprintln!("Unable to determine max CPU frequency, please provide it via env var CPU_MAX_FREQ_GHZ");
-                None
-            }
-        })
-        .clone()
-}
+use crate::bench_other::util::{cpu_max_freq_hz, pin_thread_to_core};
 
 fn median(mut values: Vec<f64>) -> f64 {
     values.sort_unstable_by(|a, b| a.total_cmp(b));
@@ -158,7 +119,8 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     }
 }
 
-pub fn bench_custom<T: Ord + std::fmt::Debug>(
+pub fn bench<T: Ord + std::fmt::Debug>(
+    _c: &mut Criterion,
     filter_arg: &str,
     test_size: usize,
     transform_name: &str,
@@ -171,23 +133,7 @@ pub fn bench_custom<T: Ord + std::fmt::Debug>(
         return;
     }
 
-    static SEEN_BENCHMARKS: Mutex<Option<HashSet<String>>> = Mutex::new(None);
-
-    let mut seen_benchmarks = SEEN_BENCHMARKS.lock().unwrap();
-
-    if seen_benchmarks.is_none() {
-        *seen_benchmarks = Some(HashSet::new());
-    }
-
-    // Kind of hacky way to deduplicate
-    let seen_before = !seen_benchmarks
-        .as_mut()
-        .unwrap()
-        .insert(format!("{}-{}-{}", transform_name, pattern_name, test_size));
-
-    if seen_before {
-        return;
-    }
+    // TODO use proper criterion benchmarking.
 
     // bench_partition_impl(
     //     filter_arg,

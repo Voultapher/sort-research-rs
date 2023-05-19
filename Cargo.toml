@@ -53,6 +53,8 @@ default = [
     "large_test_sizes",
     # "evolution",
     # "small_sort",
+    # "partition",
+    # "partition_point",
 
     # "cold_benchmarks",
     # "cpp_std_sys",
@@ -146,6 +148,12 @@ evolution = []
 
 # Enable explicit small-sort benchmarks.
 small_sort = []
+
+# Enable partition benchmarks.
+partition = []
+
+# Enable partition_point benchmarks.
+partition_point = []
 
 # --- Other ---
 

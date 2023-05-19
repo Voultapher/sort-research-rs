@@ -1,12 +1,10 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
+use std::sync::Mutex;
 
-use regex::Regex;
-
-use once_cell::sync::OnceCell;
-
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[allow(unused_imports)]
 use sort_test_tools::ffi_types::{FFIOneKiloByte, FFIString, F128};
@@ -19,110 +17,10 @@ use sort_comp::{stable, unstable};
 #[cfg(feature = "cold_benchmarks")]
 mod trash_prediction;
 
-mod bench_custom;
+mod bench_other;
 
-use crate::bench_custom::{bench_custom, pin_thread_to_core};
-
-#[inline(never)]
-fn bench_sort<T: Ord + std::fmt::Debug>(
-    c: &mut Criterion,
-    test_size: usize,
-    transform_name: &str,
-    transform: &fn(Vec<i32>) -> Vec<T>,
-    pattern_name: &str,
-    pattern_provider: &fn(usize) -> Vec<i32>,
-    mut bench_name: &str,
-    sort_func: impl Fn(&mut [T]),
-) {
-    // Pin the benchmark to the same core to improve repeatability. Doing it this way allows
-    // criterion to do other stuff with other threads, which greatly impacts overall benchmark
-    // throughput.
-    pin_thread_to_core();
-
-    let batch_size = if test_size > 30 {
-        BatchSize::LargeInput
-    } else {
-        BatchSize::SmallInput
-    };
-
-    static FILTER_REGEX: OnceCell<Option<regex::Regex>> = OnceCell::new();
-
-    let is_bench_name_ok = |name: &str| -> bool {
-        let filter_regex = FILTER_REGEX.get_or_init(|| {
-            env::var("CUSTOM_BENCH_REGEX")
-                .ok()
-                .map(|filter_regex| Regex::new(&filter_regex).unwrap())
-        });
-
-        filter_regex
-            .as_ref()
-            .map(|reg| reg.is_match(name))
-            .unwrap_or(true)
-    };
-
-    static NAME_OVERWRITE: OnceCell<Option<String>> = OnceCell::new();
-
-    let name_overwrite = NAME_OVERWRITE.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
-
-    if let Some(name) = name_overwrite {
-        let split_pos = name.find(":").unwrap();
-        let match_name = &name[..split_pos];
-        if bench_name == match_name {
-            bench_name = &name[(split_pos + 1)..];
-        }
-    }
-
-    let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}");
-    if is_bench_name_ok(&bench_name_hot) {
-        c.bench_function(&bench_name_hot, |b| {
-            b.iter_batched(
-                || transform(pattern_provider(test_size)),
-                |mut test_data| {
-                    sort_func(black_box(test_data.as_mut_slice()));
-                    black_box(test_data); // side-effect
-                },
-                batch_size,
-            )
-        });
-    }
-
-    #[cfg(feature = "cold_benchmarks")]
-    {
-        let bench_name_cold =
-            format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_size}");
-        if is_bench_name_ok(&bench_name_cold) {
-            c.bench_function(&bench_name_cold, |b| {
-                b.iter_batched(
-                    || {
-                        let mut test_ints = pattern_provider(test_size);
-
-                        if test_ints.len() == 0 {
-                            return vec![];
-                        }
-
-                        // Try as best as possible to trash all prediction state in the CPU, to
-                        // simulate calling the benchmark function as part of a larger program.
-                        // Caveat, memory caches. We don't want to benchmark how expensive it is to
-                        // load something from main memory.
-                        let first_val =
-                            black_box(trash_prediction::trash_prediction_state(test_ints[0]));
-
-                        // Limit the optimizer in getting rid of trash_prediction_state,
-                        // by tying its output to the test input.
-                        test_ints[0] = first_val;
-
-                        transform(test_ints)
-                    },
-                    |mut test_data| {
-                        sort_func(black_box(test_data.as_mut_slice()));
-                        black_box(test_data); // side-effect
-                    },
-                    BatchSize::PerIteration,
-                )
-            });
-        }
-    }
-}
+use crate::bench_other::bench_other;
+use crate::bench_other::util::bench_fn;
 
 fn measure_comp_count(
     name: &str,
@@ -168,11 +66,11 @@ fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_test_tools::Sort>(
     if env::var("MEASURE_COMP").is_ok() {
         // Configure this to filter results. For now the only real difference is copy types.
         if transform_name == "i32" && bench_name.contains("unstable") && test_size <= 100000 {
-            // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
             let name = format!(
                 "{}-comp-{}-{}-{}",
                 bench_name, transform_name, pattern_name, test_size
             );
+
             // Instrument via sort_by to ensure the type properties such as Copy of the type
             // that is being sorted doesn't change. And we get representative numbers.
             let comp_count = Rc::new(RefCell::new(0u64));
@@ -186,21 +84,37 @@ fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_test_tools::Sort>(
             };
             measure_comp_count(&name, test_size, instrumented_sort_func, comp_count);
         }
-    } else if env::var("BENCH_CUSTOM").is_ok() {
-        let args = env::args().collect::<Vec<_>>();
-        // No clue how stable that is.
-        let filter_arg = &args[args.len() - 2];
+    } else if env::var("BENCH_OTHER").is_ok() {
+        static SEEN_BENCHMARKS: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
-        bench_custom(
-            filter_arg,
-            test_size,
-            transform_name,
-            transform,
-            pattern_name,
-            pattern_provider,
-        );
+        let mut seen_benchmarks = SEEN_BENCHMARKS.lock().unwrap();
+
+        if seen_benchmarks.is_none() {
+            *seen_benchmarks = Some(HashSet::new());
+        }
+
+        let combination_name = format!("{transform_name}-{pattern_name}-{test_size}");
+        let seen_before = !seen_benchmarks.as_mut().unwrap().insert(combination_name);
+
+        // Other benchmarks will not use the sort functions so only call the other benchmark builder
+        // once per pattern-type-len combination.
+        if !seen_before {
+            let args = env::args().collect::<Vec<_>>();
+            // No clue how stable that is.
+            let filter_arg = &args[args.len() - 2];
+
+            bench_other(
+                c,
+                filter_arg,
+                test_size,
+                transform_name,
+                transform,
+                pattern_name,
+                pattern_provider,
+            );
+        }
     } else {
-        bench_sort(
+        bench_fn(
             c,
             test_size,
             transform_name,
@@ -223,18 +137,18 @@ fn shuffle_vec<T: Ord>(mut v: Vec<T>) -> Vec<T> {
     v
 }
 
-fn split_len(size: usize, part_a_percent: f64) -> (usize, usize) {
-    let len_a = ((size as f64 / 100.0) * part_a_percent).round() as usize;
-    let len_b = size - len_a;
+fn split_len(len: usize, part_a_percent: f64) -> (usize, usize) {
+    let len_a = ((len as f64 / 100.0) * part_a_percent).round() as usize;
+    let len_b = len - len_a;
 
     (len_a, len_b)
 }
 
 // TODO move to patterns.
-fn random_x_percent(size: usize, percent: f64) -> Vec<i32> {
+fn random_x_percent(len: usize, percent: f64) -> Vec<i32> {
     assert!(percent > 0.0 && percent < 100.0);
 
-    let (len_zero, len_random_p) = split_len(size, 100.0 - percent);
+    let (len_zero, len_random_p) = split_len(len, 100.0 - percent);
     let v: Vec<i32> = std::iter::repeat(0)
         .take(len_zero)
         .chain(patterns::random(len_random_p))
@@ -256,52 +170,52 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
     let mut pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
         ("random", patterns::random),
-        ("random_z1", |size| patterns::random_zipf(size, 1.0)),
-        ("random_d20", |size| patterns::random_uniform(size, 0..20)),
-        ("random_p5", |size| random_x_percent(size, 5.0)),
-        ("random_s95", |size| patterns::random_sorted(size, 95.0)),
+        ("random_z1", |len| patterns::random_zipf(len, 1.0)),
+        ("random_d20", |len| patterns::random_uniform(len, 0..20)),
+        ("random_p5", |len| random_x_percent(len, 5.0)),
+        ("random_s95", |len| patterns::random_sorted(len, 95.0)),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
-        ("saws_short", |size| patterns::saw_mixed_range(size, 20..70)),
+        ("saws_short", |len| patterns::saw_mixed_range(len, 20..70)),
     ];
 
     // Custom patterns designed to find worst case performance.
     let mut extra_pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
-        ("saws_long", |size| {
-            patterns::saw_mixed(size, ((size as f64).log2().round()) as usize)
+        ("saws_long", |len| {
+            patterns::saw_mixed(len, ((len as f64).log2().round()) as usize)
         }),
-        ("random_d20_start_block", |size| {
-            let mut v = patterns::random_uniform(size, 0..20);
-            let loop_end = std::cmp::min(size, 100);
+        ("random_d20_start_block", |len| {
+            let mut v = patterns::random_uniform(len, 0..20);
+            let loop_end = std::cmp::min(len, 100);
             for i in 0..loop_end {
                 v[i] = 0;
             }
 
             v
         }),
-        ("90_one_10_zero", |size| {
-            let (len_90, len_10) = split_len(size, 90.0);
+        ("90_one_10_zero", |len| {
+            let (len_90, len_10) = split_len(len, 90.0);
             std::iter::repeat(1)
                 .take(len_90)
                 .chain(std::iter::repeat(0).take(len_10))
                 .collect()
         }),
-        ("90_zero_10_one", |size| {
-            let (len_90, len_10) = split_len(size, 90.0);
+        ("90_zero_10_one", |len| {
+            let (len_90, len_10) = split_len(len, 90.0);
             std::iter::repeat(0)
                 .take(len_90)
                 .chain(std::iter::repeat(1).take(len_10))
                 .collect()
         }),
-        ("90_zero_10_random", |size| {
-            let (len_90, len_10) = split_len(size, 90.0);
+        ("90_zero_10_random", |len| {
+            let (len_90, len_10) = split_len(len, 90.0);
             std::iter::repeat(0)
                 .take(len_90)
                 .chain(patterns::random(len_10))
                 .collect()
         }),
-        ("90p_zero_10p_one", |size| {
-            let (len_90p, len_10p) = split_len(size, 90.0);
+        ("90p_zero_10p_one", |len| {
+            let (len_90p, len_10p) = split_len(len, 90.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_90p)
                 .chain(std::iter::repeat(1).take(len_10p))
@@ -309,8 +223,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("90p_zero_10p_random_dense_neg", |size| {
-            let (len_90p, len_10p) = split_len(size, 90.0);
+        ("90p_zero_10p_random_dense_neg", |len| {
+            let (len_90p, len_10p) = split_len(len, 90.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_90p)
                 .chain(patterns::random_uniform(len_10p, -10..=10))
@@ -318,8 +232,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("90p_zero_10p_random_dense_pos", |size| {
-            let (len_90p, len_10p) = split_len(size, 90.0);
+        ("90p_zero_10p_random_dense_pos", |len| {
+            let (len_90p, len_10p) = split_len(len, 90.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_90p)
                 .chain(patterns::random_uniform(len_10p, 0..=10))
@@ -327,8 +241,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("90p_zero_10p_random", |size| {
-            let (len_90p, len_10p) = split_len(size, 90.0);
+        ("90p_zero_10p_random", |len| {
+            let (len_90p, len_10p) = split_len(len, 90.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_90p)
                 .chain(patterns::random(len_10p))
@@ -336,8 +250,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("95p_zero_5p_random", |size| {
-            let (len_95p, len_5p) = split_len(size, 95.0);
+        ("95p_zero_5p_random", |len| {
+            let (len_95p, len_5p) = split_len(len, 95.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_95p)
                 .chain(patterns::random(len_5p))
@@ -345,8 +259,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("99p_zero_1p_random", |size| {
-            let (len_99p, len_1p) = split_len(size, 99.0);
+        ("99p_zero_1p_random", |len| {
+            let (len_99p, len_1p) = split_len(len, 99.0);
             let v: Vec<i32> = std::iter::repeat(0)
                 .take(len_99p)
                 .chain(patterns::random(len_1p))
@@ -354,70 +268,68 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("ascending_saw", |size| {
-            patterns::ascending_saw(size, ((size as f64).log2().round()) as usize)
+        ("ascending_saw", |len| {
+            patterns::ascending_saw(len, ((len as f64).log2().round()) as usize)
         }),
-        ("descending_saw", |size| {
-            patterns::descending_saw(size, ((size as f64).log2().round()) as usize)
+        ("descending_saw", |len| {
+            patterns::descending_saw(len, ((len as f64).log2().round()) as usize)
         }),
         ("pipe_organ", patterns::pipe_organ),
-        ("random__div3", |size| {
-            patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
+        ("random__div3", |len| {
+            patterns::random_uniform(len, 0..=(((len as f64 / 3.0).round()) as i32))
         }),
-        ("random__div5", |size| {
-            patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
+        ("random__div5", |len| {
+            patterns::random_uniform(len, 0..=(((len as f64 / 3.0).round()) as i32))
         }),
-        ("random__div8", |size| {
-            patterns::random_uniform(size, 0..=(((size as f64 / 3.0).round()) as i32))
+        ("random__div8", |len| {
+            patterns::random_uniform(len, 0..=(((len as f64 / 3.0).round()) as i32))
         }),
-        ("random_d2", |size| patterns::random_uniform(size, 0..2)),
-        ("random_d3", |size| patterns::random_uniform(size, 0..3)),
-        ("random_d4", |size| patterns::random_uniform(size, 0..4)),
-        ("random_d8", |size| patterns::random_uniform(size, 0..8)),
-        ("random_d10", |size| patterns::random_uniform(size, 0..10)),
-        ("random_d16", |size| patterns::random_uniform(size, 0..16)),
-        ("random_d32", |size| patterns::random_uniform(size, 0..32)),
-        ("random_d64", |size| patterns::random_uniform(size, 0..64)),
-        ("random_d128", |size| patterns::random_uniform(size, 0..128)),
-        ("random_d256", |size| patterns::random_uniform(size, 0..256)),
-        ("random_d512", |size| patterns::random_uniform(size, 0..512)),
-        ("random_d1024", |size| {
-            patterns::random_uniform(size, 0..1024)
-        }),
-        ("random_p1", |size| random_x_percent(size, 1.0)),
-        ("random_p2", |size| random_x_percent(size, 2.0)),
-        ("random_p4", |size| random_x_percent(size, 4.0)),
-        ("random_p6", |size| random_x_percent(size, 6.0)),
-        ("random_p8", |size| random_x_percent(size, 8.0)),
-        ("random_p10", |size| random_x_percent(size, 10.0)),
-        ("random_p15", |size| random_x_percent(size, 15.0)),
-        ("random_p20", |size| random_x_percent(size, 20.0)),
-        ("random_p30", |size| random_x_percent(size, 30.0)),
-        ("random_p40", |size| random_x_percent(size, 40.0)),
-        ("random_p50", |size| random_x_percent(size, 50.0)),
-        ("random_p60", |size| random_x_percent(size, 60.0)),
-        ("random_p70", |size| random_x_percent(size, 70.0)),
-        ("random_p80", |size| random_x_percent(size, 80.0)),
-        ("random_p90", |size| random_x_percent(size, 90.0)),
-        ("random_p95", |size| random_x_percent(size, 95.0)),
-        ("random_p99", |size| random_x_percent(size, 99.0)),
-        ("random_z1_05", |size| patterns::random_zipf(size, 1.05)),
-        ("random_z1_1", |size| patterns::random_zipf(size, 1.1)),
-        ("random_z1_2", |size| patterns::random_zipf(size, 1.2)),
-        ("random_z1_3", |size| patterns::random_zipf(size, 1.3)),
-        ("random_z1_4", |size| patterns::random_zipf(size, 1.4)),
-        ("random_z1_6", |size| patterns::random_zipf(size, 1.6)),
-        ("random_z2", |size| patterns::random_zipf(size, 2.0)),
-        ("random_z3", |size| patterns::random_zipf(size, 3.0)),
-        ("random_z4", |size| patterns::random_zipf(size, 4.0)),
-        ("random_s5", |size| patterns::random_sorted(size, 95.0)),
-        ("random_s5", |size| patterns::random_sorted(size, 5.0)),
-        ("random_s10", |size| patterns::random_sorted(size, 10.0)),
-        ("random_s30", |size| patterns::random_sorted(size, 30.0)),
-        ("random_s50", |size| patterns::random_sorted(size, 50.0)),
-        ("random_s70", |size| patterns::random_sorted(size, 70.0)),
-        ("random_s90", |size| patterns::random_sorted(size, 90.0)),
-        ("random_s99", |size| patterns::random_sorted(size, 99.0)),
+        ("random_d2", |len| patterns::random_uniform(len, 0..2)),
+        ("random_d3", |len| patterns::random_uniform(len, 0..3)),
+        ("random_d4", |len| patterns::random_uniform(len, 0..4)),
+        ("random_d8", |len| patterns::random_uniform(len, 0..8)),
+        ("random_d10", |len| patterns::random_uniform(len, 0..10)),
+        ("random_d16", |len| patterns::random_uniform(len, 0..16)),
+        ("random_d32", |len| patterns::random_uniform(len, 0..32)),
+        ("random_d64", |len| patterns::random_uniform(len, 0..64)),
+        ("random_d128", |len| patterns::random_uniform(len, 0..128)),
+        ("random_d256", |len| patterns::random_uniform(len, 0..256)),
+        ("random_d512", |len| patterns::random_uniform(len, 0..512)),
+        ("random_d1024", |len| patterns::random_uniform(len, 0..1024)),
+        ("random_p1", |len| random_x_percent(len, 1.0)),
+        ("random_p2", |len| random_x_percent(len, 2.0)),
+        ("random_p4", |len| random_x_percent(len, 4.0)),
+        ("random_p6", |len| random_x_percent(len, 6.0)),
+        ("random_p8", |len| random_x_percent(len, 8.0)),
+        ("random_p10", |len| random_x_percent(len, 10.0)),
+        ("random_p15", |len| random_x_percent(len, 15.0)),
+        ("random_p20", |len| random_x_percent(len, 20.0)),
+        ("random_p30", |len| random_x_percent(len, 30.0)),
+        ("random_p40", |len| random_x_percent(len, 40.0)),
+        ("random_p50", |len| random_x_percent(len, 50.0)),
+        ("random_p60", |len| random_x_percent(len, 60.0)),
+        ("random_p70", |len| random_x_percent(len, 70.0)),
+        ("random_p80", |len| random_x_percent(len, 80.0)),
+        ("random_p90", |len| random_x_percent(len, 90.0)),
+        ("random_p95", |len| random_x_percent(len, 95.0)),
+        ("random_p99", |len| random_x_percent(len, 99.0)),
+        ("random_z1_05", |len| patterns::random_zipf(len, 1.05)),
+        ("random_z1_1", |len| patterns::random_zipf(len, 1.1)),
+        ("random_z1_2", |len| patterns::random_zipf(len, 1.2)),
+        ("random_z1_3", |len| patterns::random_zipf(len, 1.3)),
+        ("random_z1_4", |len| patterns::random_zipf(len, 1.4)),
+        ("random_z1_6", |len| patterns::random_zipf(len, 1.6)),
+        ("random_z2", |len| patterns::random_zipf(len, 2.0)),
+        ("random_z3", |len| patterns::random_zipf(len, 3.0)),
+        ("random_z4", |len| patterns::random_zipf(len, 4.0)),
+        ("random_s5", |len| patterns::random_sorted(len, 95.0)),
+        ("random_s5", |len| patterns::random_sorted(len, 5.0)),
+        ("random_s10", |len| patterns::random_sorted(len, 10.0)),
+        ("random_s30", |len| patterns::random_sorted(len, 30.0)),
+        ("random_s50", |len| patterns::random_sorted(len, 50.0)),
+        ("random_s70", |len| patterns::random_sorted(len, 70.0)),
+        ("random_s90", |len| patterns::random_sorted(len, 90.0)),
+        ("random_s99", |len| patterns::random_sorted(len, 99.0)),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {
