@@ -175,6 +175,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crumsort"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c67b358f202b5b2260672290e0b392e5fa1209fe6f85d303d5e1a2aa02064b8a"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "csv"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -560,6 +569,7 @@ dependencies = [
  "cc",
  "core_affinity",
  "criterion",
+ "crumsort",
  "dmsort",
  "glidesort",
  "once_cell",

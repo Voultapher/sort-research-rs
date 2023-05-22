@@ -484,6 +484,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             unstable::rust_dmsort::SortImpl,
         );
 
+        #[cfg(feature = "rust_crumsort_rs")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            unstable::rust_crumsort_rs::SortImpl,
+        );
+
         #[cfg(feature = "cpp_pdqsort")]
         bench_impl(
             c,
@@ -865,6 +876,13 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         //             this
         //         })
+        //         .collect()
+        // });
+
+        // bench_patterns(c, test_size, "u8", |values| {
+        //     values
+        //         .iter()
+        //         .map(|val| -> u8 { (val & u8::MAX as i32) as u8 })
         //         .collect()
         // });
     }

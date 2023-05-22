@@ -21,6 +21,7 @@ zipf = "7.0.0"
 radsort = { version = "0.1", optional = true }
 dmsort = { version = "1.0", optional = true }
 glidesort = { version = "0.1.2", features = ["unstable"], optional = true }
+crumsort = { version = "0.1", optional = true }
 sort_test_tools = { path = "sort_test_tools", default-features = false }
 
 [dev-dependencies]
@@ -74,6 +75,7 @@ default = [
     # "rust_radsort",
     # "rust_dmsort",
     # "rust_glidesort",
+    # "rust_crumsort_rs",
 ]
 
 # Enable support for C++ std::sort and std::sort_stable.
@@ -120,11 +122,11 @@ cpp_blockquicksort = []
 # Enable Gerben Stavenga's QuickSort https://github.com/gerben-s/quicksort-blog-post
 cpp_gerbens_qsort = []
 
-# Enable support for c_crumsort.
+# Enable crumsort by Igor van den Hoven.
 # Uses system C++ standard lib.
 c_crumsort = []
 
-# Enable support for c_fluxsort.
+# Enable fluxsort by Igor van den Hoven.
 # Uses system C++ standard lib.
 c_fluxsort = []
 
@@ -140,7 +142,12 @@ rust_radsort = ["radsort"]
 # No additional requirements, but disabled by default to keep things lean.
 rust_dmsort = ["dmsort"]
 
+# Enable glidesort by Orson Peters.
 rust_glidesort = ["glidesort"]
+
+# Enable Rust port of crumsort. Parallelized by default and not a carbon copy port. There are
+# substantial differences to the original crumsort.
+rust_crumsort_rs = ["crumsort"]
 
 # Enable the sort evolution code.
 # Demonstrates various stages and optimizations of stable and unstable sorts.
