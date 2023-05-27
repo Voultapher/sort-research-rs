@@ -591,6 +591,7 @@ fn fulcrum_partition_impl<T, F, const ROTATION_ELEMS: usize>(
     is_less: &mut F,
 ) -> usize
 where
+    T: Freeze,
     F: FnMut(&T, &T) -> bool,
 {
     // TODO explain ideas. and panic safety. cleanup.
@@ -598,11 +599,7 @@ where
 
     const SWAP_SIZE: usize = 64;
 
-    assert!(
-        len >= (ROTATION_ELEMS * 2)
-            && ROTATION_ELEMS <= 32
-            && !has_direct_iterior_mutability::<T>()
-    );
+    assert!(len >= (ROTATION_ELEMS * 2) && ROTATION_ELEMS <= 32);
 
     let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO
@@ -664,6 +661,7 @@ where
 
 fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
+    T: Freeze,
     F: FnMut(&T, &T) -> bool,
 {
     // TODO explain.
@@ -846,7 +844,19 @@ impl<T> UnstableSortTypeImpl for T {
     where
         F: FnMut(&Self, &Self) -> bool,
     {
-        small_sort_default(v, is_less)
+        const MAX_LEN_INSERTION_SORT: usize = 20;
+
+        let len = v.len();
+
+        if intrinsics::likely(len <= MAX_LEN_INSERTION_SORT) {
+            if intrinsics::likely(len >= 2) {
+                insertion_sort_shift_left(v, 1, is_less);
+            }
+
+            true
+        } else {
+            false
+        }
     }
 
     default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
@@ -854,25 +864,6 @@ impl<T> UnstableSortTypeImpl for T {
         F: FnMut(&Self, &Self) -> bool,
     {
         partition_in_blocks(v, pivot, is_less)
-    }
-}
-
-fn small_sort_default<T, F>(v: &mut [T], is_less: &mut F) -> bool
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    const MAX_LEN_INSERTION_SORT: usize = max_len_small_sort::<String>();
-
-    if intrinsics::likely(len <= MAX_LEN_INSERTION_SORT) {
-        if intrinsics::likely(len >= 2) {
-            insertion_sort_shift_left(v, 1, is_less);
-        }
-
-        true
-    } else {
-        false
     }
 }
 
@@ -1000,41 +991,27 @@ where
     }
 }
 
-// Limit this code-gen to Copy types, to limit emitted LLVM-IR.
-// The sorting-networks will have the best effect for types like integers.
-impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
+impl<T: Freeze> UnstableSortTypeImpl for T {
     fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
     where
         F: FnMut(&Self, &Self) -> bool,
     {
-        if const { is_cheap_to_move::<T>() } {
-            let len = v.len();
+        let len = v.len();
 
-            const MAX_LEN_NETWORK: usize = max_len_small_sort::<i32>();
-            if intrinsics::unlikely(len > MAX_LEN_NETWORK) {
-                return false;
-            }
-
-            // Always sort assuming somewhat random distribution.
-            // Patterns should have already been found by the other analysis steps.
-            //
-            // Small total slices are handled separately, see function quicksort.
-            if len >= 14 {
-                sort14_plus(v, is_less);
-            } else if len >= 2 {
-                let end = if len >= 10 {
-                    sort10_optimal(&mut v[0..10], is_less);
-                    10
-                } else {
-                    1
-                };
-
-                insertion_sort_shift_left(v, end, is_less);
+        if intrinsics::likely(len <= max_len_small_sort::<T>()) {
+            // I suspect that generalized efficient indirect branchless sorting constructs like
+            // sort4_indirect for larger sizes exist. But finding them is an open research problem.
+            // And even then it's not clear that they would be better than in-place sorting-networks
+            // as used in small_sort_network.
+            if const { has_efficient_in_place_swap::<T>() } {
+                small_sort_network(v, is_less);
+            } else {
+                small_sort_general(v, is_less);
             }
 
             true
         } else {
-            small_sort_default(v, is_less)
+            false
         }
     }
 
@@ -1042,8 +1019,9 @@ impl<T: Copy + Freeze> UnstableSortTypeImpl for T {
     where
         F: FnMut(&Self, &Self) -> bool,
     {
-        // TODO explain this limitation.
-        if const { FULCRUM_ENABLED && mem::size_of::<T>() <= mem::size_of::<usize>() } {
+        // The code-gen properties that make in-place swapping inefficient for types larger than u64
+        // also apply to fulcrum partitioning.
+        if const { FULCRUM_ENABLED && has_efficient_in_place_swap::<T>() } {
             fulcrum_partition(v, pivot, is_less)
         } else {
             partition_in_blocks(v, pivot, is_less)
@@ -1145,7 +1123,7 @@ where
 }
 
 #[inline(always)]
-pub unsafe fn merge_up<T, F>(
+unsafe fn merge_up<T, F>(
     mut src_left: *const T,
     mut src_right: *const T,
     mut dest_ptr: *mut T,
@@ -1166,18 +1144,22 @@ where
     // }
     // dest_ptr = dest_ptr.add(1);
 
-    let is_l = !is_less(&*src_right, &*src_left);
-    let copy_ptr = if is_l { src_left } else { src_right };
-    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
-    src_right = src_right.wrapping_add(!is_l as usize);
-    src_left = src_left.wrapping_add(is_l as usize);
-    dest_ptr = dest_ptr.add(1);
+    // SAFETY: The caller must guarantee that `src_left`, `src_right` are valid to read and
+    // `dest_ptr` is valid to write, while not aliasing.
+    unsafe {
+        let is_l = !is_less(&*src_right, &*src_left);
+        let copy_ptr = if is_l { src_left } else { src_right };
+        ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
+        src_right = src_right.wrapping_add(!is_l as usize);
+        src_left = src_left.wrapping_add(is_l as usize);
+        dest_ptr = dest_ptr.add(1);
+    }
 
     (src_left, src_right, dest_ptr)
 }
 
 #[inline(always)]
-pub unsafe fn merge_down<T, F>(
+unsafe fn merge_down<T, F>(
     mut src_left: *const T,
     mut src_right: *const T,
     mut dest_ptr: *mut T,
@@ -1198,55 +1180,99 @@ where
     // }
     // dest_ptr = dest_ptr.sub(1);
 
-    let is_l = !is_less(&*src_right, &*src_left);
-    let copy_ptr = if is_l { src_right } else { src_left };
-    ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
-    src_right = src_right.wrapping_sub(is_l as usize);
-    src_left = src_left.wrapping_sub(!is_l as usize);
-    dest_ptr = dest_ptr.sub(1);
+    // SAFETY: The caller must guarantee that `src_left`, `src_right` are valid to read and
+    // `dest_ptr` is valid to write, while not aliasing.
+    unsafe {
+        let is_l = !is_less(&*src_right, &*src_left);
+        let copy_ptr = if is_l { src_right } else { src_left };
+        ptr::copy_nonoverlapping(copy_ptr, dest_ptr, 1);
+        src_right = src_right.wrapping_sub(is_l as usize);
+        src_left = src_left.wrapping_sub(!is_l as usize);
+        dest_ptr = dest_ptr.sub(1);
+    }
 
     (src_left, src_right, dest_ptr)
 }
 
-// Adapted from crumsort/quadsort.
-unsafe fn parity_merge<T, F>(v: &[T], dest_ptr: *mut T, is_less: &mut F)
+/// Merge v assuming the len is even and v[..len / 2] and v[len / 2..] are sorted.
+///
+/// Original idea for bi-directional merging by Igor van den Hoven (quadsort), adapted to only use
+/// merge up and down. In contrast to the original parity_merge function, it performs 2 writes
+/// instead of 4 per iteration. Ord violation detection was added.
+unsafe fn bi_directional_merge_even<T, F>(v: &[T], dest_ptr: *mut T, is_less: &mut F)
 where
+    T: Freeze,
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: the caller must guarantee that `dest_ptr` is valid for v.len() writes.
     // Also `v.as_ptr` and `dest_ptr` must not alias.
     //
     // The caller must guarantee that T cannot modify itself inside is_less.
+    // merge_up and merge_down read left and right pointers and potentially modify the stack value
+    // they point to, if T has interior mutability. This may leave one or two potential writes to
+    // the stack value un-observed when dest is copied onto of src.
+
+    // It helps to visualize the merge:
+    //
+    // Initial:
+    //
+    //  |ptr_data (in dest)
+    //  |ptr_left           |ptr_right
+    //  v                   v
+    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+    //                     ^                   ^
+    //                     |t_ptr_left         |t_ptr_right
+    //                                         |t_ptr_data (in dest)
+    //
+    // After:
+    //
+    //                      |ptr_data (in dest)
+    //        |ptr_left     |           |ptr_right
+    //        v             v           v
+    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+    //       ^             ^           ^
+    //       |t_ptr_left   |           |t_ptr_right
+    //                     |t_ptr_data (in dest)
+    //
+    //
+    // Note, the pointers that have been written, are now one past where they were read and
+    // copied. written == incremented or decremented + copy to dest.
+
     let len = v.len();
     let src_ptr = v.as_ptr();
 
-    let block = len / 2;
+    let len_div_2 = len / 2;
 
-    let mut ptr_left = src_ptr;
-    let mut ptr_right = src_ptr.wrapping_add(block);
-    let mut ptr_data = dest_ptr;
+    // SAFETY: No matter what the result of the user-provided comparison function is, all 4 read
+    // pointers will always be in-bounds. Writing `ptr_data` and `t_ptr_data` will always be in
+    // bounds if the caller guarantees that `dest_ptr` is valid for `v.len()` writes.
+    unsafe {
+        let mut ptr_left = src_ptr;
+        let mut ptr_right = src_ptr.wrapping_add(len_div_2);
+        let mut ptr_data = dest_ptr;
 
-    let mut t_ptr_left = src_ptr.wrapping_add(block - 1);
-    let mut t_ptr_right = src_ptr.wrapping_add(len - 1);
-    let mut t_ptr_data = dest_ptr.wrapping_add(len - 1);
+        let mut t_ptr_left = src_ptr.wrapping_add(len_div_2 - 1);
+        let mut t_ptr_right = src_ptr.wrapping_add(len - 1);
+        let mut t_ptr_data = dest_ptr.wrapping_add(len - 1);
 
-    for _ in 0..block {
-        (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
-        (t_ptr_left, t_ptr_right, t_ptr_data) =
-            merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
-    }
+        for _ in 0..len_div_2 {
+            (ptr_left, ptr_right, ptr_data) = merge_up(ptr_left, ptr_right, ptr_data, is_less);
+            (t_ptr_left, t_ptr_right, t_ptr_data) =
+                merge_down(t_ptr_left, t_ptr_right, t_ptr_data, is_less);
+        }
 
-    let left_diff = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
-    let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
+        let left_diff = (ptr_left as usize).wrapping_sub(t_ptr_left as usize);
+        let right_diff = (ptr_right as usize).wrapping_sub(t_ptr_right as usize);
 
-    if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
-        panic_on_ord_violation();
+        if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
+            panic_on_ord_violation();
+        }
     }
 }
 
 // Slices of up to this length get sorted using optimized sorting for small slices.
 const fn max_len_small_sort<T>() -> usize {
-    if is_cheap_to_move::<T>() && is_copy::<T>() {
+    if <T as IsFreeze>::value() && has_efficient_in_place_swap::<T>() {
         36
     } else {
         20
@@ -1254,33 +1280,9 @@ const fn max_len_small_sort<T>() -> usize {
 }
 
 // // #[rustc_unsafe_specialization_marker]
-#[const_trait]
-trait IsCopy {
-    fn value() -> bool;
-}
-
-impl<T> const IsCopy for T {
-    default fn value() -> bool {
-        false
-    }
-}
-
-impl<T: Copy> const IsCopy for T {
-    fn value() -> bool {
-        true
-    }
-}
-
-const fn is_copy<T>() -> bool {
-    <T as IsCopy>::value()
-}
-
-// impl<T: Copy> IsCopyMarker for T {}
-
-// // #[rustc_unsafe_specialization_marker]
 // trait Freeze {}
 
-// Can the type have interior mutability, this is checked by testing if T is Copy. If the type can
+// Can the type have interior mutability, this is checked by testing if T is Freeze. If the type can
 // have interior mutability it may alter itself during comparison in a way that must be observed
 // after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
 // double free.
@@ -1311,40 +1313,16 @@ impl<T: Freeze> const IsFreeze for T {
 }
 
 #[must_use]
-const fn has_direct_iterior_mutability<T>() -> bool {
-    // - Can the type have interior mutability, this is checked by testing if T is Copy.
-    //   If the type can have interior mutability it may alter itself during comparison in a way
-    //   that must be observed after the sort operation concludes.
-    //   Otherwise a type like Mutex<Option<Box<str>>> could lead to double free.
-    !<T as IsFreeze>::value()
-}
-
-const fn is_cheap_to_move<T>() -> bool {
-    // This is a heuristic, and as such it will guess wrong from time to time. The two parts broken
-    // down:
-    //
-    // - Type size: Large types are more expensive to move and the time won avoiding branches can be
-    //              offset by the increased cost of moving the values.
-    //
-    // In contrast to stable sort, using sorting networks here, allows to do fewer comparisons.
-    mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()
+const fn has_efficient_in_place_swap<T>() -> bool {
+    mem::size_of::<T>() <= mem::size_of::<u64>()
 }
 
 #[test]
 fn type_info() {
-    assert!(is_copy::<i32>());
-    assert!(is_copy::<u64>());
-    assert!(!is_copy::<String>());
-
-    assert!(!has_direct_iterior_mutability::<i32>());
-    assert!(!has_direct_iterior_mutability::<u64>());
-    assert!(!has_direct_iterior_mutability::<String>());
-    assert!(has_direct_iterior_mutability::<core::cell::Cell<i32>>());
-
-    assert!(is_cheap_to_move::<i32>());
-    assert!(is_cheap_to_move::<u64>());
-    assert!(is_cheap_to_move::<String>());
-    assert!(!is_cheap_to_move::<[i32; 20]>());
+    assert!(has_efficient_in_place_swap::<i32>());
+    assert!(has_efficient_in_place_swap::<u64>());
+    assert!(!has_efficient_in_place_swap::<u128>());
+    assert!(!has_efficient_in_place_swap::<String>());
 }
 
 // --- Branchless sorting (less branches not zero) ---
@@ -1522,12 +1500,13 @@ where
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort14_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
+    T: Freeze,
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
     const MAX_BRANCHLESS_SMALL_SORT: usize = max_len_small_sort::<i32>();
 
-    assert!(len >= 14 && len <= MAX_BRANCHLESS_SMALL_SORT && !has_direct_iterior_mutability::<T>());
+    assert!(len >= 14 && len <= MAX_BRANCHLESS_SMALL_SORT);
 
     if len < 20 {
         sort14_optimal(&mut v[0..14], is_less);
@@ -1557,11 +1536,11 @@ where
     let mut swap = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
-    // SAFETY: We checked that T is Copy and thus observation safe.
+    // SAFETY: We checked that T is Freeze and thus observation safe.
     // Should is_less panic v was not modified in parity_merge and retains it's original input.
     // swap and v must not alias and swap has v.len() space.
     unsafe {
-        parity_merge(&mut v[..even_len], swap_ptr, is_less);
+        bi_directional_merge_even(&mut v[..even_len], swap_ptr, is_less);
         ptr::copy_nonoverlapping(swap_ptr, v.as_mut_ptr(), even_len);
     }
 
@@ -1569,6 +1548,202 @@ where
         // SAFETY: We know len >= 2.
         unsafe {
             insert_tail(v, is_less);
+        }
+    }
+}
+
+fn small_sort_network<T, F>(v: &mut [T], is_less: &mut F)
+where
+    T: Freeze,
+    F: FnMut(&T, &T) -> bool,
+{
+    // This implementation is tuned to be efficient for integer types.
+
+    let len = v.len();
+
+    // Always sort assuming somewhat random distribution.
+    // Patterns should have already been found by the other analysis steps.
+    //
+    // Small total slices are handled separately, see function quicksort.
+    if len >= 14 {
+        sort14_plus(v, is_less);
+    } else if len >= 2 {
+        let end = if len >= 10 {
+            sort10_optimal(&mut v[0..10], is_less);
+            10
+        } else {
+            1
+        };
+
+        insertion_sort_shift_left(v, end, is_less);
+    }
+}
+
+fn small_sort_general<T, F>(v: &mut [T], is_less: &mut F)
+where
+    T: Freeze,
+    F: FnMut(&T, &T) -> bool,
+{
+    // This implementation is tuned to be efficient for various types that are larger than u64.
+
+    const MAX_SIZE: usize = max_len_small_sort::<String>();
+
+    let len = v.len();
+
+    let mut scratch = MaybeUninit::<[T; MAX_SIZE]>::uninit();
+    let scratch_ptr = scratch.as_mut_ptr() as *mut T;
+
+    if len >= 16 && len <= MAX_SIZE {
+        let even_len = len - (len % 2);
+        let len_div_2 = even_len / 2;
+
+        // SAFETY: scratch_ptr is valid and has enough space. And we checked that both
+        // v[..len_div_2] and v[len_div_2..] are at least 8 large.
+        unsafe {
+            let arr_ptr = v.as_mut_ptr();
+            sort8_indirect(arr_ptr, scratch_ptr, is_less);
+            sort8_indirect(arr_ptr.add(len_div_2), scratch_ptr, is_less);
+        }
+
+        insertion_sort_shift_left(&mut v[0..len_div_2], 8, is_less);
+        insertion_sort_shift_left(&mut v[len_div_2..], 8, is_less);
+
+        // SAFETY: We checked that T is Freeze and thus observation safe. Should is_less panic v
+        // was not modified in parity_merge and retains it's original input. swap and v must not
+        // alias and swap has v.len() space.
+        unsafe {
+            bi_directional_merge_even(&mut v[..even_len], scratch_ptr, is_less);
+            ptr::copy_nonoverlapping(scratch_ptr, v.as_mut_ptr(), even_len);
+        }
+
+        if len != even_len {
+            // SAFETY: We know len >= 2.
+            unsafe {
+                insert_tail(v, is_less);
+            }
+        }
+    } else if len >= 2 {
+        let offset = if len >= 8 {
+            // SAFETY: scratch_ptr is valid and has enough space.
+            unsafe {
+                sort8_indirect(v.as_mut_ptr(), scratch_ptr, is_less);
+            }
+
+            8
+        } else {
+            1
+        };
+
+        insertion_sort_shift_left(v, offset, is_less);
+    }
+}
+
+/// SAFETY: The caller MUST guarantee that `arr_ptr` is valid for 4 reads and `dest_ptr` is valid
+/// for 4 writes.
+pub unsafe fn sort4_indirect<T, F>(arr_ptr: *const T, dest_ptr: *mut T, is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // By limiting select to picking pointers, we are guaranteed good cmov code-gen regardless of
+    // type T layout. Further this only does 5 instead of 6 comparisons compared to a stable
+    // transposition 4 element sorting-network. Also by only operating on pointers, we get optimal
+    // element copy usage. Doing exactly 1 copy per element.
+
+    // let arr_ptr = v.as_ptr();
+
+    unsafe {
+        // Stably create two pairs a <= b and c <= d.
+        let c1 = is_less(&*arr_ptr.add(1), &*arr_ptr) as usize;
+        let c2 = is_less(&*arr_ptr.add(3), &*arr_ptr.add(2)) as usize;
+        let a = arr_ptr.add(c1);
+        let b = arr_ptr.add(c1 ^ 1);
+        let c = arr_ptr.add(2 + c2);
+        let d = arr_ptr.add(2 + (c2 ^ 1));
+
+        // Compare (a, c) and (b, d) to identify max/min. We're left with two
+        // unknown elements, but because we are a stable sort we must know which
+        // one is leftmost and which one is rightmost.
+        // c3, c4 | min max unknown_left unknown_right
+        //  0,  0 |  a   d    b         c
+        //  0,  1 |  a   b    c         d
+        //  1,  0 |  c   d    a         b
+        //  1,  1 |  c   b    a         d
+        let c3 = is_less(&*c, &*a);
+        let c4 = is_less(&*d, &*b);
+        let min = select(c3, c, a);
+        let max = select(c4, b, d);
+        let unknown_left = select(c3, a, select(c4, c, b));
+        let unknown_right = select(c4, d, select(c3, b, c));
+
+        // Sort the last two unknown elements.
+        let c5 = is_less(&*unknown_right, &*unknown_left);
+        let lo = select(c5, unknown_right, unknown_left);
+        let hi = select(c5, unknown_left, unknown_right);
+
+        ptr::copy_nonoverlapping(min, dest_ptr, 1);
+        ptr::copy_nonoverlapping(lo, dest_ptr.add(1), 1);
+        ptr::copy_nonoverlapping(hi, dest_ptr.add(2), 1);
+        ptr::copy_nonoverlapping(max, dest_ptr.add(3), 1);
+    }
+
+    #[inline(always)]
+    pub fn select<T>(cond: bool, if_true: *const T, if_false: *const T) -> *const T {
+        if cond {
+            if_true
+        } else {
+            if_false
+        }
+    }
+}
+
+/// SAFETY: The caller MUST guarantee that `arr_ptr` is valid for 8 reads and writes, and
+/// `scratch_ptr` is valid for 8 writes.
+#[inline(never)]
+unsafe fn sort8_indirect<T, F>(arr_ptr: *mut T, scratch_ptr: *mut T, is_less: &mut F)
+where
+    T: Freeze,
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: The caller must guarantee that scratch_ptr is valid for 8 writes, and that arr_ptr is
+    // valid for 8 reads.
+    unsafe {
+        sort4_indirect(arr_ptr, scratch_ptr, is_less);
+        sort4_indirect(arr_ptr.add(4), scratch_ptr.add(4), is_less);
+    }
+
+    // SAFETY: We checked that T is Freeze and thus observation safe.
+    // Should is_less panic v was not modified in parity_merge and retains its original input.
+    // swap and v must not alias and swap has v.len() space.
+    unsafe {
+        // It's slightly faster to merge directly into v and copy over the 'safe' elements of swap
+        // into v only if there was a panic. This technique is also known as ping-pong merge.
+        let drop_guard = DropGuard {
+            src: scratch_ptr,
+            dest: arr_ptr,
+        };
+        bi_directional_merge_even(
+            &*ptr::slice_from_raw_parts(scratch_ptr, 8),
+            arr_ptr,
+            is_less,
+        );
+        mem::forget(drop_guard);
+    }
+
+    struct DropGuard<T> {
+        src: *const T,
+        dest: *mut T,
+    }
+
+    impl<T> Drop for DropGuard<T> {
+        fn drop(&mut self) {
+            // SAFETY: `T` is not a zero-sized type, src must hold the original 8 elements of v in
+            // any order. And dest must be valid to write 8 elements.
+            //
+            // Use black_box to emit memcpy instead of efficient direct copying. This reduces the
+            // binary size, and this path will only be used if the comparison function panics.
+            unsafe {
+                ptr::copy_nonoverlapping(self.src, self.dest, core::hint::black_box(8));
+            }
         }
     }
 }
