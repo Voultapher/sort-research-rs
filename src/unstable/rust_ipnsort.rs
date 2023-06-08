@@ -1428,6 +1428,185 @@ where
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 // performance impact.
 #[inline(never)]
+fn sort11_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 11.
+    assert!(v.len() == 11);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 9, is_less);
+        swap_if_less(arr_ptr, 1, 6, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 3, 7, is_less);
+        swap_if_less(arr_ptr, 5, 8, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 4, 10, is_less);
+        swap_if_less(arr_ptr, 6, 9, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 4, 7, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 0, 4, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 7, is_less);
+        swap_if_less(arr_ptr, 5, 9, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 6, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 3, 6, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn sort12_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 12.
+    assert!(v.len() == 12);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 8, is_less);
+        swap_if_less(arr_ptr, 1, 7, is_less);
+        swap_if_less(arr_ptr, 2, 6, is_less);
+        swap_if_less(arr_ptr, 3, 11, is_less);
+        swap_if_less(arr_ptr, 4, 10, is_less);
+        swap_if_less(arr_ptr, 5, 9, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 6, 9, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 0, 2, is_less);
+        swap_if_less(arr_ptr, 1, 6, is_less);
+        swap_if_less(arr_ptr, 5, 10, is_less);
+        swap_if_less(arr_ptr, 9, 11, is_less);
+        swap_if_less(arr_ptr, 0, 3, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 8, 11, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 1, 4, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 7, 10, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 6, 9, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn sort13_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 13.
+    assert!(v.len() == 13);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 12, is_less);
+        swap_if_less(arr_ptr, 1, 10, is_less);
+        swap_if_less(arr_ptr, 2, 9, is_less);
+        swap_if_less(arr_ptr, 3, 7, is_less);
+        swap_if_less(arr_ptr, 5, 11, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 1, 6, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 11, is_less);
+        swap_if_less(arr_ptr, 7, 9, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 0, 4, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 11, 12, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 5, 9, is_less);
+        swap_if_less(arr_ptr, 8, 11, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 0, 5, is_less);
+        swap_if_less(arr_ptr, 3, 8, is_less);
+        swap_if_less(arr_ptr, 4, 7, is_less);
+        swap_if_less(arr_ptr, 6, 11, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 6, 9, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
 fn sort14_optimal<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -1497,6 +1676,350 @@ where
     }
 }
 
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn sort15_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 15.
+    assert!(v.len() == 15);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 10, is_less);
+        swap_if_less(arr_ptr, 4, 14, is_less);
+        swap_if_less(arr_ptr, 5, 8, is_less);
+        swap_if_less(arr_ptr, 6, 13, is_less);
+        swap_if_less(arr_ptr, 7, 12, is_less);
+        swap_if_less(arr_ptr, 9, 11, is_less);
+        swap_if_less(arr_ptr, 0, 14, is_less);
+        swap_if_less(arr_ptr, 1, 5, is_less);
+        swap_if_less(arr_ptr, 2, 8, is_less);
+        swap_if_less(arr_ptr, 3, 7, is_less);
+        swap_if_less(arr_ptr, 6, 9, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 11, 13, is_less);
+        swap_if_less(arr_ptr, 0, 7, is_less);
+        swap_if_less(arr_ptr, 1, 6, is_less);
+        swap_if_less(arr_ptr, 2, 9, is_less);
+        swap_if_less(arr_ptr, 4, 10, is_less);
+        swap_if_less(arr_ptr, 5, 11, is_less);
+        swap_if_less(arr_ptr, 8, 13, is_less);
+        swap_if_less(arr_ptr, 12, 14, is_less);
+        swap_if_less(arr_ptr, 0, 6, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 7, 11, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 9, 12, is_less);
+        swap_if_less(arr_ptr, 13, 14, is_less);
+        swap_if_less(arr_ptr, 0, 3, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 4, 7, is_less);
+        swap_if_less(arr_ptr, 5, 9, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 12, 13, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 7, 9, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 11, 13, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 11, 12, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn sort16_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 16.
+    assert!(v.len() == 16);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 13, is_less);
+        swap_if_less(arr_ptr, 1, 12, is_less);
+        swap_if_less(arr_ptr, 2, 15, is_less);
+        swap_if_less(arr_ptr, 3, 14, is_less);
+        swap_if_less(arr_ptr, 4, 8, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 11, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 0, 5, is_less);
+        swap_if_less(arr_ptr, 1, 7, is_less);
+        swap_if_less(arr_ptr, 2, 9, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 6, 13, is_less);
+        swap_if_less(arr_ptr, 8, 14, is_less);
+        swap_if_less(arr_ptr, 10, 15, is_less);
+        swap_if_less(arr_ptr, 11, 12, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 7, 9, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 12, 13, is_less);
+        swap_if_less(arr_ptr, 14, 15, is_less);
+        swap_if_less(arr_ptr, 0, 2, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 4, 10, is_less);
+        swap_if_less(arr_ptr, 5, 11, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 12, 14, is_less);
+        swap_if_less(arr_ptr, 13, 15, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 12, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 9, 11, is_less);
+        swap_if_less(arr_ptr, 13, 14, is_less);
+        swap_if_less(arr_ptr, 1, 4, is_less);
+        swap_if_less(arr_ptr, 2, 6, is_less);
+        swap_if_less(arr_ptr, 5, 8, is_less);
+        swap_if_less(arr_ptr, 7, 10, is_less);
+        swap_if_less(arr_ptr, 9, 13, is_less);
+        swap_if_less(arr_ptr, 11, 14, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 3, 6, is_less);
+        swap_if_less(arr_ptr, 9, 12, is_less);
+        swap_if_less(arr_ptr, 11, 13, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 7, 9, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 11, 12, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn sort17_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 17.
+    assert!(v.len() == 17);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 11, is_less);
+        swap_if_less(arr_ptr, 1, 15, is_less);
+        swap_if_less(arr_ptr, 2, 10, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 8, 12, is_less);
+        swap_if_less(arr_ptr, 9, 16, is_less);
+        swap_if_less(arr_ptr, 13, 14, is_less);
+        swap_if_less(arr_ptr, 0, 6, is_less);
+        swap_if_less(arr_ptr, 1, 13, is_less);
+        swap_if_less(arr_ptr, 2, 8, is_less);
+        swap_if_less(arr_ptr, 4, 14, is_less);
+        swap_if_less(arr_ptr, 5, 15, is_less);
+        swap_if_less(arr_ptr, 7, 11, is_less);
+        swap_if_less(arr_ptr, 0, 8, is_less);
+        swap_if_less(arr_ptr, 3, 7, is_less);
+        swap_if_less(arr_ptr, 4, 9, is_less);
+        swap_if_less(arr_ptr, 6, 16, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 12, 14, is_less);
+        swap_if_less(arr_ptr, 0, 2, is_less);
+        swap_if_less(arr_ptr, 1, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 13, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 11, 14, is_less);
+        swap_if_less(arr_ptr, 15, 16, is_less);
+        swap_if_less(arr_ptr, 0, 3, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 6, 11, is_less);
+        swap_if_less(arr_ptr, 7, 10, is_less);
+        swap_if_less(arr_ptr, 9, 13, is_less);
+        swap_if_less(arr_ptr, 12, 15, is_less);
+        swap_if_less(arr_ptr, 14, 16, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 10, is_less);
+        swap_if_less(arr_ptr, 6, 9, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 11, 15, is_less);
+        swap_if_less(arr_ptr, 13, 14, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 7, is_less);
+        swap_if_less(arr_ptr, 4, 8, is_less);
+        swap_if_less(arr_ptr, 6, 12, is_less);
+        swap_if_less(arr_ptr, 11, 13, is_less);
+        swap_if_less(arr_ptr, 14, 15, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 2, 7, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 9, 11, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 13, 14, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 7, 9, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 11, 12, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 12, 13, is_less);
+    }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn sort18_optimal<T, F>(v: &mut [T], is_less: &mut F)
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 18.
+    assert!(v.len() == 18);
+
+    let arr_ptr = v.as_mut_ptr();
+
+    // Optimal sorting network see:
+    // https://bertdobbelaere.github.io/sorting_networks.html.
+
+    // We checked the len.
+    unsafe {
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 3, is_less);
+        swap_if_less(arr_ptr, 4, 5, is_less);
+        swap_if_less(arr_ptr, 6, 7, is_less);
+        swap_if_less(arr_ptr, 8, 9, is_less);
+        swap_if_less(arr_ptr, 10, 11, is_less);
+        swap_if_less(arr_ptr, 12, 13, is_less);
+        swap_if_less(arr_ptr, 14, 15, is_less);
+        swap_if_less(arr_ptr, 16, 17, is_less);
+        swap_if_less(arr_ptr, 0, 2, is_less);
+        swap_if_less(arr_ptr, 1, 3, is_less);
+        swap_if_less(arr_ptr, 4, 12, is_less);
+        swap_if_less(arr_ptr, 5, 13, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 9, 11, is_less);
+        swap_if_less(arr_ptr, 14, 16, is_less);
+        swap_if_less(arr_ptr, 15, 17, is_less);
+        swap_if_less(arr_ptr, 0, 14, is_less);
+        swap_if_less(arr_ptr, 1, 16, is_less);
+        swap_if_less(arr_ptr, 2, 15, is_less);
+        swap_if_less(arr_ptr, 3, 17, is_less);
+        swap_if_less(arr_ptr, 0, 6, is_less);
+        swap_if_less(arr_ptr, 1, 10, is_less);
+        swap_if_less(arr_ptr, 2, 9, is_less);
+        swap_if_less(arr_ptr, 7, 16, is_less);
+        swap_if_less(arr_ptr, 8, 15, is_less);
+        swap_if_less(arr_ptr, 11, 17, is_less);
+        swap_if_less(arr_ptr, 1, 4, is_less);
+        swap_if_less(arr_ptr, 3, 9, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 8, 14, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 13, 16, is_less);
+        swap_if_less(arr_ptr, 0, 1, is_less);
+        swap_if_less(arr_ptr, 2, 5, is_less);
+        swap_if_less(arr_ptr, 3, 13, is_less);
+        swap_if_less(arr_ptr, 4, 14, is_less);
+        swap_if_less(arr_ptr, 7, 9, is_less);
+        swap_if_less(arr_ptr, 8, 10, is_less);
+        swap_if_less(arr_ptr, 12, 15, is_less);
+        swap_if_less(arr_ptr, 16, 17, is_less);
+        swap_if_less(arr_ptr, 1, 2, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 4, 6, is_less);
+        swap_if_less(arr_ptr, 11, 13, is_less);
+        swap_if_less(arr_ptr, 12, 14, is_less);
+        swap_if_less(arr_ptr, 15, 16, is_less);
+        swap_if_less(arr_ptr, 4, 8, is_less);
+        swap_if_less(arr_ptr, 5, 12, is_less);
+        swap_if_less(arr_ptr, 6, 10, is_less);
+        swap_if_less(arr_ptr, 7, 11, is_less);
+        swap_if_less(arr_ptr, 9, 13, is_less);
+        swap_if_less(arr_ptr, 1, 4, is_less);
+        swap_if_less(arr_ptr, 2, 8, is_less);
+        swap_if_less(arr_ptr, 3, 6, is_less);
+        swap_if_less(arr_ptr, 5, 7, is_less);
+        swap_if_less(arr_ptr, 9, 15, is_less);
+        swap_if_less(arr_ptr, 10, 12, is_less);
+        swap_if_less(arr_ptr, 11, 14, is_less);
+        swap_if_less(arr_ptr, 13, 16, is_less);
+        swap_if_less(arr_ptr, 2, 4, is_less);
+        swap_if_less(arr_ptr, 5, 8, is_less);
+        swap_if_less(arr_ptr, 6, 10, is_less);
+        swap_if_less(arr_ptr, 7, 11, is_less);
+        swap_if_less(arr_ptr, 9, 12, is_less);
+        swap_if_less(arr_ptr, 13, 15, is_less);
+        swap_if_less(arr_ptr, 3, 5, is_less);
+        swap_if_less(arr_ptr, 6, 8, is_less);
+        swap_if_less(arr_ptr, 7, 10, is_less);
+        swap_if_less(arr_ptr, 9, 11, is_less);
+        swap_if_less(arr_ptr, 12, 14, is_less);
+        swap_if_less(arr_ptr, 3, 4, is_less);
+        swap_if_less(arr_ptr, 5, 6, is_less);
+        swap_if_less(arr_ptr, 7, 8, is_less);
+        swap_if_less(arr_ptr, 9, 10, is_less);
+        swap_if_less(arr_ptr, 11, 12, is_less);
+        swap_if_less(arr_ptr, 13, 14, is_less);
+    }
+}
+
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn sort14_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
@@ -1509,29 +2032,67 @@ where
     assert!(len >= 14 && len <= MAX_BRANCHLESS_SMALL_SORT);
 
     if len < 20 {
-        sort14_optimal(&mut v[0..14], is_less);
-        insertion_sort_shift_left(v, 14, is_less);
+        match len {
+            14 => sort14_optimal(v, is_less),
+            15 => sort15_optimal(v, is_less),
+            16 => sort16_optimal(v, is_less),
+            17 => sort17_optimal(v, is_less),
+            18 => sort18_optimal(v, is_less),
+            19 => {
+                sort18_optimal(&mut v[..18], is_less);
+                // SAFETY: TODO
+                unsafe {
+                    insert_tail(v, is_less);
+                }
+            }
+            _ => unreachable!(),
+        }
         return;
     }
 
     // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
-    let even_len = len - (len % 2 != 0) as usize;
+    let even_len = len - (len % 2) as usize;
     let len_div_2 = even_len / 2;
 
-    let mid = if len < 28 {
-        sort10_optimal(&mut v[0..10], is_less);
-        sort10_optimal(&mut v[len_div_2..(len_div_2 + 10)], is_less);
-
-        10
-    } else {
-        sort14_optimal(&mut v[0..14], is_less);
-        sort14_optimal(&mut v[len_div_2..(len_div_2 + 14)], is_less);
-
-        14
-    };
-
-    insertion_sort_shift_left(&mut v[0..len_div_2], mid, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..], mid, is_less);
+    match even_len {
+        20 => {
+            sort10_optimal(&mut v[0..10], is_less);
+            sort10_optimal(&mut v[len_div_2..(len_div_2 + 10)], is_less);
+        }
+        22 => {
+            sort11_optimal(&mut v[0..11], is_less);
+            sort11_optimal(&mut v[len_div_2..(len_div_2 + 11)], is_less);
+        }
+        24 => {
+            sort12_optimal(&mut v[0..12], is_less);
+            sort12_optimal(&mut v[len_div_2..(len_div_2 + 12)], is_less);
+        }
+        26 => {
+            sort13_optimal(&mut v[0..13], is_less);
+            sort13_optimal(&mut v[len_div_2..(len_div_2 + 13)], is_less);
+        }
+        28 => {
+            sort14_optimal(&mut v[0..14], is_less);
+            sort14_optimal(&mut v[len_div_2..(len_div_2 + 14)], is_less);
+        }
+        30 => {
+            sort15_optimal(&mut v[0..15], is_less);
+            sort15_optimal(&mut v[len_div_2..(len_div_2 + 15)], is_less);
+        }
+        32 => {
+            sort16_optimal(&mut v[0..16], is_less);
+            sort16_optimal(&mut v[len_div_2..(len_div_2 + 16)], is_less);
+        }
+        34 => {
+            sort17_optimal(&mut v[0..17], is_less);
+            sort17_optimal(&mut v[len_div_2..(len_div_2 + 17)], is_less);
+        }
+        36 => {
+            sort18_optimal(&mut v[0..18], is_less);
+            sort18_optimal(&mut v[len_div_2..(len_div_2 + 18)], is_less);
+        }
+        _ => unreachable!(),
+    }
 
     let mut swap = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
