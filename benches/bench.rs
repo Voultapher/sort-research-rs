@@ -36,8 +36,10 @@ fn measure_comp_count(
         3000
     } else if test_size < 100_000 {
         1000
-    } else {
+    } else if test_size < 1_000_000 {
         100
+    } else {
+        10
     };
 
     *comp_count.borrow_mut() = 0;
@@ -65,7 +67,9 @@ fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_test_tools::Sort>(
 
     if env::var("MEASURE_COMP").is_ok() {
         // Configure this to filter results. For now the only real difference is copy types.
-        if transform_name == "i32" && bench_name.contains("unstable") && test_size <= 100000 {
+        // if transform_name == "i32" && bench_name.contains("unstable") && test_size <= 100000 {
+        if transform_name == "u64" && test_size >= 1_000_000 {
+            // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
             let name = format!(
                 "{}-comp-{}-{}-{}",
                 bench_name, transform_name, pattern_name, test_size

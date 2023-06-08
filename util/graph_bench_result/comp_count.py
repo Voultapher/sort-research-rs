@@ -5,6 +5,7 @@ Produce graph that showcases the number of comparisons done by each sort.
 
 import sys
 import math
+import os
 
 from collections import defaultdict
 
@@ -297,7 +298,10 @@ def plot_comparison_evolution(groups, stable_name):
     ]
 
     grid_plot = gridplot(plots, ncols=2)
-    show(grid_plot)
+    name = os.path.basename(sys.argv[1]).partition(".")[0]
+    html = file_html(grid_plot, CDN, stable_name)
+    with open(f"{name}-{stable_name}.html", "w+") as outfile:
+        outfile.write(html)
 
 
 def plot_comp(comp_data):
