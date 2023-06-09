@@ -92,8 +92,15 @@ def plot_scaling(ty, prediction_state, pattern, values):
 
     max_y_val = 0
     for sort_name in sort_names:
+        is_new_sort = sort_name.endswith("_new")
+
+        effective_sort_name = (
+            sort_name.partition("_new")[0] if is_new_sort else sort_name
+        )
+        line_dash = "dashed" if is_new_sort else "solid"
+
         x, y = extract_line(ty, sort_name, pattern, values)
-        color = COLOR_PALETTE[sort_name]
+        color = COLOR_PALETTE[effective_sort_name]
 
         max_y_val = max(max_y_val, max(y))
 
@@ -104,6 +111,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
             source=source,
             line_width=1.5,
             color=color,
+            line_dash=line_dash,
             legend_label=sort_name,
         )
 
