@@ -20,7 +20,7 @@
 // Define detail::Shuffle1230 etc, but only when viewing the current header;
 // normally this is included via highway.h, which includes ops/*.h.
 #if HWY_IDE && !defined(HWY_HIGHWAY_INCLUDED)
-#include "hwy/detect_targets.h"
+#include "../detect_targets.h"
 #include "emu128-inl.h"
 #endif  // HWY_IDE
 

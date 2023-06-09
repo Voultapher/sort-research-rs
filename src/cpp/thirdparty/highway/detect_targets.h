@@ -38,9 +38,10 @@
 // AVX2 target for VMs which support AVX2 but not the other instruction sets)
 // #define HWY_DISABLE_BMI2_FMA
 
-// Uncomment to enable SSSE3/SSE4 on MSVC even if AVX is not enabled
-// #define HWY_WANT_SSSE3
-// #define HWY_WANT_SSE4
+// Uncomment to enable these on MSVC even if the predefined macros are not set.
+// #define HWY_WANT_SSE2 1
+// #define HWY_WANT_SSSE3 1
+// #define HWY_WANT_SSE4 1
 
 //------------------------------------------------------------------------------
 // Targets
@@ -58,17 +59,22 @@
 // left-shifting 2^62), but still do not use bit 63 because it is the sign bit.
 
 // --------------------------- x86: 15 targets (+ one fallback)
-// Bits 0..6 reserved (7 targets)
+// Bits 0..5 reserved (6 targets)
+// Currently HWY_AVX3_DL plus a special case for CompressStore (10x as fast).
+// We may later also use VPCONFLICT.
+#define HWY_AVX3_ZEN4 (1LL << 6)  // see HWY_WANT_AVX3_ZEN4 below
+
 // Currently satisfiable by Ice Lake (VNNI, VPCLMULQDQ, VPOPCNTDQ, VBMI, VBMI2,
-// VAES, BITALG). Later to be added: BF16 (Cooper Lake). VP2INTERSECT is only in
-// Tiger Lake? We do not yet have uses for GFNI.
+// VAES, BITALG, GFNI). Later to be added: BF16 (Cooper Lake). VP2INTERSECT is
+// only in Tiger Lake?
 #define HWY_AVX3_DL (1LL << 7)  // see HWY_WANT_AVX3_DL below
-#define HWY_AVX3 (1LL << 8)
-#define HWY_AVX2 (1LL << 9)
-// Bit 10: reserved for AVX
-#define HWY_SSE4 (1LL << 11)
-#define HWY_SSSE3 (1LL << 12)
-// Bits 13..14 reserved for SSE3 or SSE2 (2 targets)
+#define HWY_AVX3 (1LL << 8)     // HWY_AVX2 plus AVX-512F/BW/CD/DQ/VL
+#define HWY_AVX2 (1LL << 9)     // HWY_SSE4 plus BMI2 + F16 + FMA
+// Bit 10: reserved
+#define HWY_SSE4 (1LL << 11)   // SSE4.2 plus AES + CLMUL
+#define HWY_SSSE3 (1LL << 12)  // S-SSE3
+// Bit 13: reserved for SSE3
+#define HWY_SSE2 (1LL << 14)
 // The highest bit in the HWY_TARGETS mask that a x86 target can have. Used for
 // dynamic dispatch. All x86 target bits must be lower or equal to
 // (1 << HWY_HIGHEST_TARGET_BIT_X86) and they can only use
@@ -81,8 +87,8 @@
 #define HWY_SVE_256 (1LL << 25)   // specialized target (e.g. Arm V1)
 #define HWY_SVE2 (1LL << 26)
 #define HWY_SVE (1LL << 27)
-#define HWY_NEON (1LL << 28)  // On A64, includes/requires AES
-// Bit 29 reserved (Helium?)
+#define HWY_NEON (1LL << 28)  // Implies support for AES
+#define HWY_NEON_WITHOUT_AES (1LL << 29)
 #define HWY_HIGHEST_TARGET_BIT_ARM 29
 
 // --------------------------- RISC-V: 9 targets (+ one fallback)
@@ -95,8 +101,10 @@
 // Bits 39..42 reserved
 
 // --------------------------- IBM Power: 9 targets (+ one fallback)
-// Bits 43..48 reserved (6 targets)
-#define HWY_PPC8 (1LL << 49)  // v2.07 or 3
+// Bits 43..46 reserved (4 targets)
+#define HWY_PPC10 (1LL << 47)  // v3.1
+#define HWY_PPC9 (1LL << 48)   // v3.0
+#define HWY_PPC8 (1LL << 49)   // v2.07
 // Bits 50..51 reserved for prior VSX/AltiVec (2 targets)
 #define HWY_HIGHEST_TARGET_BIT_PPC 51
 

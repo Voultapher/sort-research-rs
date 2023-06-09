@@ -249,10 +249,10 @@ static inline const char* AlgoName(Algo algo) {
 #define HIGHWAY_HWY_CONTRIB_SORT_ALGO_TOGGLE
 #endif
 
-#include "hwy/contrib/sort/traits-inl.h"
-#include "hwy/contrib/sort/traits128-inl.h"
-#include "hwy/contrib/sort/vqsort-inl.h"  // HeapSort
-#include "hwy/tests/test_util-inl.h"
+#include "../contrib/sort/traits-inl.h"
+#include "../contrib/sort/traits128-inl.h"
+#include "../contrib/sort/vqsort-inl.h"  // HeapSort
+#include "../tests/test_util-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 

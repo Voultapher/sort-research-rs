@@ -40,7 +40,7 @@
 #endif
 
 #if VQSORT_PRINT
-#include "hwy/print-inl.h"
+#include "../print-inl.h"
 #endif
 
 #include "shared-inl.h"

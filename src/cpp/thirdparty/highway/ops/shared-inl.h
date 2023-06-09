@@ -25,7 +25,7 @@
 #include <stdint.h>
 #endif
 
-#include "hwy/detect_compiler_arch.h"
+#include "../detect_compiler_arch.h"
 
 // Separate header because foreach_target.h re-enables its include guard.
 #include "set_macros-inl.h"
