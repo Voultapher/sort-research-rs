@@ -103,7 +103,7 @@ Footnotes:
 
 ### Results `u64`
 
-A good benchmark to shine light into the ability of the sort to exploit instruction-level parallelism (ILP) is hot-u64-10000. The input are 10k `u64` values, which fits into the core private L2 data cache for the used Zen3 test machine. The upper limit should be in the order of 4-5 instructions per cycle for such a dataset. 10k elements is enough to reliably exploit existing patterns in the input data. This can be reproduced by running `cargo bench hot-u64-<pattern>-10000`
+A good benchmark to shine light into the ability of the sort to exploit instruction-level parallelism (ILP) is hot-u64-10000. The input are 10k `u64` values, which fits into the core private L2 data cache for the used test machines. The upper limit should be in the order of 4-5 instructions per cycle for such a dataset. 10k elements is enough to reliably exploit existing patterns in the input data. This can be reproduced by running `cargo bench hot-u64-<pattern>-10000`
 
 <img src="assets/hot-u64-10k-windows.png" width=600 />
 
