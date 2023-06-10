@@ -1,17 +1,15 @@
 # 10~17x faster than what? A performance analysis of Intel' x86-simd-sort (AVX-512)
 
-**WIP: Please do not publish.**
-
 Author: Lukas Bergdoll @Voultapher  
-Date: TODO (DD-MM-YYYY)
+Date: 10-06-2023 (DD-MM-YYYY)
 
 This is a performance analysis of the recently popularized [[1](https://www.phoronix.com/news/Intel-AVX-512-Quicksort-Numpy)] Intel AVX-512 sort implementation.
 
 > Intel Publishes Blazing Fast AVX-512 Sorting Library, Numpy Switching To It For 10~17x Faster Sorts
 
-This analysis will look at the performance of Intel' x86-simd-sort and how it compares to various other generic sort implementations such as the C++ standard library `std::sort` and another high-performance manually vectorized implementation vqsort. Breaking down complex performance characteristics into a single number is tricky and might have little predictive power. This analysis aims to put that '10~17x' number into perspective and how it relates to other high-performance implementations.
+This analysis will look at the performance of Intel' x86-simd-sort and how it compares to various other generic sort implementations such as the C++ standard library `std::sort` and vqsort another high-performance manually vectorized sort implementation. Breaking down complex performance characteristics into a single number is tricky and might have little predictive power. This analysis aims to put that '10~17x' number into perspective and how it relates to other high-performance implementations.
 
-TL;DR: Benchmarking is tricky and there are faster implementations in various aspects.
+TL;DR: Benchmarking is tricky. If you are using x86-simd-sort, you can get better overall performance and avoid catastrophic scaling for certain input patterns by using vqsort + Clang. In addition it is shown that hardware specific manual vectorization with wide AVX-512 SIMD is not the only way to write efficient software. ipnsort demonstrates comparable performance to x86-simd-sort while being generic, optimized for more than only peak performance and only using up to SSE2 instructions.
 
 ---
 
@@ -130,7 +128,7 @@ Observations:
 
 - Classically bound by the Big-O complexity of O(N * log(N)) for random inputs, one could expect peak throughput to occur for the smallest inputs. However in reality for tiny input sizes the function call overhead, cold code, cache- and branch-prediction misses will limit throughput. And at very large sizes the main limit tends to be main-memory bandwidth, paired with the increased amount of work required per element. The peak throughput across most high-performance implementations, balancing these aforementioned factors, sits at input size ~1k.
 - vqsort as tested is exceedingly slow for small inputs. More on that below.
-- Starting at ~50k elements vqsort is the fastest.
+- Starting at input size ~50k vqsort is the fastest.
 - ipnsort catches up to intel_avx512 at ~1m, despite only using SSE2 instructions and using no hardware specific code, and while caring about binary-size and compile-times, sometimes at the cost of performance.
 
 #### Linux vs Windows
@@ -150,8 +148,8 @@ Observations:
 - intel_avx512, pdqsort, rust_std and ipnsort all loose performance
 - libstdc++ `std::sort` seems to perform better than the `msvc` version in this test. Showing significantly less regression than would be expected due to the CPU frequency difference.
 - The relative performance loss compared to Windows machine of ipnsort is larger than the one of intel_avx512. This is likely caused by the disabled CPU boost and overall conservative frequency cap of 3 GHz. The Linux machine is more indicative of a server environment. Where in contrast on the Windows machine ipnsort can boost higher than intel_avx512.
-- For larger inputs intel_avx512 shows better throughput on Windows with a measured sustained frequency of ~3.8GHz. E.g. for 1m elements on Windows ~67m elem/s vs ~54m elem/s on Linux. Which neatly matches the frequency difference.
-- vqsort however is a lot faster on Linux. Both in terms of peak performance and min input size to outperform the rest. This is an unexpected result, and considerable effort was spent to analyze the root cause of this. In the test vqsort used the same compiler and flags as intel_avx512. A different benchmark suite yields the same results, a different pre-built Clang version yields the same results. On a dual-booted Zen3 machine vqsort in AVX2 mode shows the same ~2x regression when going from Linux to Windows for 10k elements. In addition the higher frequency as shown by intel_avx512 on Windows should give it yet another boost above Linux which doesn't manifest. All this while the other sort implementations remain largely the same. The root cause for this was identified in collaboration with the vqsort authors [[4](https://github.com/google/highway/tree/master/hwy/contrib/sort#optimizations-for-small-arrays)]. The tested vqsort version acquired randomness from the OS, for each call to vqsort in an attempt to mitigate a potential performance DDOS. This idea is similar to the use of SipHash as the default hasher in the Rust standard library. This explains why we see significantly different results on Windows and Linux. See the linked explanation for more details.
+- For larger inputs intel_avx512 shows better throughput on Windows with a measured sustained frequency of ~3.8GHz. E.g. at input size 1m on Windows ~67m elem/s vs ~54m elem/s on Linux. Which neatly matches the frequency difference.
+- vqsort however is a lot faster on Linux. Both in terms of peak performance and min input size to outperform the rest. This is an unexpected result, and considerable effort was spent to analyze the root cause of this. In the test vqsort used the same compiler and flags as intel_avx512. A different benchmark suite yields the same results, a different pre-built Clang version yields the same results. On a dual-booted Zen3 machine vqsort in AVX2 mode shows the same ~2x regression when going from Linux to Windows at input size 10k. In addition the higher frequency as shown by intel_avx512 on Windows should give it yet another boost above Linux which doesn't manifest. All this while the other sort implementations remain largely the same. The root cause for this was identified in collaboration with the vqsort authors [[4](https://github.com/google/highway/tree/master/hwy/contrib/sort#optimizations-for-small-arrays)]. The tested vqsort version acquired randomness from the OS, for each call to vqsort in an attempt to mitigate a potential performance denial-of-service (DOS). This idea is similar to the use of SipHash as the default hasher in the Rust standard library. This explains why we see significantly different results on Windows and Linux. See the linked explanation for more details.
 - Another unexpected result is the peak throughput for intel_avx512 is lower than on Linux, despite higher frequencies. And the peak is reached earlier on Linux.
 
 Measuring a more natural zipfian distribution random_z1 across different sizes:
@@ -246,11 +244,11 @@ Compared to the fastest generic comparison based implementation ipnsort:
 
 Observations:
 
-- Between 36 and 1k elements, intel_avx512 is faster in nearly every pattern on Linux. Between 1k and 100k intel_avx512 is faster for fully random and saw like patterns.
+- Between input size 36 and 1k, intel_avx512 is faster in nearly every pattern on Linux. Between 1k and 100k intel_avx512 is faster for fully random and saw like patterns.
 - ipnsort is faster for low- cardinality and zipfian patterns, where it can leverage the pdqsort derived ability to filter out common values.
 - On Linux and with a max frequency of 3 GHz intel_avx512 is faster for fully random and saw like patterns.
-- As noted earlier, intel_avx512 shows worse than `O(N * log(N))` scaling for random_p5, making ipnsort ~15x times faster on Windows and ~19x Linux for 10m elements.
-- Both intel_avx512 and vqsort are unable to leverage already sorted inputs. While the pdqsort derived implementations can handle this case in `O(N)`. For 100k elements ipnsort is ~20x faster on Windows and ~15x on Linux. And for 10m elements ~10x faster on Windows and ~16x on Linux. Where the 10m case will be mostly limited by main memory bandwidth, of which the Server Skylake implementation has more.
+- As noted earlier, intel_avx512 shows worse than `O(N * log(N))` scaling for random_p5, making ipnsort ~15x times faster on Windows and ~19x Linux for input size 10m.
+- Both intel_avx512 and vqsort are unable to leverage already sorted inputs. While the pdqsort derived implementations can handle this case in `O(N)`. At input size 100k ipnsort is ~20x faster on Windows and ~15x on Linux. And at input size 10m ~10x faster on Windows and ~16x on Linux. Where the 10m case will be mostly limited by main memory bandwidth, of which the Server Skylake implementation has more.
 
 ### Non AVX-512 results
 
@@ -296,7 +294,7 @@ Observations:
 - cpp_std_libcxx performs the worst in general.
 - vqsort shows performance similar to pdqsort, limited by the Neon instruction set and 128-bit vector width.
 - The two implementations heavily exploiting ILP, crumsort and ipnsort, see larger uplifts compared to pdqsort as their baseline, with ipnsort showing ~1.9x the performance compared to ~1.6x on Skylake.
-- At 50k there is a performance valley that is reproducible and seems to affect both crumsort and ipnsort.
+- At input size 50k there is a performance valley that is reproducible and seems to affect both crumsort and ipnsort.
 - Power measurements indicate that ipnsort uses ~1.4x less power than vqsort while being nearly twice as fast. Which would imply ~2.7x better power efficiency. This indicates that in some scenarios code that focuses on exploiting ILP can be more energy efficient than vectorized code. With the additional benefit of not being hardware specific.
 
 ### C sort interface
@@ -348,7 +346,7 @@ Observations:
 
 ### Hot benchmarks
 
-Especially small sizes are likely not representative of real world performance, where CPU branch, instruction and data caches may be cold. **These numbers should be interpreted as best case performance under laboratory conditions.**
+Running a sort implementation several million times in a loop, as is the standard for tools like google benchmark and criterion, with new unique inputs of the same size and pattern is not representative of real world application performance. To simulate a program that calls sort occasionally with varying sizes, and a cold CPU prediction state, the benchmarks are also run in a mode where between each sort call, the CPU prediction state is trashed [[6](https://github.com/Voultapher/sort-research-rs/blob/b7bcd199e861d6f8b265164242f3c34d5c36c75f/benches/trash_prediction.rs#L7)]. These benchmarks are marked `cold-*`. And they for the basis for the above scaling graphs. Benchmarks using the default hot loop logic are marked `hot-*`. **hot benchmark numbers should be interpreted as best case performance under laboratory conditions.**
 
 #### u64-scaling
 
@@ -357,22 +355,19 @@ Measuring random pattern performance across different sizes:
 
 Observations:
 
-- vqsort as tested is exceedingly slow for small inputs.
+- Even in a hot loop vqsort as tested is exceedingly slow for small inputs.
 - intel_avx512 is fast across all sizes, when benchmarked in a hot loop.
 - intel_avx512 and crumsort, differentiate themselves from the other implementations by not using insertion sort for such inputs.
 - Starting at ~50k vqsort is the fastest.
 - ipnsort catches up to intel_avx512 at ~1m, despite only using SSE2 instructions and using no hardware specific code.
+- Starting at inputs size ~10k hot and cold results are largely the same.
 
 
-Hot benchmarks are deceiving for small sizes. Instrumenting the Rust standard library and building a custom version of rustc that logs the input size and time spent in `slice::sort`, which is the stable sort of the Rust standard library, yielded these insights clean compiling 60 crates:
+Instrumenting the Rust standard library and building a custom version of rustc that logs the input size and time spent in `slice::sort` [[7](https://github.com/rust-lang/rust/pull/108005#issuecomment-1440360350)], which is the stable sort of the Rust standard library, yielded these insights clean compiling 60 crates:
 
-Out of the ~500k calls to `slice::sort` 99+% were `len <= 20` and together they account for ~50% of the time spent in `slice::sort`.
+Out of the ~500k calls to `slice::sort` 71.6% were `len == 0`, 22.8% were `len == 1` and in total 99+% were `len <= 20` and together they account for ~50% of the time spent in `slice::sort`.
 
-Running a sort implementation several million times in a loop, with new unique inputs of the same size and pattern is not representative of real world performance effects. To simulate a program that calls sort occasionally with varying sizes, and a cold CPU prediction state, the benchmarks are also run in a mode where between each sort call, the CPU prediction state is trashed [[6](https://github.com/Voultapher/sort-research-rs/blob/b7bcd199e861d6f8b265164242f3c34d5c36c75f/benches/trash_prediction.rs#L7)]. Looking at that important `len <= 20` range:
-
-<img src="assets/cold-u64-scaling-random-windows.png" width=810 />
-
-Zoomed in:
+Looking at that important `len <= 20` range:
 
 <img src="assets/cold-u64-scaling-random-windows-zoomed.png" width=810 />
 
@@ -381,13 +376,11 @@ Observations:
 - ipnsort leads the chart, in contrast to the hot results.
 - Peak throughput for `len <= 20` drops by 5x compared to hot results.
 
-Another aspect that should be mentioned, is frequency scaling. With the exception of the latest generations of Intel and AMD  micro-architectures, Golden Cove and Zen4, previous Intel AVX-512 implementations scaled down the CPU boost frequency when certain AVX-512 instructions were executed [[7](https://travisdowns.github.io/blog/2020/08/19/icl-avx512-freq.html)]. This may affect real world usage and performance. Another aspect potentially affected by cold code is the AVX-512 startup, a phenomenon limited to the arguably poor Skylake AVX-512 implementation.
+Another aspect that should be mentioned, is frequency scaling. With the exception of the latest generations of Intel and AMD  micro-architectures, Golden Cove and Zen4, previous Intel AVX-512 implementations scaled down the CPU boost frequency when certain AVX-512 instructions were executed [[8](https://travisdowns.github.io/blog/2020/08/19/icl-avx512-freq.html)]. This may affect real world usage and performance. Another aspect potentially affected by cold code is the AVX-512 startup, a phenomenon limited to the arguably poor Skylake AVX-512 implementation.
 
 The shown cold and hot benchmarks, model the two extremes of the likely range of possible results.
 
 #### Further hot results
-
-<img src="assets/hot-u64-10k-linux.png" width=600 />
 
 <img src="assets/hot-i32-scaling-random-windows.png" width=810 />
 
@@ -413,19 +406,19 @@ All the results are a snapshot of the respective implementations. After performi
 
 ## Thanks
 
-Thank you Jan Wassenberg for your detailed feedback and extensive help. Thank you Roland Bock for your detailed feedback.
+Thank you Jan Wassenberg for your detailed feedback, extensive help in running benchmarks and helping me understand some of the observations. Thank you Roland Bock for your detailed feedback and ideas how to make this writeup more readable.
 
-### Addendum
+## Addendum
 
-#### Updated vqsort results
+### Updated vqsort results
 
 New vqsort version fe85fdf. Same graphs as above, with cpp_vqsort_new added. Only vqsort was re-tested here.
 
-Skylake (AVX-512)
+Skylake (AVX-512):
 
 <img src="assets/cold-u64-scaling-random-vqsort-new-skylake-windows.png" width=810 />
 
-Zen3 (AVX2)
+Zen3 (AVX2):
 
 <img src="assets/cold-u64-scaling-random-vqsort-new-zen3.png" width=810 />
 
