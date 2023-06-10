@@ -1,4 +1,4 @@
-# 10~17x faster than what? A performance analysis of Intel' x86-simd-sort (AVX-512)
+# 10~17x faster than what? A performance analysis of Intel's x86-simd-sort (AVX-512)
 
 Author: Lukas Bergdoll @Voultapher  
 Date: 10-06-2023 (DD-MM-YYYY)
@@ -145,7 +145,7 @@ Linux:
 
 Observations:
 
-- intel_avx512, pdqsort, rust_std and ipnsort all loose performance
+- intel_avx512, pdqsort, rust_std and ipnsort all lose performance
 - libstdc++ `std::sort` seems to perform better than the `msvc` version in this test. Showing significantly less regression than would be expected due to the CPU frequency difference.
 - The relative performance loss compared to Windows machine of ipnsort is larger than the one of intel_avx512. This is likely caused by the disabled CPU boost and overall conservative frequency cap of 3 GHz. The Linux machine is more indicative of a server environment. Where in contrast on the Windows machine ipnsort can boost higher than intel_avx512.
 - For larger inputs intel_avx512 shows better throughput on Windows with a measured sustained frequency of ~3.8GHz. E.g. at input size 1m on Windows ~67m elem/s vs ~54m elem/s on Linux. Which neatly matches the frequency difference.
@@ -272,7 +272,7 @@ Observations:
 - All generic comparison based implementations see a large performance uplift compared to Skylake.
 - ipnsort is much closer to vqsort for large inputs compared to the Skylake Linux machine.
 - crumsort shows smaller gains compared to pdqsort and rust_std than on the Skylake machines.
-- vqsort hits it's peak throughput earlier than on the Skylake Linux machine. 
+- vqsort hits its peak throughput earlier than on the Skylake Linux machine. 
 
 #### Neon test machine
 
