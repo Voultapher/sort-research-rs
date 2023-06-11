@@ -131,6 +131,22 @@ fn build_and_link_cpp_intel_avx512() {
 #[cfg(not(feature = "cpp_intel_avx512"))]
 fn build_and_link_cpp_intel_avx512() {}
 
+#[cfg(feature = "singeli_singelisort")]
+fn build_and_link_singelisort() {
+    build_and_link_cpp_sort(
+        "singeli_singelisort",
+        Some(|builder: &mut cc::Build| {
+            // Clang seems to produce slightly better perf.
+            builder.compiler(CLANG_PATH);
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "singeli_singelisort"))]
+fn build_and_link_singelisort() {}
+
 #[cfg(not(feature = "cpp_ips4o"))]
 fn build_and_link_cpp_ips4o() {}
 
@@ -255,6 +271,7 @@ fn main() {
     build_and_link_cpp_simdsort();
     build_and_link_cpp_vqsort();
     build_and_link_cpp_intel_avx512();
+    build_and_link_singelisort();
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
     build_and_link_cpp_gerbens_qsort();

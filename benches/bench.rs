@@ -633,6 +633,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             sort_comp::other::cpp_intel_avx512::SortImpl,
         );
 
+        #[cfg(feature = "singeli_singelisort")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::singeli_singelisort::SortImpl,
+        );
+
         // --- Evolution ---
 
         #[cfg(feature = "evolution")]
