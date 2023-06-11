@@ -13,6 +13,10 @@ pub mod cpp_vqsort;
 #[cfg(feature = "cpp_intel_avx512")]
 pub mod cpp_intel_avx512;
 
+// Call singelisort sort via FFI.
+#[cfg(feature = "singeli_singelisort")]
+pub mod singeli_singelisort;
+
 #[cfg(feature = "evolution")]
 pub mod sort_evolution;
 

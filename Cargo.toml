@@ -71,6 +71,7 @@ default = [
     # "cpp_gerbens_qsort",
     # "c_crumsort",
     # "c_fluxsort",
+    # "singeli_singelisort",
     # "rust_wpwoodjr",
     # "rust_radsort",
     # "rust_dmsort",
@@ -120,6 +121,7 @@ cpp_ips4o = []
 cpp_blockquicksort = []
 
 # Enable Gerben Stavenga's QuickSort https://github.com/gerben-s/quicksort-blog-post
+# Uses system C++ standard lib.
 cpp_gerbens_qsort = []
 
 # Enable crumsort by Igor van den Hoven.
@@ -129,6 +131,10 @@ c_crumsort = []
 # Enable fluxsort by Igor van den Hoven.
 # Uses system C++ standard lib.
 c_fluxsort = []
+
+# Enable SingeliSort by Marshall Lochbaum.
+# Uses system C++ standard lib.
+singeli_singelisort = []
 
 # Enable rust_wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.
