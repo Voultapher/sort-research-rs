@@ -578,6 +578,7 @@ dependencies = [
  "rand",
  "regex",
  "sort_test_tools",
+ "tiny_sort",
  "zipf",
 ]
 
@@ -609,6 +610,12 @@ checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
 ]
+
+[[package]]
+name = "tiny_sort"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6615b923372dbed0327e9a3817abde9bc937209d8142aeede8674830c0a4a786"
 
 [[package]]
 name = "tinytemplate"

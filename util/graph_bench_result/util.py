@@ -87,6 +87,7 @@ def build_color_palette():
         "cpp_powersort_stable": palette[6],
         "cpp_powersort_4way_stable": palette[7],
         "rust_wpwoodjr_stable": palette[7],
+        "rust_tinymergesort_stable": palette[7],
         # Unstable
         "c_crumsort_unstable": palette[0],
         "cpp_std_sys_unstable": palette[1],
@@ -99,6 +100,7 @@ def build_color_palette():
         "rust_ipnsort_unstable": palette[5],
         "cpp_ips4o_unstable": palette[6],
         "cpp_blockquicksort": palette[7],
+        "rust_tinyheapsort_unstable": palette[7],
         # There are more sorts but they don't really fit the graph or colors at
         # the same time
         "rust_radsort_radix": palette[4],

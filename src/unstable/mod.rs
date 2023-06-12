@@ -7,6 +7,9 @@ pub mod rust_dmsort;
 #[cfg(feature = "rust_crumsort_rs")]
 pub mod rust_crumsort_rs;
 
+#[cfg(feature = "rust_tinysort")]
+pub mod rust_tinysort;
+
 // Call pdqsort sort via FFI.
 #[cfg(feature = "cpp_pdqsort")]
 pub mod cpp_pdqsort;

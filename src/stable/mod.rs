@@ -6,6 +6,9 @@ pub mod rust_wpwoodjr;
 #[cfg(feature = "rust_glidesort")]
 pub mod rust_glidesort;
 
+#[cfg(feature = "rust_tinysort")]
+pub mod rust_tinysort;
+
 // Call stdlib std::sort_stable sort via FFI.
 #[cfg(feature = "cpp_std_sys")]
 pub mod cpp_std_sys;
