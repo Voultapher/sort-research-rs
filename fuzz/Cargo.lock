@@ -115,7 +115,8 @@ dependencies = [
  "cc",
  "once_cell",
  "paste",
- "rand",
+ "sort_test_tools",
+ "zipf",
 ]
 
 [[package]]
@@ -127,7 +128,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sort_test_tools"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "rand",
+ "zipf",
+]
+
+[[package]]
 name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+
+[[package]]
+name = "zipf"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835688a7a1b5d2dfaeb5b7e1b4cfb979e7095a70cd1c72fe083f4904ef3e995e"
+dependencies = [
+ "rand",
+]
