@@ -1,10 +1,8 @@
-use std::collections::HashSet;
 use std::mem;
 use std::ptr;
-use std::sync::Mutex;
 use std::time;
 
-use criterion::black_box;
+use criterion::{black_box, Criterion};
 
 use sort_comp::other::partition::{self, Partition};
 
