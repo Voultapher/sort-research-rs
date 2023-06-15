@@ -1412,3 +1412,184 @@ where
         is_l_count
     }
 }
+
+
+//! The idea is to build a partition implementation for types u64 and smaller.
+
+use std::cmp;
+use std::mem::{self, MaybeUninit};
+use std::ptr;
+
+partition_impl!("lola_partition");
+
+// use std::sync::atomic::{AtomicPtr, Ordering};
+// static SCRATCH: AtomicPtr<u64> = AtomicPtr::new(ptr::null_mut());
+
+macro_rules! partition_core {
+    ($base_ptr:expr, $j:expr, $lt_count:expr, $scratch_out_ptr:expr, $pivot:expr, $is_less:expr) => {{
+        $scratch_out_ptr = $scratch_out_ptr.sub(1);
+        let elem_ptr = $base_ptr.add($j);
+        let is_lt = $is_less(&*elem_ptr, $pivot);
+
+        let dest_ptr = if is_lt { $base_ptr } else { $scratch_out_ptr };
+        ptr::copy(elem_ptr, dest_ptr.add($lt_count), 1);
+
+        $lt_count += is_lt as usize;
+    }};
+}
+
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // TODO T: Freeze
+
+    let len = v.len();
+    let arr_ptr = v.as_mut_ptr();
+
+    const BLOCK_SIZE: usize = 128;
+    // This is not efficient for other types and large types could cause stack issues.
+    assert!(mem::size_of::<T>() <= mem::size_of::<u64>());
+
+    let mut scratch = MaybeUninit::<[T; BLOCK_SIZE]>::uninit();
+    let scratch_ptr = scratch.as_mut_ptr() as *mut T;
+
+    // let mut scratch_ptr_u64 = SCRATCH.load(Ordering::Acquire);
+    // if scratch_ptr_u64.is_null() {
+    //     use std::alloc;
+    //     unsafe {
+    //         scratch_ptr_u64 =
+    //             alloc::alloc(alloc::Layout::array::<u64>(BLOCK_SIZE).unwrap()) as *mut u64;
+    //     }
+    //     SCRATCH.store(scratch_ptr_u64, Ordering::Release);
+    // }
+    // assert!(
+    //     mem::size_of::<T>() <= mem::size_of::<u64>()
+    //         && mem::align_of::<T>() <= mem::size_of::<u64>()
+    // );
+    // let scratch_ptr = scratch_ptr_u64 as *mut T;
+
+    // type DebugT = i32;
+
+    // SAFETY: TODO
+    let mut base_ptr = arr_ptr;
+    let mut r_ptr = unsafe { arr_ptr.add(len) };
+
+    // SAFETY: TODO
+    unsafe {
+        loop {
+            // TODO intrinsics unlikely.
+            // dbg!(i, r_ptr.sub_ptr(arr_ptr));
+            let block_size = cmp::min(BLOCK_SIZE, r_ptr.sub_ptr(base_ptr));
+
+            // for i in 0..BLOCK_SIZE {
+            //     ptr::copy_nonoverlapping(&999, scratch_ptr.add(i) as *mut DebugT, 1);
+            // }
+
+            // Looking at `v[i..(i + BLOCK_SIZE)]` elements. Stack all elements that are less than (lt)
+            // on the left side of that sub-slice. And store elements that are great or equal (ge)
+            // in scratch.
+            //
+            // E.g. v == [0, 3, 7, 9, 2, 1] and pivot == 5 -> v == [0, 3, 2, 1, 2, 1] and lt_count == 4
+
+            let block_size_div_2 = block_size / 2;
+
+            let base_ptr_a = base_ptr;
+            let mut lt_count_a = 0;
+            let mut scratch_out_ptr_a = scratch_ptr.add(block_size_div_2);
+
+            let base_ptr_b = base_ptr.add(block_size_div_2);
+            let mut lt_count_b = 0;
+            let mut scratch_out_ptr_b = scratch_ptr.add(block_size);
+
+            // TODO butterfly partition grow two buffers independently of each other.
+            // Pick mid-point P and grow in both directions <-P-> this allows one contiguous
+            // copy for both buffers at the end. Maybe midpoint grow directly into v?
+            for j in 0..block_size_div_2 {
+                partition_core!(base_ptr_a, j, lt_count_a, scratch_out_ptr_a, pivot, is_less);
+                partition_core!(base_ptr_b, j, lt_count_b, scratch_out_ptr_b, pivot, is_less);
+            }
+            // TODO this might not need to be branchless madness etc.
+            // if block_size % 2 != 0 {
+            //     partition_core!(
+            //         base_ptr,
+            //         block_size - 1,
+            //         lt_count_b,
+            //         scratch_out_ptr_b,
+            //         pivot,
+            //         is_less
+            //     );
+            // }
+
+            // println!(
+            //     "scratch_ptr: {:?}",
+            //     &*ptr::slice_from_raw_parts(scratch_ptr as *const DebugT, BLOCK_SIZE)
+            // );
+
+            // Instead of swapping between processing elements on the left and then on the right.
+            // Copy elements from the right and keep processing from the left. This greatly reduces
+            // code-gen. And allows to use a variable size block and larger sizes to amortize the
+            // cost of calling memcpy.
+
+            // TODO pattern breaker and swap a and b copy locations.
+
+            // println!(
+            //     "arr_ptr 1: {:?}",
+            //     &*ptr::slice_from_raw_parts(arr_ptr as *const DebugT, len)
+            // );
+
+            {
+                // Copy elements from right side on-top of local duplicate elements a.
+                base_ptr = base_ptr.add(lt_count_a);
+                let ge_count_a = block_size_div_2 - lt_count_a;
+                // dbg!(lt_count_a, ge_count_a);
+                r_ptr = r_ptr.sub(ge_count_a);
+                // println!(
+                //     "will be overwritten: {:?}",
+                //     &*ptr::slice_from_raw_parts(base_ptr as *const DebugT, ge_count_a)
+                // );
+                // println!(
+                //     "with: {:?}",
+                //     &*ptr::slice_from_raw_parts(r_ptr as *const DebugT, ge_count_a)
+                // );
+                // ptr::copy(r_ptr, base_ptr, ge_count_a);
+
+                // println!(
+                //     "arr_ptr1.1:{:?}",
+                //     &*ptr::slice_from_raw_parts(arr_ptr as *const DebugT, len)
+                // );
+
+                // Copy greater equal (ge) elements created by partition_core a to the right side.
+                ptr::copy_nonoverlapping(scratch_out_ptr_a.add(lt_count_a), r_ptr, ge_count_a);
+            }
+
+            // println!(
+            //     "arr_ptr 2: {:?}",
+            //     &*ptr::slice_from_raw_parts(arr_ptr as *const DebugT, len)
+            // );
+
+            {
+                // Copy elements from right side on-top of local duplicate elements b.
+                base_ptr = base_ptr.add(lt_count_b);
+                let ge_count_b = block_size_div_2 - (lt_count_b + (block_size % 2) as usize);
+                // dbg!(lt_count_b, ge_count_b);
+                r_ptr = r_ptr.sub(ge_count_b);
+                ptr::copy(r_ptr, base_ptr, ge_count_b);
+                // Copy greater equal (ge) elements created by partition_core b to the right side.
+                ptr::copy_nonoverlapping(scratch_out_ptr_b.add(lt_count_b), r_ptr, ge_count_b);
+            }
+
+            // println!(
+            //     "arr_ptr 3: {:?}",
+            //     &*ptr::slice_from_raw_parts(arr_ptr as *const DebugT, len)
+            // );
+
+            if block_size < BLOCK_SIZE {
+                break;
+            }
+        }
+
+        base_ptr.sub_ptr(arr_ptr)
+    }
+}

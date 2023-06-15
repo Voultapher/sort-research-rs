@@ -294,4 +294,24 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     //     pattern_provider,
     //     partition::fulcrum_partition_revised::PartitionImpl,
     // );
+
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::luna_partition::PartitionImpl,
+    // );
+
+    bench_partition_impl(
+        filter_arg,
+        test_size,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::butterfly_partition::PartitionImpl,
+    );
 }
