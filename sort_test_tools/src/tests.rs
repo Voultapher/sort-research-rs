@@ -335,7 +335,7 @@ pub fn random_s95<S: Sort>() {
     // Great for debugging.
     test_impl::<i32, S>(|size| {
         if size > 3 {
-            patterns::random_zipf(size, 95.0)
+            patterns::random_sorted(size, 95.0)
         } else {
             Vec::new()
         }
