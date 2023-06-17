@@ -62,6 +62,18 @@ If you want to collect a set of results that can then later be used to create gr
 CUSTOM_BENCH_REGEX="_stable.*random-" python util/run_benchmarks.py my_test_zen3
 ```
 
+To run the `graph_all.py` script to create graphs from this data you need to first install the dependencies as specified in requirements.txt e.g. on Linux:
+```
+python -m venv venv
+source ./venv/bin/active
+pip install --requirement util/graph_bench_result/requirements.txt
+```
+
+Afterwards, you can use the `graph_all.py` script:
+```
+python util/graph_bench_result/graph_all.py my_test_zen3.json
+```
+
 ## Fuzzing
 
 You'll need to install cargo fuzz and cargo afl respectively.
