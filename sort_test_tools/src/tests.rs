@@ -369,15 +369,15 @@ pub fn descending<S: Sort>() {
     test_impl::<i32, S>(patterns::descending);
 }
 
-pub fn ascending_saw<S: Sort>() {
+pub fn saw_ascending<S: Sort>() {
     test_impl::<i32, S>(|test_size| {
-        patterns::ascending_saw(test_size, ((test_size as f64).log2().round()) as usize)
+        patterns::saw_ascending(test_size, ((test_size as f64).log2().round()) as usize)
     });
 }
 
-pub fn descending_saw<S: Sort>() {
+pub fn saw_descending<S: Sort>() {
     test_impl::<i32, S>(|test_size| {
-        patterns::descending_saw(test_size, ((test_size as f64).log2().round()) as usize)
+        patterns::saw_descending(test_size, ((test_size as f64).log2().round()) as usize)
     });
 }
 
@@ -1239,11 +1239,11 @@ macro_rules! instantiate_sort_tests {
             $sort_impl,
             [miri_no, all_equal],
             [miri_yes, ascending],
-            [miri_no, ascending_saw],
+            [miri_no, saw_ascending],
             [miri_yes, basic],
             [miri_yes, comp_panic],
             [miri_yes, descending],
-            [miri_no, descending_saw],
+            [miri_no, saw_descending],
             [miri_yes, dyn_val],
             [miri_yes, fixed_seed],
             [miri_yes, int_edge],

@@ -185,9 +185,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
     // Custom patterns designed to find worst case performance.
     let mut extra_pattern_providers: Vec<(&'static str, fn(usize) -> Vec<i32>)> = vec![
-        ("saws_long", |len| {
-            patterns::saw_mixed(len, ((len as f64).log2().round()) as usize)
-        }),
         ("random_d20_start_block", |len| {
             let mut v = patterns::random_uniform(len, 0..20);
             let loop_end = std::cmp::min(len, 100);
@@ -272,11 +269,14 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
-        ("ascending_saw", |len| {
-            patterns::ascending_saw(len, ((len as f64).log2().round()) as usize)
+        ("saw_ascending", |len| {
+            patterns::saw_ascending(len, ((len as f64).log2().round()) as usize)
         }),
-        ("descending_saw", |len| {
-            patterns::descending_saw(len, ((len as f64).log2().round()) as usize)
+        ("saw_descending", |len| {
+            patterns::saw_descending(len, ((len as f64).log2().round()) as usize)
+        }),
+        ("saws_long", |len| {
+            patterns::saw_mixed(len, ((len as f64).log2().round()) as usize)
         }),
         ("pipe_organ", patterns::pipe_organ),
         ("random__div3", |len| {
