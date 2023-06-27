@@ -12,6 +12,8 @@ from bokeh.resources import CDN
 from bokeh.embed import file_html
 from bokeh.models import FactorRange, LabelSet
 
+from natsort import natsorted
+
 from cpu_info import get_cpu_info
 from util import parse_result, extract_groups, build_color_palette
 
@@ -77,7 +79,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
     y = []
     bench_times = []
     colors = []
-    for pattern, val in reversed(sorted(values.items())):
+    for pattern, val in reversed(natsorted(values.items())):
         for sort_name, bench_times_ns in sorted(
             val.items(), key=lambda x: x[1], reverse=True
         ):

@@ -16,6 +16,8 @@ from bokeh.embed import file_html
 from bokeh.palettes import Colorblind
 from bokeh.models import FactorRange, LabelSet
 
+from natsort import natsorted
+
 TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
 
 
@@ -127,7 +129,7 @@ def plot_single_size(ty, test_size, values):
     comp_counts = []
     comp_counts_full = []
     colors = []
-    for pattern, val in sorted(values.items()):
+    for pattern, val in natsorted(values.items()):
         for sort_name, comp_count in sorted(
             val.items(), key=lambda x: x[1], reverse=True
         ):
@@ -255,7 +257,7 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
                     pattern
                 )
 
-    for pattern, data in sorted(pattern_comp_counts.items()):
+    for pattern, data in natsorted(pattern_comp_counts.items()):
         source = ColumnDataSource(data=data)
         color = map_pattern_to_color(pattern)
 
