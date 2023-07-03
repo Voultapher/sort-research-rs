@@ -97,7 +97,7 @@ pub fn descending(size: usize) -> Vec<i32> {
     (0..size as i32).rev().collect::<Vec<_>>()
 }
 
-pub fn ascending_saw(size: usize, saw_count: usize) -> Vec<i32> {
+pub fn saw_ascending(size: usize, saw_count: usize) -> Vec<i32> {
     //   .:  .:
     // .:::.:::
 
@@ -115,7 +115,7 @@ pub fn ascending_saw(size: usize, saw_count: usize) -> Vec<i32> {
     vals
 }
 
-pub fn descending_saw(size: usize, saw_count: usize) -> Vec<i32> {
+pub fn saw_descending(size: usize, saw_count: usize) -> Vec<i32> {
     // :.  :.
     // :::.:::.
 

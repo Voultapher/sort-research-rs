@@ -13,6 +13,8 @@ from bokeh.resources import CDN
 from bokeh.embed import file_html
 from bokeh.palettes import Colorblind
 
+from natsort import natsorted
+
 from cpu_info import get_cpu_info
 from util import parse_result, extract_groups
 
@@ -94,7 +96,7 @@ def extract_line(sort_name_a, sort_name_b, pattern, values):
 
 
 def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
-    patterns = sorted(list(values.values())[0].keys())
+    patterns = natsorted(list(values.values())[0].keys())
     min_test_size = min(values.keys())
     max_test_size = max(values.keys())
 

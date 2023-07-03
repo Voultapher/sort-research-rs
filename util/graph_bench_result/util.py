@@ -37,12 +37,6 @@ def extract_groups(bench_result):
         if sort_name == "c_fluxsort_stable" and ty not in ("u64", "i32"):
             continue
 
-        if "_stable" in sort_name:
-            continue  # TODO graph all.
-
-        # if "radix" in sort_name:
-        #     continue
-
         bench_time_ns = value["criterion_estimates_v1"]["median"][
             "point_estimate"
         ]
