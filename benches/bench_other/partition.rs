@@ -1,5 +1,7 @@
+use std::collections::HashSet;
 use std::mem;
 use std::ptr;
+use std::sync::Mutex;
 use std::time;
 
 use criterion::{black_box, Criterion};
@@ -74,6 +76,10 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
         let start = time::Instant::now();
 
         for test_input in &mut test_inputs {
+            // Uncomment for random pivot, potentially pretty uneven.
+            let pivot_pos = choose_pivot(test_input, &mut |a, b| a.lt(b));
+            test_input.swap(0, pivot_pos);
+
             let pivot = unsafe { mem::ManuallyDrop::new(ptr::read(&test_input[0])) };
             let swap_idx = black_box(P::partition(
                 black_box(&mut test_input[1..]),
@@ -117,6 +123,127 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     }
 }
 
+/// Selects a pivot from left, right.
+///
+/// Idea taken from glidesort by Orson Peters.
+///
+/// This chooses a pivot by sampling an adaptive amount of points, mimicking the median quality of
+/// median of square root.
+fn choose_pivot<T, F>(v: &[T], is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
+
+    let len_div_2 = len / 2;
+    let arr_ptr = v.as_ptr();
+
+    let median_guess_ptr = if len < PSEUDO_MEDIAN_REC_THRESHOLD {
+        // For small sizes it's crucial to pick a good median, just doing median3 is not great.
+        let start = len_div_2 - 3;
+        median7_approx(&v[start..(start + 7)], is_less)
+    } else {
+        // SAFETY: TODO
+        unsafe {
+            let len_div_8 = len / 8;
+            let a = arr_ptr;
+            let b = arr_ptr.add(len_div_8 * 4);
+            let c = arr_ptr.add(len_div_8 * 7);
+
+            median3_rec(a, b, c, len_div_8, is_less)
+        }
+    };
+
+    // SAFETY: median_guess_ptr is part of v if median7_approx and median3_rec work as expected.
+    unsafe { median_guess_ptr.offset_from(arr_ptr) as usize }
+}
+
+// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
+// performance impact.
+#[inline(never)]
+fn median7_approx<T, F>(v: &[T], is_less: &mut F) -> *const T
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: caller must ensure v.len() >= 7.
+    assert!(v.len() == 7);
+
+    let arr_ptr = v.as_ptr();
+
+    // We checked the len.
+    unsafe {
+        let lower_median3 = median3(arr_ptr.add(0), arr_ptr.add(1), arr_ptr.add(2), is_less);
+        let upper_median3 = median3(arr_ptr.add(4), arr_ptr.add(5), arr_ptr.add(6), is_less);
+
+        let median_approx_ptr = median3(lower_median3, arr_ptr.add(3), upper_median3, is_less);
+        median_approx_ptr
+    }
+}
+
+const PSEUDO_MEDIAN_REC_THRESHOLD: usize = 64;
+
+/// Calculates an approximate median of 3 elements from sections a, b, c, or recursively from an
+/// approximation of each, if they're large enough. By dividing the size of each section by 8 when
+/// recursing we have logarithmic recursion depth and overall sample from
+/// f(n) = 3*f(n/8) -> f(n) = O(n^(log(3)/log(8))) ~= O(n^0.528) elements.
+///
+/// SAFETY: a, b, c must point to the start of initialized regions of memory of
+/// at least n elements.
+#[inline(never)]
+unsafe fn median3_rec<T, F>(
+    mut a: *const T,
+    mut b: *const T,
+    mut c: *const T,
+    n: usize,
+    is_less: &mut F,
+) -> *const T
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: TODO
+    unsafe {
+        if n * 8 >= PSEUDO_MEDIAN_REC_THRESHOLD {
+            let n8 = n / 8;
+            a = median3_rec(a, a.add(n8 * 4), a.add(n8 * 7), n8, is_less);
+            b = median3_rec(b, b.add(n8 * 4), b.add(n8 * 7), n8, is_less);
+            c = median3_rec(c, c.add(n8 * 4), c.add(n8 * 7), n8, is_less);
+        }
+        median3(a, b, c, is_less)
+    }
+}
+
+/// Calculates the median of 3 elements.
+///
+/// SAFETY: a, b, c must be valid initialized elements.
+unsafe fn median3<T, F>(a: *const T, b: *const T, c: *const T, is_less: &mut F) -> *const T
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // SAFETY: TODO
+    //
+    // Compiler tends to make this branchless when sensible, and avoids the
+    // third comparison when not.
+    unsafe {
+        let x = is_less(&*a, &*b);
+        let y = is_less(&*a, &*c);
+        if x == y {
+            // If x=y=0 then b, c <= a. In this case we want to return max(b, c).
+            // If x=y=1 then a < b, c. In this case we want to return min(b, c).
+            // By toggling the outcome of b < c using XOR x we get this behavior.
+            let z = is_less(&*b, &*c);
+
+            if z ^ x {
+                c
+            } else {
+                b
+            }
+        } else {
+            // Either c <= a < b or b <= a < c, thus a is our median.
+            a
+        }
+    }
+}
+
 pub fn bench<T: Ord + std::fmt::Debug>(
     _c: &mut Criterion,
     filter_arg: &str,
@@ -129,6 +256,18 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     // We are not really interested in very small input. These are handled by some other logic.
     if test_size < 30 {
         return;
+    }
+
+    static SEEN_SIZES: Mutex<Option<HashSet<usize>>> = Mutex::new(None);
+
+    let mut seen_sizes = SEEN_SIZES.lock().unwrap();
+    if seen_sizes.is_none() {
+        *seen_sizes = Some(HashSet::new());
+    }
+
+    let seen_before = !seen_sizes.as_mut().unwrap().insert(test_size);
+    if !seen_before {
+        println!(""); // For readability to split multiple blocks.
     }
 
     // TODO use proper criterion benchmarking.
@@ -173,7 +312,15 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     //     partition::simple_scan_branchless::PartitionImpl,
     // );
 
-    // ---
+    // bench_partition_impl(
+    //     filter_arg,
+    //     test_size,
+    //     transform_name,
+    //     transform,
+    //     pattern_name,
+    //     pattern_provider,
+    //     partition::scan_branchless_2unroll::PartitionImpl,
+    // );
 
     bench_partition_impl(
         filter_arg,

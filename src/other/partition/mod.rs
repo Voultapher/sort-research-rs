@@ -50,6 +50,7 @@ pub mod fulcrum_partition_simple;
 pub mod ilp_partition;
 pub mod luna_partition;
 pub mod new_block_quicksort;
+pub mod scan_branchless_2unroll;
 pub mod scan_branchless_2way;
 pub mod scan_branchless_4way;
 pub mod simple_scan_branchless;
