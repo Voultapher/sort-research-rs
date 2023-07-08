@@ -74,15 +74,19 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
 
     for i in 0..(batched_runs + 1) {
         let mut test_inputs = (0..batch_len)
-            .map(|_| transform(pattern_provider(test_len)))
+            .map(|_| {
+                let test_slice = transform(pattern_provider(test_len));
+                let pivot_pos = choose_pivot(&test_slice, &mut |a, b| a.lt(b));
+
+                (test_slice, pivot_pos)
+            })
             .collect::<Vec<_>>();
 
         let start = time::Instant::now();
 
-        for test_input in &mut test_inputs {
+        for (test_input, pivot_pos) in &mut test_inputs {
             // Uncomment for random pivot, potentially pretty uneven.
-            let pivot_pos = choose_pivot(test_input, &mut |a, b| a.lt(b));
-            test_input.swap(0, pivot_pos);
+            test_input.swap(0, *pivot_pos);
 
             let pivot = unsafe { mem::ManuallyDrop::new(ptr::read(&test_input[0])) };
             let swap_idx = black_box(P::partition(
@@ -475,4 +479,14 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     //     pattern_provider,
     //     partition::blockptr_partition::PartitionImpl,
     // );
+
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::hybrid_bitset_partition::PartitionImpl,
+    );
 }
