@@ -1593,3 +1593,146 @@ where
         base_ptr.sub_ptr(arr_ptr)
     }
 }
+
+// let l_was_refilled = l_bitmap == 0;
+
+// // The goal is that this doesn't get unrolled and we save the expensive double instantiation of fill_bitset.
+// let mut i = 0;
+// let mut block_info = [(&mut l_bitmap, l_ptr), (&mut r_bitmap, r_ptr)];
+// while i < 2 {
+//     let bitmap = &mut block_info[i].0;
+//     if **bitmap == 0 {
+//         **bitmap =
+//             fill_bitset(BLOCK, block_info[i].1, &mut |elem| is_less(elem, pivot));
+//     }
+//     i += std::hint::black_box(1);
+// }
+
+// l_bitmap = l_bitmap ^ (BitsetStorageT::MAX * (l_was_refilled as u32));
+
+// let swap_count = cmp::min(std::hint::black_box(3i32).count_ones(), 3i32.count_ones()) as usize;
+// std::hint::black_box(swap_count);
+
+// for i in 0..swap_count {
+//     let i = (l_bitmap & MASK_TABLE.get_unchecked(i)).trailing_zeros() as usize;
+//     let j = (r_bitmap & MASK_TABLE.get_unchecked(i)).trailing_zeros() as usize;
+//     ptr::swap_nonoverlapping(l_ptr.add(i), r_ptr.add(j), 1);
+// }
+
+// let new_l_bitmap = l_bitmap & MASK_TABLE.get_unchecked(swap_count);
+// let new_r_bitmap = r_bitmap & MASK_TABLE.get_unchecked(swap_count);
+
+// (new_l_bitmap, new_r_bitmap)
+
+// // let swap_count = cmp::max(l_bitmap.count_ones(), r_bitmap.count_ones());
+// let swap_count = std::hint::black_box(8);
+
+// for _ in 0..swap_count {
+//     std::intrinsics::assume(l_bitmap != 0);
+//     std::intrinsics::assume(r_bitmap != 0);
+
+//     let i = l_bitmap.trailing_zeros() as usize;
+//     let j = r_bitmap.trailing_zeros() as usize;
+//     ptr::swap_nonoverlapping(l_base_ptr.add(i), r_base_ptr.add(j), 1);
+//     l_bitmap &= l_bitmap - 1; // Clear lowest bit.
+//     r_bitmap &= r_bitmap - 1;
+// }
+
+// let clear_lowest_bit =
+//     |x: BitsetStorageT| -> BitsetStorageT { unsafe { core::arch::x86_64::_blsr_u32(x) } };
+
+// let left = |l_bitmap: &mut BitsetStorageT| {
+//     let l_idx = l_bitmap.trailing_zeros() as usize;
+//     *l_bitmap = clear_lowest_bit(*l_bitmap);
+//     l_ptr.add(l_idx)
+// };
+
+// let right = |r_bitmap: &mut BitsetStorageT| {
+//     let r_idx = r_bitmap.trailing_zeros() as usize;
+//     *r_bitmap = clear_lowest_bit(*r_bitmap);
+//     r_ptr.add(r_idx)
+// };
+
+// // TODO cyclic permutation comment.
+// if l_bitmap > 1 && r_bitmap > 1 {
+//     let mut left_elem_ptr = left(&mut l_bitmap);
+//     let mut right_elem_ptr = right(&mut r_bitmap);
+
+//     let tmp = ptr::read(left_elem_ptr);
+//     ptr::copy_nonoverlapping(right_elem_ptr, left_elem_ptr, 1);
+
+//     while l_bitmap > 0 && r_bitmap > 0 {
+//         left_elem_ptr = left(&mut l_bitmap);
+//         ptr::copy_nonoverlapping(left_elem_ptr, right_elem_ptr, 1);
+//         right_elem_ptr = right(&mut r_bitmap);
+//         ptr::copy_nonoverlapping(right_elem_ptr, left_elem_ptr, 1);
+//     }
+
+//     ptr::copy_nonoverlapping(&tmp, right_elem_ptr, 1);
+//     mem::forget(tmp);
+// }
+
+// while l_bitmap > 0 && r_bitmap > 0 {
+//     let i = l_bitmap.trailing_zeros() as usize;
+//     l_bitmap = clear_lowest_bit(l_bitmap);
+//     let j = r_bitmap.trailing_zeros() as usize;
+//     r_bitmap = clear_lowest_bit(r_bitmap);
+//     ptr::swap_nonoverlapping(l_ptr.add(i), r_ptr.add(j), 1);
+// }
+
+// The goal is to take care of the remaining elements in the unfinished bitmap if any,
+// in fashion that allows the small-size optimized following part to neatly hook into
+// it. Example:
+//
+// l_bitmap == 0b10101100001000000000000000000000
+//
+// There are 5 elements from the left block that are still on the left side but need to
+// be moved to the right side. `l_ptr[..l_bitmap.trailing_zeros() == 21]` is guaranteed
+// all elements that don't need to be swapped anymore. So we move the elements that are
+// zero in the region 10101100001 to the end of the left side while moving the elements
+// that are one to the right side and replacing them on the left side with unknown
+// elements from the right side. -> left side 0bUUUUU000000000000000000000000000
+
+// type DebugT = i32;
+// if l_bitmap != 0 {
+//     println!(
+//         "area before: {:?}",
+//         &*ptr::slice_from_raw_parts(l_ptr as *const DebugT, BLOCK)
+//     );
+
+//     let mut l_bitmap_inv = l_bitmap ^ BitsetStorageT::MAX;
+//     let l_last_ptr = l_ptr.add(BLOCK - 1);
+
+//     println!("0b{l_bitmap:032b}");
+//     while l_bitmap > 0 {
+//         r_end_ptr = r_end_ptr.sub(1);
+
+//         core::intrinsics::assume(l_bitmap_inv != 0);
+
+//         let l_ge_ptr = l_ptr.add(l_bitmap.trailing_zeros() as usize);
+//         let l_lt_fill_ptr = l_last_ptr.sub(l_bitmap_inv.leading_zeros() as usize);
+//         let r_unknown_ptr = r_end_ptr;
+
+//         let tmp = ptr::read(l_ge_ptr);
+//         ptr::copy_nonoverlapping(l_lt_fill_ptr, l_ge_ptr, 1);
+//         ptr::copy_nonoverlapping(r_unknown_ptr, l_lt_fill_ptr, 1);
+//         ptr::copy_nonoverlapping(&tmp, r_unknown_ptr, 1);
+//         mem::forget(tmp);
+//         // println!(
+//         //     "l_ge_ptr: {} l_lt_fill_ptr: {} r_unknown_ptr: {}",
+//         //     l_ge_ptr.sub_ptr(l_ptr),
+//         //     l_lt_fill_ptr.sub_ptr(l_ptr),
+//         //     r_ptr.add(BLOCK).sub_ptr(r_unknown_ptr)
+//         // );
+
+//         l_bitmap = clear_lowest_bit(l_bitmap);
+//         l_bitmap_inv = clear_highest_bit(l_bitmap_inv);
+//     }
+
+//     println!(
+//         "area after:  {:?}",
+//         &*ptr::slice_from_raw_parts(l_ptr as *const DebugT, BLOCK)
+//     );
+//     todo!();
+// } else if r_bitmap != 0 {
+// }

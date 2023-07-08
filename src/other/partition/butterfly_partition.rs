@@ -98,7 +98,7 @@ where
     const BLOCK_SIZE: usize = 256;
 
     // This is not efficient for other types and large types could cause stack issues.
-    assert!(mem::size_of::<T>() <= mem::size_of::<u64>());
+    // assert!(mem::size_of::<T>() <= mem::size_of::<u64>());
 
     let mut scratch_lt = MaybeUninit::<[T; BLOCK_SIZE]>::uninit();
     let scratch_lt_ptr = scratch_lt.as_mut_ptr() as *mut T;

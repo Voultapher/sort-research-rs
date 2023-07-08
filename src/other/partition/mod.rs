@@ -41,7 +41,9 @@ macro_rules! partition_impl {
 }
 
 pub mod avx2;
+pub mod bitset_partition_revised;
 pub mod block_quicksort;
+pub mod blockptr_partition;
 pub mod butterfly_partition;
 pub mod crumsort;
 pub mod fulcrum_partition_revised;
@@ -55,6 +57,6 @@ pub mod scan_branchless_2way;
 pub mod scan_branchless_4way;
 pub mod simple_scan_branchless;
 pub mod simple_scan_branchy;
-pub mod small_fast;
+pub mod small_partition;
 pub mod sum_is_less;
 pub mod sum_lookup;
