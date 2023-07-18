@@ -1,7 +1,7 @@
 //! The idea is to build a partition implementation for types u64 and smaller.
 
 use std::cmp;
-use std::mem::{self, MaybeUninit};
+use std::mem::MaybeUninit;
 use std::ptr;
 
 partition_impl!("butterfly_partition");

@@ -5,6 +5,8 @@
 //! impl etc. With SIMD faster for types < u64 like i32. TODO talk about if already partitioned
 //! perf relevant for common values filtered out via pdqsort logic.
 
+#![allow(unused)]
+
 use std::cmp;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
@@ -127,7 +129,7 @@ unsafe fn swap_between_blocks<T>(
     (l_bitmap, r_bitmap)
 }
 
-// #[cfg(target_arch = "x86_64")]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn partition_impl<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
@@ -292,6 +294,11 @@ fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: features have to be present.
-    unsafe { partition_impl(v, pivot, is_less) }
+    #[cfg(target_arch = "x86_64")]
+    {
+        // SAFETY: features have to be present.
+        return unsafe { partition_impl(v, pivot, is_less) };
+    }
+
+    unimplemented!()
 }

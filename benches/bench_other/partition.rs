@@ -479,14 +479,4 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     //     pattern_provider,
     //     partition::blockptr_partition::PartitionImpl,
     // );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::hybrid_bitset_partition::PartitionImpl,
-    );
 }
