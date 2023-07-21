@@ -237,6 +237,15 @@ pub fn random_type_u128<S: Sort>() {
     });
 }
 
+pub fn random_cell_i32<S: Sort>() {
+    test_impl::<Cell<i32>, S>(|size| {
+        patterns::random(size)
+            .into_iter()
+            .map(|val| Cell::new(val))
+            .collect()
+    });
+}
+
 pub fn random_d4<S: Sort>() {
     test_impl::<i32, S>(|size| {
         if size > 3 {
@@ -1269,6 +1278,7 @@ macro_rules! instantiate_sort_tests {
             [miri_no, random_str],
             [miri_yes, random_type_u128],
             [miri_yes, random_type_u64],
+            [miri_yes, random_cell_i32],
             [miri_yes, random_z1],
             [miri_no, random_z1_03],
             [miri_no, random_z2],
