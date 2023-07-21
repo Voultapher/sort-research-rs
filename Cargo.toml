@@ -58,10 +58,10 @@ default = [
     "large_test_sizes",
     # "evolution",
     # "small_sort",
-    "partition",
+    # "partition",
     # "partition_point",
-
     # "cold_benchmarks",
+
     # "cpp_std_sys",
     # "cpp_std_libcxx",
     # "cpp_std_gcc4_3",
