@@ -10,6 +10,8 @@ fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
+    const UNROLL_LEN: usize = 4;
+
     let len = v.len();
     let arr_ptr = v.as_mut_ptr();
 
@@ -29,22 +31,40 @@ where
             dest: arr_ptr,
         };
 
+        // TODO measure compile-time impact of using macro.
         macro_rules! left {
             () => {
                 tmp_val_drop_guard.dest
             };
         }
 
-        for i in 1..len {
-            let right = arr_ptr.add(i);
-            let right_is_lt = is_less(&*right, pivot);
+        macro_rules! loop_body {
+            ($i:expr) => {
+                let right = arr_ptr.add($i);
+                let right_is_lt = is_less(&*right, pivot);
 
-            ptr::copy(right, left!(), 1);
+                ptr::copy(right, left!(), 1);
 
-            left!() = left!().add(right_is_lt as usize);
+                left!() = left!().add(right_is_lt as usize);
 
-            let new_left_dest = if right_is_lt { right } else { left!() };
-            ptr::copy(left!(), new_left_dest, 1);
+                let new_left_dest = if right_is_lt { right } else { left!() };
+                ptr::copy(left!(), new_left_dest, 1);
+            };
+        }
+
+        let mut offset = 1;
+        while (offset + UNROLL_LEN) < len {
+            for unroll_i in 0..UNROLL_LEN {
+                loop_body!(offset + unroll_i);
+            }
+            offset += UNROLL_LEN;
+        }
+
+        // Avoid unrolling for the loop cleanup.
+        let one = std::hint::black_box(1);
+        while offset < len {
+            loop_body!(offset);
+            offset += one;
         }
 
         let lt_count = left!().sub_ptr(arr_ptr) + (tmp_is_lt as usize);

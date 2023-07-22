@@ -102,6 +102,7 @@ pub mod cyclic_partition_crumsort;
 pub mod cyclic_partition_cumsort_revised;
 pub mod cyclic_partition_simple;
 pub mod hybrid_bitset_partition;
+pub mod hybrid_block_partition;
 pub mod ilp_partition;
 pub mod luna_partition;
 pub mod scan_branchless_2unroll;
