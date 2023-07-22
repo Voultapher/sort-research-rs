@@ -72,6 +72,11 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     let mut time_measurements = Vec::with_capacity(batched_runs);
     let mut side_effect = 0;
 
+    // Ensure that the tls scratch is initialized for this test size.
+    black_box(sort_comp::other::partition::get_or_alloc_tls_scratch(
+        std::alloc::Layout::array::<T>(test_len).unwrap(),
+    ));
+
     for i in 0..(batched_runs + 1) {
         let mut test_inputs = (0..batch_len)
             .map(|_| {
@@ -430,6 +435,16 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         partition::scan_branchless_4way::PartitionImpl,
     );
 
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::scan_branchless_cyclic::PartitionImpl,
+    );
+
     // bench_partition_impl(
     //     filter_arg,
     //     test_len,
@@ -479,4 +494,34 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     //     pattern_provider,
     //     partition::blockptr_partition::PartitionImpl,
     // );
+
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::hybrid_bitset_partition::PartitionImpl,
+    );
+
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::butterfly_block_partition::PartitionImpl,
+    );
+
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::stable_2side_fill::PartitionImpl,
+    );
 }

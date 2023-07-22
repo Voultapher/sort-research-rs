@@ -153,7 +153,7 @@ where
     // SAFETY: TODO
     unsafe {
         let mut l_ptr = arr_ptr;
-        let mut r_end_ptr = arr_ptr.add(len);
+        // let mut r_end_ptr = arr_ptr.add(len);
 
         let mut l_bitmap: BitsetStorageT = 0; // aka ge_bitmap
         let mut r_bitmap: BitsetStorageT = 0; // aka lt_bitmap
@@ -185,7 +185,7 @@ where
 
             // Switch to other conceptual model where r_end_ptr is the end of the right side instead
             // of the start.
-            r_end_ptr = r_ptr.add(BLOCK);
+            // r_end_ptr = r_ptr.add(BLOCK);
 
             // Take care of the remaining elements in the unfinished bitmap if any.
 
@@ -194,98 +194,98 @@ where
             debug_assert!(!(l_bitmap != 0 && r_bitmap != 0));
         }
 
-        // The following is optimized differently than the main block loop above. It tries to be
-        // fast and binary efficient based on the fact that the remaining window is small and
-        // contiguous. This is also crucial for perf of the relatively more common calls to
-        // partition with smaller slices that have sizes which exceed the small-sort.
+        // // The following is optimized differently than the main block loop above. It tries to be
+        // // fast and binary efficient based on the fact that the remaining window is small and
+        // // contiguous. This is also crucial for perf of the relatively more common calls to
+        // // partition with smaller slices that have sizes which exceed the small-sort.
 
-        // #[repr(align(64))]
-        // struct
+        // // #[repr(align(64))]
+        // // struct
 
-        // TODO explain
-        let mut ge_idx_buffer = MaybeUninit::<[u8; BLOCK * 2]>::uninit();
-        let mut ge_idx_ptr = ge_idx_buffer.as_mut_ptr() as *mut u8;
+        // // TODO explain
+        // let mut ge_idx_buffer = MaybeUninit::<[u8; BLOCK * 2]>::uninit();
+        // let mut ge_idx_ptr = ge_idx_buffer.as_mut_ptr() as *mut u8;
 
-        let mut lt_idx_buffer = MaybeUninit::<[u8; BLOCK * 2]>::uninit();
-        let mut lt_idx_ptr = lt_idx_buffer.as_mut_ptr() as *mut u8;
+        // let mut lt_idx_buffer = MaybeUninit::<[u8; BLOCK * 2]>::uninit();
+        // let mut lt_idx_ptr = lt_idx_buffer.as_mut_ptr() as *mut u8;
 
-        let remainder = r_end_ptr.sub_ptr(l_ptr);
-        // dbg!(remainder);
-        debug_assert!(remainder < (BLOCK * 2));
-        return l_ptr.sub_ptr(arr_ptr);
+        // let remainder = r_end_ptr.sub_ptr(l_ptr);
+        // // dbg!(remainder);
+        // debug_assert!(remainder < (BLOCK * 2));
+        // return l_ptr.sub_ptr(arr_ptr);
 
-        macro_rules! set_idx_ptrs(
-            ($i:expr) => {
-                *lt_idx_ptr = $i;
-                *ge_idx_ptr = $i;
-                let is_lt = is_less(&*l_ptr.add($i as usize), pivot);
-                lt_idx_ptr = lt_idx_ptr.add(is_lt as usize);
-                ge_idx_ptr = ge_idx_ptr.add(!is_lt as usize);
-            }
-        );
+        // macro_rules! set_idx_ptrs(
+        //     ($i:expr) => {
+        //         *lt_idx_ptr = $i;
+        //         *ge_idx_ptr = $i;
+        //         let is_lt = is_less(&*l_ptr.add($i as usize), pivot);
+        //         lt_idx_ptr = lt_idx_ptr.add(is_lt as usize);
+        //         ge_idx_ptr = ge_idx_ptr.add(!is_lt as usize);
+        //     }
+        // );
 
-        // Manually unrolled because on Arm LLVM doesn't do so and that's terrible for perf.
-        let mut i: u8 = 0;
+        // // Manually unrolled because on Arm LLVM doesn't do so and that's terrible for perf.
+        // let mut i: u8 = 0;
 
-        // if l_bitmap != 0 {
-        //     i =
+        // // if l_bitmap != 0 {
+        // //     i =
+        // // }
+
+        // let end = remainder as u8 + i;
+
+        // while (i + 1) < end {
+        //     set_idx_ptrs!(i);
+        //     set_idx_ptrs!(i + 1);
+
+        //     i += 2;
         // }
 
-        let end = remainder as u8 + i;
+        // if (remainder % 2) != 0 {
+        //     set_idx_ptrs!(i);
+        // }
 
-        while (i + 1) < end {
-            set_idx_ptrs!(i);
-            set_idx_ptrs!(i + 1);
+        // let ge_idx_base_ptr = ge_idx_buffer.as_ptr() as *const u8;
+        // let ge_count = ge_idx_ptr.sub_ptr(ge_idx_base_ptr);
 
-            i += 2;
-        }
+        // let lt_idx_base_ptr = lt_idx_buffer.as_ptr() as *const u8;
+        // let lt_count = lt_idx_ptr.sub_ptr(lt_idx_base_ptr);
 
-        if (remainder % 2) != 0 {
-            set_idx_ptrs!(i);
-        }
+        // let swap_count = cmp::min(ge_count, lt_count);
 
-        let ge_idx_base_ptr = ge_idx_buffer.as_ptr() as *const u8;
-        let ge_count = ge_idx_ptr.sub_ptr(ge_idx_base_ptr);
+        // // println!(
+        // //     "\nge_idx_buffer: {:?}",
+        // //     &*ptr::slice_from_raw_parts(ge_idx_buffer.as_ptr() as *const u8, ge_count)
+        // // );
+        // // println!(
+        // //     "lt_idx_buffer: {:?}",
+        // //     &*ptr::slice_from_raw_parts(lt_idx_buffer.as_ptr() as *const u8, lt_count)
+        // // );
 
-        let lt_idx_base_ptr = lt_idx_buffer.as_ptr() as *const u8;
-        let lt_count = lt_idx_ptr.sub_ptr(lt_idx_base_ptr);
+        // // type DebugT = i32;
+        // lt_idx_ptr = lt_idx_ptr.wrapping_sub(1);
 
-        let swap_count = cmp::min(ge_count, lt_count);
+        // // TODO benchmark cyclic permutation.
+        // for i in 0..swap_count {
+        //     let l_ge_idx = *ge_idx_base_ptr.add(i) as usize;
+        //     if l_ge_idx >= lt_count {
+        //         break;
+        //     }
 
-        // println!(
-        //     "\nge_idx_buffer: {:?}",
-        //     &*ptr::slice_from_raw_parts(ge_idx_buffer.as_ptr() as *const u8, ge_count)
-        // );
-        // println!(
-        //     "lt_idx_buffer: {:?}",
-        //     &*ptr::slice_from_raw_parts(lt_idx_buffer.as_ptr() as *const u8, lt_count)
-        // );
+        //     let r_lt_idx = *lt_idx_ptr.sub(i) as usize;
 
-        // type DebugT = i32;
-        lt_idx_ptr = lt_idx_ptr.wrapping_sub(1);
+        //     // println!(
+        //     //     "swapping {} <-> {} | idx {l_ge_idx} <-> {r_lt_idx}",
+        //     //     *(l_ptr.add(l_ge_idx) as *const DebugT),
+        //     //     *(l_ptr.add(r_lt_idx) as *const DebugT),
+        //     // );
 
-        // TODO benchmark cyclic permutation.
-        for i in 0..swap_count {
-            let l_ge_idx = *ge_idx_base_ptr.add(i) as usize;
-            if l_ge_idx >= lt_count {
-                break;
-            }
-
-            let r_lt_idx = *lt_idx_ptr.sub(i) as usize;
-
-            // println!(
-            //     "swapping {} <-> {} | idx {l_ge_idx} <-> {r_lt_idx}",
-            //     *(l_ptr.add(l_ge_idx) as *const DebugT),
-            //     *(l_ptr.add(r_lt_idx) as *const DebugT),
-            // );
-
-            ptr::swap_nonoverlapping(l_ptr.add(l_ge_idx), l_ptr.add(r_lt_idx), 1);
-        }
+        //     ptr::swap_nonoverlapping(l_ptr.add(l_ge_idx), l_ptr.add(r_lt_idx), 1);
+        // }
 
         // let remaining = r_ptr.sub_ptr(l_ptr);
         // dbg!(remaining);
 
-        l_ptr.sub_ptr(arr_ptr) + lt_count
+        l_ptr.sub_ptr(arr_ptr)
     }
 }
 
