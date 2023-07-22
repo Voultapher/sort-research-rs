@@ -687,56 +687,50 @@ fn partition<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    let mid = {
-        // Place the pivot at the beginning of slice.
-        v.swap(0, pivot);
-        let (pivot, v) = v.split_at_mut(1);
-        let pivot = &mut pivot[0];
+    // Proves a bunch of useful stuff to the compiler.
+    if v.len() == 0 {
+        return 0;
+    }
 
-        // Read the pivot into a stack-allocated variable for efficiency. If a following comparison
-        // operation panics, the pivot will be automatically written back into the slice.
+    // Place the pivot at the beginning of slice.
+    v.swap(0, pivot);
+    let (pivot, v_without_pivot) = v.split_at_mut(1);
 
-        // SAFETY: `pivot` is a reference to the first element of `v`, so `ptr::read` is safe.
-        let tmp = mem::ManuallyDrop::new(unsafe { ptr::read(pivot) });
-        let _pivot_guard = InsertionHole {
-            src: &*tmp,
-            dest: pivot,
-        };
-        let pivot = &*tmp;
+    // Assuming that Rust generates noalias LLVM IR we can be sure that a partition function
+    // signature of the form `(v: &mut [T], pivot: &T)` guarantees that pivot and v can't alias.
+    // Having this guarantee is crucial for optimizations. It's possible to copy the pivot value
+    // into a stack value, but this creates issues for types with interior mutability mandating
+    // a drop guard.
+    let pivot = &mut pivot[0];
 
-        // type DebugT = i32;
-        // let v_as_x = unsafe { mem::transmute::<&[T], &[DebugT]>(v) };
-        // let pivot_as_x = unsafe { mem::transmute::<&T, &DebugT>(pivot) };
+    // type DebugT = i32;
+    // let v_as_x = unsafe { mem::transmute::<&[T], &[DebugT]>(v) };
+    // let pivot_as_x = unsafe { mem::transmute::<&T, &DebugT>(pivot) };
 
-        // println!("pivot: {}", pivot_as_x);
-        // println!("before: {v_as_x:?}");
-        // let is_less_count = <crate::other::partition::fulcrum_partition_revised::PartitionImpl as crate::other::partition::Partition>::partition_by(v, pivot, is_less);
-        // println!("after:  {v_as_x:?}");
-        // println!("sub: {:?}\n", &v_as_x[..is_less_count]);
+    // println!("pivot: {}", pivot_as_x);
+    // println!("before: {v_as_x:?}");
+    // let lt_count = <crate::other::partition::scan_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
+    // println!("after:  {v_as_x:?}");
+    // println!("sub: {:?}\n", &v_as_x[..lt_count]);
 
-        // for val in &v_as_x[is_less_count..] {
-        //     if val < pivot_as_x {
-        //         println!("wrong val: {val}");
-        //         panic!();
-        //     }
-        // }
+    // for val in &v_as_x[lt_count..] {
+    //     if val < pivot_as_x {
+    //         println!("wrong val: {val}");
+    //         panic!("partition impl is wrong");
+    //     }
+    // }
 
-        let is_less_count = <T as UnstableSortTypeImpl>::partition(v, pivot, is_less);
+    let lt_count = T::partition(v_without_pivot, pivot, is_less);
 
-        is_less_count
+    // let lt_count = <crate::other::partition::scan_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
 
-        // pivot quality measurement.
-        // println!("len: {} is_less: {}", v.len(), l + is_less_count);
-
-        // `_pivot_guard` goes out of scope and writes the pivot (which is a stack-allocated
-        // variable) back into the slice where it originally was. This step is critical in ensuring
-        // safety!
-    };
+    // pivot quality measurement.
+    // println!("len: {} is_less: {}", v.len(), l + lt_count);
 
     // Place the pivot between the two partitions.
-    v.swap(0, mid);
+    v.swap(0, lt_count);
 
-    mid
+    lt_count
 }
 
 /// Partitions `v` into elements equal to `v[pivot]` followed by elements greater than `v[pivot]`.
@@ -1034,12 +1028,12 @@ impl<T: Freeze> UnstableSortTypeImpl for T {
 // TODO merge with local variants
 
 // When dropped, copies from `src` into `dest`.
-struct InsertionHole<T> {
+struct SingleValueDropGuard<T> {
     src: *const T,
     dest: *mut T,
 }
 
-impl<T> Drop for InsertionHole<T> {
+impl<T> Drop for SingleValueDropGuard<T> {
     fn drop(&mut self) {
         unsafe {
             ptr::copy_nonoverlapping(self.src, self.dest, 1);
@@ -1081,7 +1075,7 @@ where
             // If `is_less` panics at any point during the process, `hole` will get dropped and
             // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
             // initially held exactly once.
-            let mut hole = InsertionHole {
+            let mut hole = SingleValueDropGuard {
                 src: &*tmp,
                 dest: i_ptr.sub(1),
             };
