@@ -285,25 +285,15 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     // TODO use proper criterion benchmarking.
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::sum_is_less::PartitionImpl,
-    // );
-
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::sum_lookup::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::sum_is_less::PartitionImpl,
+    );
 
     bench_partition_impl(
         filter_arg,
@@ -345,15 +335,15 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         partition::block_quicksort::PartitionImpl,
     );
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::fulcrum_partition_simple::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::cyclic_partition_simple::PartitionImpl,
+    );
 
     bench_partition_impl(
         filter_arg,
@@ -362,28 +352,28 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         transform,
         pattern_name,
         pattern_provider,
-        partition::fulcrum_partition_scandum::PartitionImpl,
+        partition::cyclic_partition_crumsort::PartitionImpl,
     );
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::crumsort::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::cyclic_partition_cumsort_revised::PartitionImpl,
+    );
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::new_block_quicksort::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::crumsort_rs::PartitionImpl,
+    );
 
     bench_partition_impl(
         filter_arg,
@@ -394,26 +384,6 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         pattern_provider,
         partition::small_partition::PartitionImpl,
     );
-
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::ilp_partition::PartitionImpl,
-    // );
-
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::avx2::PartitionImpl,
-    // );
 
     bench_partition_impl(
         filter_arg,
@@ -445,25 +415,15 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         partition::scan_branchless_cyclic::PartitionImpl,
     );
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::fulcrum_partition_revised::PartitionImpl,
-    // );
-
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::luna_partition::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::luna_partition::PartitionImpl,
+    );
 
     bench_partition_impl(
         filter_arg,
@@ -485,15 +445,15 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         partition::bitset_partition_revised::PartitionImpl,
     );
 
-    // bench_partition_impl(
-    //     filter_arg,
-    //     test_len,
-    //     transform_name,
-    //     transform,
-    //     pattern_name,
-    //     pattern_provider,
-    //     partition::blockptr_partition::PartitionImpl,
-    // );
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::blockptr_partition::PartitionImpl,
+    );
 
     bench_partition_impl(
         filter_arg,
@@ -503,6 +463,16 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         pattern_name,
         pattern_provider,
         partition::hybrid_bitset_partition::PartitionImpl,
+    );
+
+    bench_partition_impl(
+        filter_arg,
+        test_len,
+        transform_name,
+        transform,
+        pattern_name,
+        pattern_provider,
+        partition::hybrid_block_partition::PartitionImpl,
     );
 
     bench_partition_impl(

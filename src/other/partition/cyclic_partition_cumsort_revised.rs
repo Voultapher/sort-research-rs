@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 use core::ptr;
 
-partition_impl!("fulcrum_partition_revised");
+partition_impl!("cyclic_partition_cumsort_revised");
 
 struct FulcrumState<T> {
     r_ptr: *mut T,
@@ -34,74 +34,33 @@ unsafe fn fulcrum_rotate<T, F>(
     }
 }
 
-unsafe fn small_aux_partition<T, F>(
+// Inspired by Igor van den Hoven and his work in quadsort/crumsort.
+// TODO document.
+fn fulcrum_partition_impl<T, F, const ROTATION_ELEMS: usize>(
     v: &mut [T],
-    swap_ptr: *mut T,
     pivot: &T,
     is_less: &mut F,
 ) -> usize
 where
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    let arr_ptr = v.as_mut_ptr();
-
-    // SAFETY: TODO
-    unsafe {
-        let mut swap_ptr_l = swap_ptr;
-        let mut swap_ptr_r = swap_ptr.add(len - 1);
-
-        // This could probably be sped-up by interleaving the two loops.
-        for i in 0..len {
-            let elem_ptr = arr_ptr.add(i);
-
-            let is_l = is_less(&*elem_ptr, pivot);
-
-            let target_ptr = if is_l { swap_ptr_l } else { swap_ptr_r };
-            ptr::copy_nonoverlapping(elem_ptr, target_ptr, 1);
-
-            swap_ptr_l = swap_ptr_l.add(is_l as usize);
-            swap_ptr_r = swap_ptr_r.sub(!is_l as usize);
-        }
-
-        // SAFETY: swap now contains all elements that belong on the left side of the pivot. All
-        // comparisons have been done if is_less would have panicked v would have stayed untouched.
-
-        // Now that swap has the correct order overwrite arr_ptr.
-        ptr::copy_nonoverlapping(swap_ptr, arr_ptr, len);
-
-        swap_ptr_l.sub_ptr(swap_ptr)
-    }
-}
-
-// Inspired by Igor van den Hoven and his work in quadsort/crumsort.
-// TODO document.
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
+    // T: Freeze,
     F: FnMut(&T, &T) -> bool,
 {
     // TODO explain ideas. and panic safety. cleanup.
     let len = v.len();
 
-    const ROTATION_ELEMS: usize = 32;
+    const SWAP_SIZE: usize = 64;
+
+    assert!(len >= (ROTATION_ELEMS * 2) && ROTATION_ELEMS <= 32);
 
     let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO
         unsafe { (a_ptr.sub_ptr(arr_ptr) - elem_i) <= ROTATION_ELEMS }
     };
 
-    let mut swap = MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();
+    let mut swap = MaybeUninit::<[T; SWAP_SIZE]>::uninit();
     let swap_ptr = swap.as_mut_ptr() as *mut T;
 
     let arr_ptr = v.as_mut_ptr();
-
-    // SAFETY: TODO
-    unsafe {
-        if len <= (ROTATION_ELEMS * 2) {
-            return small_aux_partition(v, swap_ptr, pivot, is_less);
-        }
-    }
 
     // SAFETY: TODO
     unsafe {
@@ -148,5 +107,18 @@ where
         fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
 
         state.elem_i
+    }
+}
+
+fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    // T: Freeze,
+    F: FnMut(&T, &T) -> bool,
+{
+    // TODO explain.
+    if v.len() < 256 {
+        fulcrum_partition_impl::<T, F, 16>(v, pivot, is_less)
+    } else {
+        fulcrum_partition_impl::<T, F, 32>(v, pivot, is_less)
     }
 }
