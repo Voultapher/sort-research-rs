@@ -240,7 +240,7 @@ where
 
         let outer_lt_count = l_ptr.sub_ptr(arr_ptr);
 
-        let inner_lt_count = <crate::other::partition::scan_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut *ptr::slice_from_raw_parts_mut(arr_ptr, remaining_len), pivot, is_less);
+        let inner_lt_count = <crate::other::partition::lomuto_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut *ptr::slice_from_raw_parts_mut(arr_ptr, remaining_len), pivot, is_less);
 
         let lt_count = outer_lt_count + inner_lt_count;
 

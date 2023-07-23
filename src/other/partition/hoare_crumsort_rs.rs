@@ -2,7 +2,7 @@ use core::mem;
 
 // version found in crumsort-rs
 
-partition_impl!("crumsort");
+partition_impl!("hoare_crumsort_rs");
 
 /// Size of tack-allocated swap memory for certain operations that can be performed faster with
 /// swap memory than in-place.

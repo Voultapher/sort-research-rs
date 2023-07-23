@@ -92,25 +92,23 @@ pub fn get_or_alloc_tls_scratch(layout: alloc::Layout) -> NonNull<u8> {
     })
 }
 
-pub mod bitset_partition_revised;
-pub mod block_quicksort;
-pub mod blockptr_partition;
-pub mod butterfly_block_partition;
-pub mod butterfly_partition;
-pub mod crumsort_rs;
-pub mod cyclic_partition_crumsort;
-pub mod cyclic_partition_cumsort_revised;
-pub mod cyclic_partition_simple;
+pub mod hoare_block;
+pub mod hoare_block_butterfly;
+pub mod hoare_block_opt;
+pub mod hoare_block_ptr;
+pub mod hoare_branchy;
+pub mod hoare_branchy_cyclic;
+pub mod hoare_crumsort;
+pub mod hoare_crumsort_opt;
+pub mod hoare_crumsort_rs;
 pub mod hybrid_bitset_partition;
 pub mod hybrid_block_partition;
-pub mod ilp_partition;
-pub mod luna_partition;
-pub mod scan_branchless_2unroll;
-pub mod scan_branchless_2way;
-pub mod scan_branchless_4way;
-pub mod scan_branchless_cyclic;
-pub mod simple_scan_branchless;
-pub mod simple_scan_branchy;
+pub mod lomuto_branchless;
+pub mod lomuto_branchless_2way;
+pub mod lomuto_branchless_4way;
+pub mod lomuto_branchless_cyclic;
+pub mod lomuto_branchless_cyclic_opt;
+pub mod lomuto_iterleaved;
 pub mod small_partition;
 pub mod stable_2side_fill;
 pub mod sum_is_less;

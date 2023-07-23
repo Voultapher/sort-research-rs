@@ -1,7 +1,7 @@
 use core::mem;
 use core::ptr;
 
-partition_impl!("cyclic_partition_simple");
+partition_impl!("hoare_branchy_cyclic");
 
 // Demonstrate ideas behind rotation based partitioning.
 

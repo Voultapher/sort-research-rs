@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 use core::ptr;
 
-partition_impl!("cyclic_partition_cumsort_revised");
+partition_impl!("hoare_crumsort_opt");
 
 struct FulcrumState<T> {
     r_ptr: *mut T,
@@ -50,7 +50,7 @@ where
 
     const SWAP_SIZE: usize = 64;
 
-    assert!(len >= (ROTATION_ELEMS * 2) && ROTATION_ELEMS <= 32);
+    assert!(len >= (ROTATION_ELEMS * 2) && ROTATION_ELEMS <= 32, "{len}");
 
     let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO

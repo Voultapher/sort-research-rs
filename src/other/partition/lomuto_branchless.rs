@@ -1,11 +1,11 @@
 use core::mem::MaybeUninit;
 use core::ptr;
 
-partition_impl!("scan_branchless_2unroll");
+partition_impl!("lomuto_branchless");
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
 #[inline(always)]
-pub unsafe fn branchless_swap_overlapping<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
+pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
     // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
     // and properly aligned, and part of the same allocation.
 
@@ -24,9 +24,9 @@ pub unsafe fn branchless_swap_overlapping<T>(a_ptr: *mut T, b_ptr: *mut T, shoul
     let a_swap_ptr = if should_swap { b_ptr } else { a_ptr };
     let b_swap_ptr = if should_swap { a_ptr } else { b_ptr };
 
-    ptr::copy(b_swap_ptr, tmp.as_mut_ptr(), 1);
+    ptr::copy_nonoverlapping(b_swap_ptr, tmp.as_mut_ptr(), 1);
     ptr::copy(a_swap_ptr, a_ptr, 1);
-    ptr::copy(tmp.as_ptr(), b_ptr, 1);
+    ptr::copy_nonoverlapping(tmp.as_ptr(), b_ptr, 1);
 }
 
 fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
@@ -38,29 +38,22 @@ where
 
     const UNROLL_SIZE: usize = 2;
 
-    let len_mod = len % UNROLL_SIZE;
-    let even_len = len - (len_mod != 0) as usize;
-    let len_div_n = even_len / UNROLL_SIZE;
-
     unsafe {
         let mut fill_ptr = arr_ptr;
         let mut elem_ptr = fill_ptr;
 
-        for _ in 0..len_div_n {
-            let elem_is_less = is_less(&*elem_ptr, pivot);
-            branchless_swap_overlapping(fill_ptr, elem_ptr, elem_is_less);
-            fill_ptr = fill_ptr.add(elem_is_less as usize);
-            elem_ptr = elem_ptr.add(1);
-
-            let elem_is_less = is_less(&*elem_ptr, pivot);
-            branchless_swap_overlapping(fill_ptr, elem_ptr, elem_is_less);
-            fill_ptr = fill_ptr.add(elem_is_less as usize);
-            elem_ptr = elem_ptr.add(1);
+        for _ in 0..(len / UNROLL_SIZE) {
+            for _ in 0..UNROLL_SIZE {
+                let elem_is_less = is_less(&*elem_ptr, pivot);
+                branchless_swap(fill_ptr, elem_ptr, elem_is_less);
+                fill_ptr = fill_ptr.add(elem_is_less as usize);
+                elem_ptr = elem_ptr.add(1);
+            }
         }
 
-        for elem in &mut v[(len - len_mod)..] {
-            let elem_is_less = is_less(elem, pivot);
-            branchless_swap_overlapping(elem, fill_ptr, elem_is_less);
+        if elem_ptr < arr_ptr.add(len) {
+            let elem_is_less = is_less(&*elem_ptr, pivot);
+            branchless_swap(elem_ptr, fill_ptr, elem_is_less);
             fill_ptr = fill_ptr.add(elem_is_less as usize);
         }
 

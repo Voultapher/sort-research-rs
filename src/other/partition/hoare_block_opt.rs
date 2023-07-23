@@ -1,9 +1,90 @@
 use core::cmp;
-use core::intrinsics;
-use core::mem;
+use core::mem::{self, MaybeUninit};
 use core::ptr;
 
-partition_impl!("block_quicksort");
+partition_impl!("hoare_block_opt");
+
+/// TODO explain
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+#[inline(always)]
+unsafe fn swap_elements_between_blocks<T>(
+    l_ptr: *mut T,
+    r_ptr: *mut T,
+    mut l_offsets_ptr: *const u8,
+    mut r_offsets_ptr: *const u8,
+    count: usize,
+) -> (*const u8, *const u8) {
+    macro_rules! left {
+        () => {
+            l_ptr.add(*l_offsets_ptr as usize)
+        };
+    }
+    macro_rules! right {
+        () => {
+            r_ptr.sub(*r_offsets_ptr as usize + 1)
+        };
+    }
+
+    // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
+    // permutation. This is not strictly equivalent to swapping, but produces a similar
+    // result using fewer memory operations.
+    //
+    // Example cyclic permutation to swap A,B,C,D with W,X,Y,Z
+    //
+    // A -> TMP
+    // Z -> A   | Z,B,C,D ___ W,X,Y,Z
+    //
+    // Loop iter 1
+    // B -> Z   | Z,B,C,D ___ W,X,Y,B
+    // Y -> B   | Z,Y,C,D ___ W,X,Y,B
+    //
+    // Loop iter 2
+    // C -> Y   | Z,Y,C,D ___ W,X,C,B
+    // X -> C   | Z,Y,X,D ___ W,X,C,B
+    //
+    // Loop iter 3
+    // D -> X   | Z,Y,X,D ___ W,D,C,B
+    // W -> D   | Z,Y,X,W ___ W,D,C,B
+    //
+    // TMP -> W | Z,Y,X,W ___ A,D,C,B
+
+    // SAFETY: The use of `ptr::read` is valid because there is at least one element in
+    // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
+    //
+    // The uses of `left!` involve calls to `offset` on `l`, which points to the
+    // beginning of `v`. All the offsets pointed-to by `l_offsets_ptr` are at most `block_l`, so
+    // these `offset` calls are safe as all reads are within the block. The same argument
+    // applies for the uses of `right!`.
+    //
+    // The calls to `l_offsets_ptr.offset` are valid because there are at most `count-1` of them,
+    // plus the final one at the end of the unsafe block, where `count` is the minimum number
+    // of collected offsets in `offsets_l` and `offsets_r`, so there is no risk of there not
+    // being enough elements. The same reasoning applies to the calls to `r_offsets_ptr.offset`.
+    //
+    // The calls to `copy_nonoverlapping` are safe because `left!` and `right!` are guaranteed
+    // not to overlap, and are valid because of the reasoning above.
+
+    if count > 0 {
+        unsafe {
+            let tmp = ptr::read(left!());
+            ptr::copy_nonoverlapping(right!(), left!(), 1);
+
+            for _ in 1..count {
+                l_offsets_ptr = l_offsets_ptr.add(1);
+                ptr::copy_nonoverlapping(left!(), right!(), 1);
+                r_offsets_ptr = r_offsets_ptr.add(1);
+                ptr::copy_nonoverlapping(right!(), left!(), 1);
+            }
+
+            ptr::copy_nonoverlapping(&tmp, right!(), 1);
+            mem::forget(tmp);
+            l_offsets_ptr = l_offsets_ptr.add(1);
+            r_offsets_ptr = r_offsets_ptr.add(1);
+        }
+    }
+
+    (l_offsets_ptr, r_offsets_ptr)
+}
 
 /// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or equal
 /// to `pivot`.
@@ -20,7 +101,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // Number of elements in a typical block.
-    const BLOCK: usize = 128;
+    const BLOCK: usize = 2usize.pow(u8::BITS);
 
     // The partitioning algorithm repeats the following steps until completion:
     //
@@ -40,7 +121,7 @@ where
     let mut block_l = BLOCK;
     let mut start_l = ptr::null_mut();
     let mut end_l = ptr::null_mut();
-    let mut offsets_l = [mem::MaybeUninit::<u8>::uninit(); BLOCK];
+    let mut offsets_l = [MaybeUninit::<u8>::uninit(); BLOCK];
 
     // The current block on the right side (from `r.sub(block_r)` to `r`).
     // SAFETY: The documentation for .add() specifically mention that `vec.as_ptr().add(vec.len())` is always safe`
@@ -48,17 +129,16 @@ where
     let mut block_r = BLOCK;
     let mut start_r = ptr::null_mut();
     let mut end_r = ptr::null_mut();
-    let mut offsets_r = [mem::MaybeUninit::<u8>::uninit(); BLOCK];
+    let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK];
 
     // FIXME: When we get VLAs, try creating one array of length `min(v.len(), 2 * BLOCK)` rather
     // than two fixed-size arrays of length `BLOCK`. VLAs might be more cache-efficient.
 
     // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
-    fn width<T>(l: *mut T, r: *mut T) -> usize {
+    fn width<T>(l: *const T, r: *const T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        // SAFETY: r >= l and not T::IS_ZST
-        unsafe { intrinsics::ptr_offset_from_unsigned(r, l) }
+        unsafe { r.sub_ptr(l) }
     }
 
     loop {
@@ -92,7 +172,7 @@ where
 
         if start_l == end_l {
             // Trace `block_l` elements from the left side.
-            start_l = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
+            start_l = MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
             end_l = start_l;
             let mut elem = l;
 
@@ -110,15 +190,15 @@ where
                 unsafe {
                     // Branchless comparison.
                     *end_l = i as u8;
-                    end_l = end_l.offset(!is_less(&*elem, pivot) as isize);
-                    elem = elem.offset(1);
+                    end_l = end_l.wrapping_add(!is_less(&*elem, pivot) as usize);
+                    elem = elem.add(1);
                 }
             }
         }
 
         if start_r == end_r {
             // Trace `block_r` elements from the right side.
-            start_r = mem::MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
+            start_r = MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
             end_r = start_r;
             let mut elem = r;
 
@@ -136,9 +216,9 @@ where
                 //        Plus, `block_r` was asserted to be less than `BLOCK` and `elem` will therefore at most be pointing to the beginning of the slice.
                 unsafe {
                     // Branchless comparison.
-                    elem = elem.offset(-1);
+                    elem = elem.sub(1);
                     *end_r = i as u8;
-                    end_r = end_r.offset(is_less(&*elem, pivot) as isize);
+                    end_r = end_r.wrapping_add(is_less(&*elem, pivot) as usize);
                 }
             }
         }
@@ -146,53 +226,11 @@ where
         // Number of out-of-order elements to swap between the left and right side.
         let count = cmp::min(width(start_l, end_l), width(start_r, end_r));
 
-        if count > 0 {
-            macro_rules! left {
-                () => {
-                    l.offset(*start_l as isize)
-                };
-            }
-            macro_rules! right {
-                () => {
-                    r.offset(-(*start_r as isize) - 1)
-                };
-            }
-
-            // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
-            // permutation. This is not strictly equivalent to swapping, but produces a similar
-            // result using fewer memory operations.
-
-            // SAFETY: The use of `ptr::read` is valid because there is at least one element in
-            // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
-            //
-            // The uses of `left!` involve calls to `offset` on `l`, which points to the
-            // beginning of `v`. All the offsets pointed-to by `start_l` are at most `block_l`, so
-            // these `offset` calls are safe as all reads are within the block. The same argument
-            // applies for the uses of `right!`.
-            //
-            // The calls to `start_l.offset` are valid because there are at most `count-1` of them,
-            // plus the final one at the end of the unsafe block, where `count` is the minimum number
-            // of collected offsets in `offsets_l` and `offsets_r`, so there is no risk of there not
-            // being enough elements. The same reasoning applies to the calls to `start_r.offset`.
-            //
-            // The calls to `copy_nonoverlapping` are safe because `left!` and `right!` are guaranteed
-            // not to overlap, and are valid because of the reasoning above.
-            unsafe {
-                let tmp = ptr::read(left!());
-                ptr::copy_nonoverlapping(right!(), left!(), 1);
-
-                for _ in 1..count {
-                    start_l = start_l.offset(1);
-                    ptr::copy_nonoverlapping(left!(), right!(), 1);
-                    start_r = start_r.offset(1);
-                    ptr::copy_nonoverlapping(right!(), left!(), 1);
-                }
-
-                ptr::copy_nonoverlapping(&tmp, right!(), 1);
-                mem::forget(tmp);
-                start_l = start_l.offset(1);
-                start_r = start_r.offset(1);
-            }
+        // SAFETY: TODO
+        unsafe {
+            (start_l, start_r) = mem::transmute::<(*const u8, *const u8), (*mut u8, *mut u8)>(
+                swap_elements_between_blocks(l, r, start_l, start_r, count),
+            );
         }
 
         if start_l == end_l {
@@ -204,7 +242,7 @@ where
             // safe. Otherwise, the debug assertions in the `is_done` case guarantee that
             // `width(l, r) == block_l + block_r`, namely, that the block sizes have been adjusted to account
             // for the smaller number of remaining elements.
-            l = unsafe { l.offset(block_l as isize) };
+            l = unsafe { l.add(block_l) };
         }
 
         if start_r == end_r {
@@ -212,7 +250,7 @@ where
 
             // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
             // or `block_r` has been adjusted for the last handful of elements.
-            r = unsafe { r.offset(-(block_r as isize)) };
+            r = unsafe { r.sub(block_r) };
         }
 
         if is_done {
@@ -241,9 +279,9 @@ where
             //  - `offsets_l` contains valid offsets into `v` collected during the partitioning of
             //    the last block, so the `l.offset` calls are valid.
             unsafe {
-                end_l = end_l.offset(-1);
-                ptr::swap(l.offset(*end_l as isize), r.offset(-1));
-                r = r.offset(-1);
+                end_l = end_l.sub(1);
+                ptr::swap(l.add(*end_l as usize), r.sub(1));
+                r = r.sub(1);
             }
         }
         width(v.as_mut_ptr(), r)
@@ -254,9 +292,9 @@ where
         while start_r < end_r {
             // SAFETY: See the reasoning in [remaining-elements-safety].
             unsafe {
-                end_r = end_r.offset(-1);
-                ptr::swap(l, r.offset(-(*end_r as isize) - 1));
-                l = l.offset(1);
+                end_r = end_r.sub(1);
+                ptr::swap(l, r.sub(*end_r as usize + 1));
+                l = l.add(1);
             }
         }
         width(v.as_mut_ptr(), l)

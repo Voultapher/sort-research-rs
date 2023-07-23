@@ -8,7 +8,7 @@ use std::cmp;
 use std::mem::MaybeUninit;
 use std::ptr;
 
-partition_impl!("blockptr_partition");
+partition_impl!("hoare_block_ptr");
 
 //  TODO explain
 

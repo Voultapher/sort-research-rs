@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 use core::ptr;
 
-partition_impl!("cyclic_partition_crumsort");
+partition_impl!("hoare_crumsort");
 
 struct FulcrumState<T> {
     r_ptr: *mut T,

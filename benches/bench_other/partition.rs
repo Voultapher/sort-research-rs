@@ -285,213 +285,39 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     // TODO use proper criterion benchmarking.
 
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::sum_is_less::PartitionImpl,
-    );
+    macro_rules! bench_inst {
+        ($partition_impl:ident) => {
+            bench_partition_impl(
+                filter_arg,
+                test_len,
+                transform_name,
+                transform,
+                pattern_name,
+                pattern_provider,
+                partition::$partition_impl::PartitionImpl,
+            );
+        };
+    }
 
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::simple_scan_branchy::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::simple_scan_branchless::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::scan_branchless_2unroll::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::block_quicksort::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::cyclic_partition_simple::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::cyclic_partition_crumsort::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::cyclic_partition_cumsort_revised::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::crumsort_rs::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::small_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::scan_branchless_2way::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::scan_branchless_4way::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::scan_branchless_cyclic::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::luna_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::butterfly_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::bitset_partition_revised::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::blockptr_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::hybrid_bitset_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::hybrid_block_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::butterfly_block_partition::PartitionImpl,
-    );
-
-    bench_partition_impl(
-        filter_arg,
-        test_len,
-        transform_name,
-        transform,
-        pattern_name,
-        pattern_provider,
-        partition::stable_2side_fill::PartitionImpl,
-    );
+    bench_inst!(hoare_block_butterfly);
+    bench_inst!(hoare_block_opt);
+    bench_inst!(hoare_block_ptr);
+    bench_inst!(hoare_block);
+    bench_inst!(hoare_branchy_cyclic);
+    bench_inst!(hoare_branchy);
+    bench_inst!(hoare_crumsort_opt);
+    bench_inst!(hoare_crumsort_rs);
+    bench_inst!(hoare_crumsort);
+    bench_inst!(hybrid_bitset_partition);
+    bench_inst!(hybrid_block_partition);
+    bench_inst!(lomuto_branchless_2way);
+    bench_inst!(lomuto_branchless_4way);
+    bench_inst!(lomuto_branchless_cyclic_opt);
+    bench_inst!(lomuto_branchless_cyclic);
+    bench_inst!(lomuto_branchless);
+    bench_inst!(lomuto_iterleaved);
+    bench_inst!(lomuto_branchless);
+    bench_inst!(small_partition);
+    bench_inst!(stable_2side_fill);
+    bench_inst!(sum_is_less);
 }

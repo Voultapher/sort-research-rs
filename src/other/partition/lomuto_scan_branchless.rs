@@ -2,7 +2,7 @@
 
 use crate::unstable::rust_ipnsort::branchless_swap;
 
-partition_impl!("simple_scan_branchless");
+partition_impl!("simple_lomuto_branchless");
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize

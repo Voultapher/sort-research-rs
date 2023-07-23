@@ -2,7 +2,7 @@
 
 use std::ptr;
 
-partition_impl!("luna_partition");
+partition_impl!("lomuto_iterleaved");
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize

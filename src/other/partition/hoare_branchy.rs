@@ -1,6 +1,6 @@
 use std::ptr;
 
-partition_impl!("simple_scan_branchy");
+partition_impl!("hoare_branchy");
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
