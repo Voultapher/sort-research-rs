@@ -66,7 +66,7 @@ pub fn get_or_alloc_tls_scratch(layout: alloc::Layout) -> NonNull<u8> {
         }
 
         fn get_or_replace(&mut self, layout: alloc::Layout) -> NonNull<u8> {
-            if self.layout != layout {
+            if self.layout.align() != layout.align() || self.layout.size() < layout.size() {
                 *self = Self::new(layout);
             }
 
