@@ -1,13 +1,64 @@
-#![allow(unused)]
-
 //! Instruction-Parallel-Network Unstable Sort, ipnsort by Lukas Bergdoll
 
-use core::cmp::{self, Ordering};
+use core::cmp::Ordering;
 use core::intrinsics;
-use core::mem::{self, MaybeUninit};
+use core::mem::{self, ManuallyDrop, MaybeUninit};
 use core::ptr;
 
 sort_impl!("rust_ipnsort_unstable");
+
+// // #[rustc_unsafe_specialization_marker]
+// trait Freeze {}
+
+// Can the type have interior mutability, this is checked by testing if T is Freeze. If the type can
+// have interior mutability it may alter itself during comparison in a way that must be observed
+// after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
+// double free.
+unsafe auto trait Freeze {}
+
+impl<T: ?Sized> !Freeze for core::cell::UnsafeCell<T> {}
+unsafe impl<T: ?Sized> Freeze for core::marker::PhantomData<T> {}
+unsafe impl<T: ?Sized> Freeze for *const T {}
+unsafe impl<T: ?Sized> Freeze for *mut T {}
+unsafe impl<T: ?Sized> Freeze for &T {}
+unsafe impl<T: ?Sized> Freeze for &mut T {}
+
+#[const_trait]
+trait IsFreeze {
+    fn value() -> bool;
+}
+
+impl<T> const IsFreeze for T {
+    default fn value() -> bool {
+        false
+    }
+}
+
+impl<T: Freeze> const IsFreeze for T {
+    fn value() -> bool {
+        true
+    }
+}
+
+#[must_use]
+const fn has_efficient_in_place_swap<T>() -> bool {
+    mem::size_of::<T>() <= mem::size_of::<u64>()
+}
+
+#[test]
+fn type_info() {
+    assert!(has_efficient_in_place_swap::<i32>());
+    assert!(has_efficient_in_place_swap::<u64>());
+    assert!(!has_efficient_in_place_swap::<u128>());
+    assert!(!has_efficient_in_place_swap::<String>());
+
+    assert!(<u64 as IsFreeze>::value());
+    assert!(<String as IsFreeze>::value());
+    assert!(!<core::cell::Cell<u64> as IsFreeze>::value());
+}
+
+trait IsTrue<const B: bool> {}
+impl IsTrue<true> for () {}
 
 /// Sorts the slice, but might not preserve the order of equal elements.
 ///
@@ -242,446 +293,41 @@ where
     }
 }
 
-/// TODO explain
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-#[inline(always)]
-unsafe fn swap_elements_between_blocks<T>(
-    l_ptr: *mut T,
-    r_ptr: *mut T,
-    mut l_offsets_ptr: *const u8,
-    mut r_offsets_ptr: *const u8,
-    count: usize,
-) -> (*const u8, *const u8) {
-    macro_rules! left {
-        () => {
-            l_ptr.add(*l_offsets_ptr as usize)
-        };
-    }
-    macro_rules! right {
-        () => {
-            r_ptr.sub(*r_offsets_ptr as usize + 1)
-        };
-    }
+// TODO move to main docs.
+// Instead of swapping one pair at the time, it is more efficient to perform a cyclic
+// permutation. This is not strictly equivalent to swapping, but produces a similar
+// result using fewer memory operations.
+//
+// Example cyclic permutation to swap A,B,C,D with W,X,Y,Z
+//
+// A -> TMP
+// Z -> A   | Z,B,C,D ___ W,X,Y,Z
+//
+// Loop iter 1
+// B -> Z   | Z,B,C,D ___ W,X,Y,B
+// Y -> B   | Z,Y,C,D ___ W,X,Y,B
+//
+// Loop iter 2
+// C -> Y   | Z,Y,C,D ___ W,X,C,B
+// X -> C   | Z,Y,X,D ___ W,X,C,B
+//
+// Loop iter 3
+// D -> X   | Z,Y,X,D ___ W,D,C,B
+// W -> D   | Z,Y,X,W ___ W,D,C,B
+//
+// TMP -> W | Z,Y,X,W ___ A,D,C,B
 
-    if count <= 1 {
-        if count == 1 {
-            // SAFETY: TODO
-            unsafe {
-                ptr::swap_nonoverlapping(left!(), right!(), 1);
-                l_offsets_ptr = l_offsets_ptr.add(1);
-                r_offsets_ptr = r_offsets_ptr.add(1);
-            }
-        }
-
-        return (l_offsets_ptr, r_offsets_ptr);
-    }
-
-    // Instead of swapping one pair at the time, it is more efficient to perform a cyclic
-    // permutation. This is not strictly equivalent to swapping, but produces a similar
-    // result using fewer memory operations.
-    //
-    // Example cyclic permutation to swap A,B,C,D with W,X,Y,Z
-    //
-    // A -> TMP
-    // Z -> A   | Z,B,C,D ___ W,X,Y,Z
-    //
-    // Loop iter 1
-    // B -> Z   | Z,B,C,D ___ W,X,Y,B
-    // Y -> B   | Z,Y,C,D ___ W,X,Y,B
-    //
-    // Loop iter 2
-    // C -> Y   | Z,Y,C,D ___ W,X,C,B
-    // X -> C   | Z,Y,X,D ___ W,X,C,B
-    //
-    // Loop iter 3
-    // D -> X   | Z,Y,X,D ___ W,D,C,B
-    // W -> D   | Z,Y,X,W ___ W,D,C,B
-    //
-    // TMP -> W | Z,Y,X,W ___ A,D,C,B
-
-    // SAFETY: The use of `ptr::read` is valid because there is at least one element in
-    // both `offsets_l` and `offsets_r`, so `left!` is a valid pointer to read from.
-    //
-    // The uses of `left!` involve calls to `offset` on `l`, which points to the
-    // beginning of `v`. All the offsets pointed-to by `l_offsets_ptr` are at most `block_l`, so
-    // these `offset` calls are safe as all reads are within the block. The same argument
-    // applies for the uses of `right!`.
-    //
-    // The calls to `l_offsets_ptr.offset` are valid because there are at most `count-1` of them,
-    // plus the final one at the end of the unsafe block, where `count` is the minimum number
-    // of collected offsets in `offsets_l` and `offsets_r`, so there is no risk of there not
-    // being enough elements. The same reasoning applies to the calls to `r_offsets_ptr.offset`.
-    //
-    // The calls to `copy_nonoverlapping` are safe because `left!` and `right!` are guaranteed
-    // not to overlap, and are valid because of the reasoning above.
-    unsafe {
-        let tmp = ptr::read(left!());
-        ptr::copy_nonoverlapping(right!(), left!(), 1);
-
-        for _ in 1..count {
-            l_offsets_ptr = l_offsets_ptr.add(1);
-            ptr::copy_nonoverlapping(left!(), right!(), 1);
-            r_offsets_ptr = r_offsets_ptr.add(1);
-            ptr::copy_nonoverlapping(right!(), left!(), 1);
-        }
-
-        ptr::copy_nonoverlapping(&tmp, right!(), 1);
-        mem::forget(tmp);
-        l_offsets_ptr = l_offsets_ptr.add(1);
-        r_offsets_ptr = r_offsets_ptr.add(1);
-    }
-
-    (l_offsets_ptr, r_offsets_ptr)
-}
-
-/// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or equal
-/// to `pivot`.
+/// Takes the input slice `v` and re-arranges elements such that when the call returns normally
+/// all elements that compare true for `is_less(elem, pivot)` where `pivot == v[pivot_pos]` are
+/// on the left side of `v` followed by the other elements, notionally considered greater or
+/// equal to `pivot`.
 ///
-/// Returns the number of elements smaller than `pivot`.
+/// Returns the number of elements that are compared true for `is_less(elem, pivot)`.
 ///
-/// Partitioning is performed block-by-block in order to minimize the cost of branching operations.
-/// This idea is presented in the [BlockQuicksort][pdf] paper.
-///
-/// [pdf]: https://drops.dagstuhl.de/opus/volltexte/2016/6389/pdf/LIPIcs-ESA-2016-38.pdf
-#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition_in_blocks<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // Number of elements in a typical block.
-    const BLOCK: usize = 2usize.pow(u8::BITS);
-
-    // The partitioning algorithm repeats the following steps until completion:
-    //
-    // 1. Trace a block from the left side to identify elements greater than or equal to the pivot.
-    // 2. Trace a block from the right side to identify elements smaller than the pivot.
-    // 3. Exchange the identified elements between the left and right side.
-    //
-    // We keep the following variables for a block of elements:
-    //
-    // 1. `block` - Number of elements in the block.
-    // 2. `start` - Start pointer into the `offsets` array.
-    // 3. `end` - End pointer into the `offsets` array.
-    // 4. `offsets - Indices of out-of-order elements within the block.
-
-    // The current block on the left side (from `l` to `l.add(block_l)`).
-    let mut l = v.as_mut_ptr();
-    let mut block_l = BLOCK;
-    let mut start_l = ptr::null_mut();
-    let mut end_l = ptr::null_mut();
-    let mut offsets_l = [MaybeUninit::<u8>::uninit(); BLOCK];
-
-    // The current block on the right side (from `r.sub(block_r)` to `r`).
-    // SAFETY: The documentation for .add() specifically mention that `vec.as_ptr().add(vec.len())` is always safe`
-    let mut r = unsafe { l.add(v.len()) };
-    let mut block_r = BLOCK;
-    let mut start_r = ptr::null_mut();
-    let mut end_r = ptr::null_mut();
-    let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK];
-
-    // FIXME: When we get VLAs, try creating one array of length `min(v.len(), 2 * BLOCK)` rather
-    // than two fixed-size arrays of length `BLOCK`. VLAs might be more cache-efficient.
-
-    // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
-    fn width<T>(l: *const T, r: *const T) -> usize {
-        debug_assert!(r.addr() >= l.addr());
-
-        unsafe { r.sub_ptr(l) }
-    }
-
-    loop {
-        // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
-        // some patch-up work in order to partition the remaining elements in between.
-        let is_done = width(l, r) <= 2 * BLOCK;
-
-        if is_done {
-            // Number of remaining elements (still not compared to the pivot).
-            let mut rem = width(l, r);
-            if start_l < end_l || start_r < end_r {
-                rem -= BLOCK;
-            }
-
-            // Adjust block sizes so that the left and right block don't overlap, but get perfectly
-            // aligned to cover the whole remaining gap.
-            if start_l < end_l {
-                block_r = rem;
-            } else if start_r < end_r {
-                block_l = rem;
-            } else {
-                // There were the same number of elements to switch on both blocks during the last
-                // iteration, so there are no remaining elements on either block. Cover the remaining
-                // items with roughly equally-sized blocks.
-                block_l = rem / 2;
-                block_r = rem - block_l;
-            }
-            debug_assert!(block_l <= BLOCK && block_r <= BLOCK);
-            debug_assert!(width(l, r) == block_l + block_r);
-        }
-
-        if start_l == end_l {
-            // Trace `block_l` elements from the left side.
-            start_l = MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
-            end_l = start_l;
-            let mut elem = l;
-
-            for i in 0..block_l {
-                // SAFETY: The unsafety operations below involve the usage of the `offset`.
-                //         According to the conditions required by the function, we satisfy them because:
-                //         1. `offsets_l` is stack-allocated, and thus considered separate allocated object.
-                //         2. The function `is_less` returns a `bool`.
-                //            Casting a `bool` will never overflow `isize`.
-                //         3. We have guaranteed that `block_l` will be `<= BLOCK`.
-                //            Plus, `end_l` was initially set to the begin pointer of `offsets_` which was declared on the stack.
-                //            Thus, we know that even in the worst case (all invocations of `is_less` returns false) we will only be at most 1 byte pass the end.
-                //        Another unsafety operation here is dereferencing `elem`.
-                //        However, `elem` was initially the begin pointer to the slice which is always valid.
-                unsafe {
-                    // Branchless comparison.
-                    *end_l = i as u8;
-                    end_l = end_l.wrapping_add(!is_less(&*elem, pivot) as usize);
-                    elem = elem.add(1);
-                }
-            }
-        }
-
-        if start_r == end_r {
-            // Trace `block_r` elements from the right side.
-            start_r = MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
-            end_r = start_r;
-            let mut elem = r;
-
-            for i in 0..block_r {
-                // SAFETY: The unsafety operations below involve the usage of the `offset`.
-                //         According to the conditions required by the function, we satisfy them because:
-                //         1. `offsets_r` is stack-allocated, and thus considered separate allocated object.
-                //         2. The function `is_less` returns a `bool`.
-                //            Casting a `bool` will never overflow `isize`.
-                //         3. We have guaranteed that `block_r` will be `<= BLOCK`.
-                //            Plus, `end_r` was initially set to the begin pointer of `offsets_` which was declared on the stack.
-                //            Thus, we know that even in the worst case (all invocations of `is_less` returns true) we will only be at most 1 byte pass the end.
-                //        Another unsafety operation here is dereferencing `elem`.
-                //        However, `elem` was initially `1 * sizeof(T)` past the end and we decrement it by `1 * sizeof(T)` before accessing it.
-                //        Plus, `block_r` was asserted to be less than `BLOCK` and `elem` will therefore at most be pointing to the beginning of the slice.
-                unsafe {
-                    // Branchless comparison.
-                    elem = elem.sub(1);
-                    *end_r = i as u8;
-                    end_r = end_r.wrapping_add(is_less(&*elem, pivot) as usize);
-                }
-            }
-        }
-
-        // Number of out-of-order elements to swap between the left and right side.
-        let count = cmp::min(width(start_l, end_l), width(start_r, end_r));
-
-        // SAFETY: TODO
-        unsafe {
-            (start_l, start_r) = mem::transmute::<(*const u8, *const u8), (*mut u8, *mut u8)>(
-                swap_elements_between_blocks(l, r, start_l, start_r, count),
-            );
-        }
-
-        if start_l == end_l {
-            // All out-of-order elements in the left block were moved. Move to the next block.
-
-            // block-width-guarantee
-            // SAFETY: if `!is_done` then the slice width is guaranteed to be at least `2*BLOCK` wide. There
-            // are at most `BLOCK` elements in `offsets_l` because of its size, so the `offset` operation is
-            // safe. Otherwise, the debug assertions in the `is_done` case guarantee that
-            // `width(l, r) == block_l + block_r`, namely, that the block sizes have been adjusted to account
-            // for the smaller number of remaining elements.
-            l = unsafe { l.add(block_l) };
-        }
-
-        if start_r == end_r {
-            // All out-of-order elements in the right block were moved. Move to the previous block.
-
-            // SAFETY: Same argument as [block-width-guarantee]. Either this is a full block `2*BLOCK`-wide,
-            // or `block_r` has been adjusted for the last handful of elements.
-            r = unsafe { r.sub(block_r) };
-        }
-
-        if is_done {
-            break;
-        }
-    }
-
-    // All that remains now is at most one block (either the left or the right) with out-of-order
-    // elements that need to be moved. Such remaining elements can be simply shifted to the end
-    // within their block.
-
-    if start_l < end_l {
-        // The left block remains.
-        // Move its remaining out-of-order elements to the far right.
-        debug_assert_eq!(width(l, r), block_l);
-        while start_l < end_l {
-            // remaining-elements-safety
-            // SAFETY: while the loop condition holds there are still elements in `offsets_l`, so it
-            // is safe to point `end_l` to the previous element.
-            //
-            // The `ptr::swap` is safe if both its arguments are valid for reads and writes:
-            //  - Per the debug assert above, the distance between `l` and `r` is `block_l`
-            //    elements, so there can be at most `block_l` remaining offsets between `start_l`
-            //    and `end_l`. This means `r` will be moved at most `block_l` steps back, which
-            //    makes the `r.offset` calls valid (at that point `l == r`).
-            //  - `offsets_l` contains valid offsets into `v` collected during the partitioning of
-            //    the last block, so the `l.offset` calls are valid.
-            unsafe {
-                end_l = end_l.sub(1);
-                ptr::swap(l.add(*end_l as usize), r.sub(1));
-                r = r.sub(1);
-            }
-        }
-        width(v.as_mut_ptr(), r)
-    } else if start_r < end_r {
-        // The right block remains.
-        // Move its remaining out-of-order elements to the far left.
-        debug_assert_eq!(width(l, r), block_r);
-        while start_r < end_r {
-            // SAFETY: See the reasoning in [remaining-elements-safety].
-            unsafe {
-                end_r = end_r.sub(1);
-                ptr::swap(l, r.sub(*end_r as usize + 1));
-                l = l.add(1);
-            }
-        }
-        width(v.as_mut_ptr(), l)
-    } else {
-        // Nothing else to do, we're done.
-        width(v.as_mut_ptr(), l)
-    }
-}
-
-struct FulcrumState<T> {
-    r_ptr: *mut T,
-    x_ptr: *mut T,
-    elem_i: usize,
-}
-
-#[inline(always)]
-unsafe fn fulcrum_rotate<T, F>(
-    arr_ptr: *mut T,
-    state: &mut FulcrumState<T>,
-    offset_val: isize,
-    loop_len: usize,
-    pivot: &T,
-    is_less: &mut F,
-) where
-    F: FnMut(&T, &T) -> bool,
-{
-    for _ in 0..loop_len {
-        let is_l = is_less(&*state.x_ptr, pivot);
-        let target_ptr = if is_l {
-            arr_ptr.add(state.elem_i)
-        } else {
-            state.r_ptr.add(state.elem_i)
-        };
-        ptr::copy(state.x_ptr, target_ptr, 1);
-        state.elem_i += is_l as usize;
-        state.x_ptr = state.x_ptr.wrapping_offset(offset_val);
-        state.r_ptr = state.r_ptr.wrapping_sub(1);
-    }
-}
-
-// Inspired by Igor van den Hoven and his work in quadsort/crumsort.
-// TODO document.
-fn fulcrum_partition_impl<T, F, const ROTATION_ELEMS: usize>(
-    v: &mut [T],
-    pivot: &T,
-    is_less: &mut F,
-) -> usize
-where
-    T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    // TODO explain ideas. and panic safety. cleanup.
-    let len = v.len();
-
-    const SWAP_SIZE: usize = 64;
-
-    assert!(len >= (ROTATION_ELEMS * 2) && ROTATION_ELEMS <= 32);
-
-    let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
-        // SAFETY: TODO
-        unsafe { (a_ptr.sub_ptr(arr_ptr) - elem_i) <= ROTATION_ELEMS }
-    };
-
-    let mut swap = MaybeUninit::<[T; SWAP_SIZE]>::uninit();
-    let swap_ptr = swap.as_mut_ptr() as *mut T;
-
-    let arr_ptr = v.as_mut_ptr();
-
-    // SAFETY: TODO
-    unsafe {
-        ptr::copy_nonoverlapping(arr_ptr, swap_ptr, ROTATION_ELEMS);
-        ptr::copy_nonoverlapping(
-            arr_ptr.add(len - ROTATION_ELEMS),
-            swap_ptr.add(ROTATION_ELEMS),
-            ROTATION_ELEMS,
-        );
-
-        let mut state = FulcrumState {
-            r_ptr: arr_ptr.add(len - 1),
-            x_ptr: ptr::null_mut(),
-            elem_i: 0,
-        };
-
-        let mut a_ptr = arr_ptr.add(ROTATION_ELEMS);
-        let mut t_ptr = arr_ptr.add(len - (ROTATION_ELEMS + 1));
-
-        for _ in 0..((len / ROTATION_ELEMS) - 2) {
-            let loop_len = ROTATION_ELEMS;
-            if advance_left(a_ptr, arr_ptr, state.elem_i) {
-                state.x_ptr = a_ptr;
-                fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
-                a_ptr = state.x_ptr;
-            } else {
-                state.x_ptr = t_ptr;
-                fulcrum_rotate(arr_ptr, &mut state, -1, loop_len, pivot, is_less);
-                t_ptr = state.x_ptr;
-            }
-        }
-
-        let loop_len = len % ROTATION_ELEMS;
-        if advance_left(a_ptr, arr_ptr, state.elem_i) {
-            state.x_ptr = a_ptr;
-            fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
-        } else {
-            state.x_ptr = t_ptr;
-            fulcrum_rotate(arr_ptr, &mut state, -1, loop_len, pivot, is_less);
-        }
-
-        let loop_len = ROTATION_ELEMS * 2;
-        state.x_ptr = swap_ptr;
-        fulcrum_rotate(arr_ptr, &mut state, 1, loop_len, pivot, is_less);
-
-        state.elem_i
-    }
-}
-
-fn fulcrum_partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    // TODO explain.
-    if v.len() < 256 {
-        fulcrum_partition_impl::<T, F, 16>(v, pivot, is_less)
-    } else {
-        fulcrum_partition_impl::<T, F, 32>(v, pivot, is_less)
-    }
-}
-
-// Disabled by default because it currently has panic safety issues.
-const FULCRUM_ENABLED: bool = false;
-
-/// Partitions `v` into elements smaller than `v[pivot]`, followed by elements greater than or
-/// equal to `v[pivot]`.
-///
-/// Returns a tuple of:
-///
-/// 1. Number of elements smaller than `v[pivot]`.
-/// 2. True if `v` was already partitioned.
+/// If `is_less` does not implement a total order the resulting order and return value are
+/// unspecified. All original elements will remain in `v` and any possible modifications via
+/// interior mutability will be observable. Same is true if `is_less` panics or `v.len()`
+/// exceeds `scratch.len()`.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
 fn partition<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
@@ -704,12 +350,12 @@ where
     let pivot = &mut pivot[0];
 
     // type DebugT = i32;
-    // let v_as_x = unsafe { mem::transmute::<&[T], &[DebugT]>(v) };
+    // let v_as_x = unsafe { mem::transmute::<&[T], &[DebugT]>(v_without_pivot) };
     // let pivot_as_x = unsafe { mem::transmute::<&T, &DebugT>(pivot) };
 
     // println!("pivot: {}", pivot_as_x);
     // println!("before: {v_as_x:?}");
-    // let lt_count = <crate::other::partition::scan_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
+    // let lt_count = <crate::other::partition::hoare_branchy_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
     // println!("after:  {v_as_x:?}");
     // println!("sub: {:?}\n", &v_as_x[..lt_count]);
 
@@ -722,7 +368,7 @@ where
 
     let lt_count = T::partition(v_without_pivot, pivot, is_less);
 
-    // let lt_count = <crate::other::partition::scan_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
+    // let lt_count = <crate::other::partition::lomuto_branchless_cyclic_opt::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
 
     // pivot quality measurement.
     // println!("len: {} is_less: {}", v.len(), l + lt_count);
@@ -763,7 +409,7 @@ fn recurse<'a, T, F>(
     loop {
         // println!("len: {}", v.len());
 
-        if <T as UnstableSortTypeImpl>::small_sort(v, is_less) {
+        if T::small_sort(v, is_less) {
             return;
         }
 
@@ -818,22 +464,21 @@ fn recurse<'a, T, F>(
 
 // Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
 // LLVM-IR for the sorting-network and median-networks for types that don't qualify.
-trait UnstableSortTypeImpl: Sized {
+trait SmallSortImpl: Sized {
     /// Sorts `v` using strategies optimized for small sizes.
     fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
     where
         F: FnMut(&Self, &Self) -> bool;
+}
 
-    /// Partitions `v` into elements smaller than `pivot`, followed by elements greater than or
-    /// equal to `pivot`.
-    ///
-    /// Returns the number of elements smaller than `pivot`.
+trait PartitionImpl: Sized {
+    /// See [`partition`].
     fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
     where
         F: FnMut(&Self, &Self) -> bool;
 }
 
-impl<T> UnstableSortTypeImpl for T {
+impl<T> SmallSortImpl for T {
     default fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
     where
         F: FnMut(&Self, &Self) -> bool,
@@ -852,12 +497,220 @@ impl<T> UnstableSortTypeImpl for T {
             false
         }
     }
+}
 
+impl<T: Freeze> SmallSortImpl for T {
+    default fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        let len = v.len();
+
+        if intrinsics::likely(len <= max_len_small_sort::<T>()) {
+            small_sort_general(v, is_less);
+
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl<T> SmallSortImpl for T
+where
+    T: Freeze + Copy,
+    (): IsTrue<{ has_efficient_in_place_swap::<T>() }>,
+{
+    fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        let len = v.len();
+
+        if intrinsics::likely(len <= max_len_small_sort::<T>()) {
+            // I suspect that generalized efficient indirect branchless sorting constructs like
+            // sort4_indirect for larger sizes exist. But finding them is an open research problem.
+            // And even then it's not clear that they would be better than in-place sorting-networks
+            // as used in small_sort_network.
+            small_sort_network(v, is_less);
+
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl<T> PartitionImpl for T {
     default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
     where
         F: FnMut(&Self, &Self) -> bool,
     {
-        partition_in_blocks(v, pivot, is_less)
+        partition_hoare_branchy_cyclic(v, pivot, is_less)
+    }
+}
+
+/// Specialize for types that are relatively cheap to copy.
+impl<T> PartitionImpl for T
+where
+    (): IsTrue<{ mem::size_of::<T>() <= 64 }>,
+{
+    fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    where
+        F: FnMut(&Self, &Self) -> bool,
+    {
+        partition_lomuto_branchless_cyclic(v, pivot, is_less)
+    }
+}
+
+struct GapGuardNonoverlapping<T> {
+    pos: *mut T,
+    value: ManuallyDrop<T>,
+}
+
+impl<T> Drop for GapGuardNonoverlapping<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
+        }
+    }
+}
+
+/// See [`partition`].
+fn partition_hoare_branchy_cyclic<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Optimized for large types that are expensive to move. Not optimized for integers. Optimized
+    // for small code-gen, assuming that is_less is an expensive operation that generates
+    // substantial amounts of code or a call. And that copying elements will likely be a call to
+    // memcpy. Using 2 `ptr::copy_nonoverlapping` has the chance to be faster than
+    // `ptr::swap_nonoverlapping` because `memcpy` can use wide SIMD based on runtime feature
+    // detection. Benchmarks support this analysis.
+
+    let mut gap_guard_opt: Option<GapGuardNonoverlapping<T>> = None;
+
+    // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
+    // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
+    // `r == v.len()` and we checked that `l < r` at every indexing operation.
+    //
+    // From here we know that `r` must be at least `r == l` which was shown to be valid from the
+    // first one.
+    unsafe {
+        let arr_ptr = v.as_mut_ptr();
+
+        let mut l_ptr = arr_ptr;
+        let mut r_ptr = arr_ptr.add(v.len());
+
+        loop {
+            // Find the first element greater than the pivot.
+            while l_ptr < r_ptr && is_less(&*l_ptr, pivot) {
+                l_ptr = l_ptr.add(1);
+            }
+
+            // Find the last element equal to the pivot.
+            while l_ptr < r_ptr && !is_less(&*r_ptr.sub(1), pivot) {
+                r_ptr = r_ptr.sub(1);
+            }
+            r_ptr = r_ptr.sub(1);
+
+            // Are we done?
+            if l_ptr >= r_ptr {
+                assert!(l_ptr != r_ptr);
+                break;
+            }
+
+            // Swap the found pair of out-of-order elements via cyclic permutation.
+            let is_first_swap_pair = gap_guard_opt.is_none();
+
+            if is_first_swap_pair {
+                gap_guard_opt = Some(GapGuardNonoverlapping {
+                    pos: r_ptr,
+                    value: ManuallyDrop::new(ptr::read(l_ptr)),
+                });
+            }
+
+            let gap_guard = gap_guard_opt.as_mut().unwrap_unchecked();
+
+            // Single place where we instantiate ptr::copy_nonoverlapping in the partition.
+            if !is_first_swap_pair {
+                ptr::copy_nonoverlapping(l_ptr, gap_guard.pos, 1);
+            }
+            gap_guard.pos = r_ptr;
+            ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
+
+            l_ptr = l_ptr.add(1);
+        }
+
+        l_ptr.sub_ptr(arr_ptr)
+
+        // `gap_guard_opt` goes out of scope and overwrites the last right wrong-side element with
+        // the first left wrong-side element that was initially overwritten by the first right
+        // wrong-side element.
+    }
+}
+
+struct GapGuardOverlapping<T> {
+    pos: *mut T,
+    value: ManuallyDrop<T>,
+}
+
+impl<T> Drop for GapGuardOverlapping<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
+        }
+    }
+}
+
+fn partition_lomuto_branchless_cyclic<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // A Kind of branchless Lomuto partition paired with a cyclic permutation. As far as I can tell
+    // this is a novel idea, developed by the author Lukas Bergdoll. Refined code-gen by Orson
+    // Peters to avoid the cmov.
+
+    // Manually unrolled to ensure consistent performance across various targets.
+    const UNROLL_LEN: usize = 2;
+
+    let len = v.len();
+    if len == 0 {
+        return 0;
+    }
+
+    unsafe {
+        let arr_ptr = v.as_mut_ptr();
+
+        let mut gap = GapGuardOverlapping {
+            pos: arr_ptr,
+            value: ManuallyDrop::new(ptr::read(arr_ptr)),
+        };
+
+        let end = arr_ptr.add(len);
+        let mut lt_count = 0;
+        while gap.pos.wrapping_add(UNROLL_LEN) < end {
+            for _ in 0..UNROLL_LEN {
+                let next_gap_pos = gap.pos.add(1);
+                let is_next_lt = is_less(&*next_gap_pos, pivot);
+                ptr::copy(arr_ptr.add(lt_count), gap.pos, 1);
+                ptr::copy_nonoverlapping(next_gap_pos, arr_ptr.add(lt_count), 1);
+                gap.pos = next_gap_pos;
+                lt_count += is_next_lt as usize;
+            }
+        }
+
+        let mut scan = gap.pos;
+        drop(gap);
+
+        while scan < end {
+            let is_lomuto_less = is_less(&*scan, pivot);
+            ptr::swap(arr_ptr.add(lt_count), scan);
+            scan = scan.add(1);
+            lt_count += is_lomuto_less as usize;
+        }
+
+        lt_count
     }
 }
 
@@ -981,44 +834,6 @@ where
         } else {
             // Either c <= a < b or b <= a < c, thus a is our median.
             a
-        }
-    }
-}
-
-impl<T: Freeze> UnstableSortTypeImpl for T {
-    fn small_sort<F>(v: &mut [Self], is_less: &mut F) -> bool
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        let len = v.len();
-
-        if intrinsics::likely(len <= max_len_small_sort::<T>()) {
-            // I suspect that generalized efficient indirect branchless sorting constructs like
-            // sort4_indirect for larger sizes exist. But finding them is an open research problem.
-            // And even then it's not clear that they would be better than in-place sorting-networks
-            // as used in small_sort_network.
-            if const { has_efficient_in_place_swap::<T>() } {
-                small_sort_network(v, is_less);
-            } else {
-                small_sort_general(v, is_less);
-            }
-
-            true
-        } else {
-            false
-        }
-    }
-
-    fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool,
-    {
-        // The code-gen properties that make in-place swapping inefficient for types larger than u64
-        // also apply to fulcrum partitioning.
-        if const { FULCRUM_ENABLED && has_efficient_in_place_swap::<T>() } {
-            fulcrum_partition(v, pivot, is_less)
-        } else {
-            partition_in_blocks(v, pivot, is_less)
         }
     }
 }
@@ -1271,52 +1086,6 @@ const fn max_len_small_sort<T>() -> usize {
     } else {
         20
     }
-}
-
-// // #[rustc_unsafe_specialization_marker]
-// trait Freeze {}
-
-// Can the type have interior mutability, this is checked by testing if T is Freeze. If the type can
-// have interior mutability it may alter itself during comparison in a way that must be observed
-// after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
-// double free.
-unsafe auto trait Freeze {}
-
-impl<T: ?Sized> !Freeze for core::cell::UnsafeCell<T> {}
-unsafe impl<T: ?Sized> Freeze for core::marker::PhantomData<T> {}
-unsafe impl<T: ?Sized> Freeze for *const T {}
-unsafe impl<T: ?Sized> Freeze for *mut T {}
-unsafe impl<T: ?Sized> Freeze for &T {}
-unsafe impl<T: ?Sized> Freeze for &mut T {}
-
-#[const_trait]
-trait IsFreeze {
-    fn value() -> bool;
-}
-
-impl<T> const IsFreeze for T {
-    default fn value() -> bool {
-        false
-    }
-}
-
-impl<T: Freeze> const IsFreeze for T {
-    fn value() -> bool {
-        true
-    }
-}
-
-#[must_use]
-const fn has_efficient_in_place_swap<T>() -> bool {
-    mem::size_of::<T>() <= mem::size_of::<u64>()
-}
-
-#[test]
-fn type_info() {
-    assert!(has_efficient_in_place_swap::<i32>());
-    assert!(has_efficient_in_place_swap::<u64>());
-    assert!(!has_efficient_in_place_swap::<u128>());
-    assert!(!has_efficient_in_place_swap::<String>());
 }
 
 // --- Branchless sorting (less branches not zero) ---

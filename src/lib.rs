@@ -15,7 +15,8 @@
     inline_const,
     const_trait_impl,
     negative_impls,
-    auto_traits
+    auto_traits,
+    generic_const_exprs
 )]
 
 macro_rules! sort_impl {

@@ -24,7 +24,9 @@ where
     // Optimized for large types that are expensive to move. Not optimized for integers. Optimized
     // for small code-gen, assuming that is_less is an expensive operation that generates
     // substantial amounts of code or a call. And that copying elements will likely be a call to
-    // memcpy.
+    // memcpy. Using 2 `ptr::copy_nonoverlapping` has the chance to be faster than
+    // `ptr::swap_nonoverlapping` because `memcpy` can use wide SIMD based on runtime feature
+    // detection. Benchmarks support this analysis.
 
     let mut gap_guard_opt: Option<GapGuardNonoverlapping<T>> = None;
 
@@ -39,8 +41,6 @@ where
 
         let mut l_ptr = arr_ptr;
         let mut r_ptr = arr_ptr.add(v.len());
-
-        let arr_ptr = v.as_mut_ptr();
 
         loop {
             // Find the first element greater than the pivot.
@@ -61,7 +61,6 @@ where
             }
 
             // Swap the found pair of out-of-order elements via cyclic permutation.
-
             let is_first_swap_pair = gap_guard_opt.is_none();
 
             if is_first_swap_pair {
