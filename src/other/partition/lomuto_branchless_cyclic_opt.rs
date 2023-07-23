@@ -42,10 +42,11 @@ where
         let mut lt_count = 0;
         while gap.pos.wrapping_add(UNROLL_LEN) < end {
             for _ in 0..UNROLL_LEN {
-                let is_next_lt = is_less(&*gap.pos.add(1), pivot);
+                let next_gap_pos = gap.pos.add(1);
+                let is_next_lt = is_less(&*next_gap_pos, pivot);
                 ptr::copy(arr_ptr.add(lt_count), gap.pos, 1);
-                ptr::copy_nonoverlapping(gap.pos.add(1), arr_ptr.add(lt_count), 1);
-                gap.pos = gap.pos.add(1);
+                ptr::copy_nonoverlapping(next_gap_pos, arr_ptr.add(lt_count), 1);
+                gap.pos = next_gap_pos;
                 lt_count += is_next_lt as usize;
             }
         }

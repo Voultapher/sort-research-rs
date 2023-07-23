@@ -1,86 +1,91 @@
-use core::mem;
+use core::mem::ManuallyDrop;
 use core::ptr;
 
 partition_impl!("hoare_branchy_cyclic");
 
-// Demonstrate ideas behind rotation based partitioning.
+struct GapGuard<T> {
+    pos: *mut T,
+    value: ManuallyDrop<T>,
+}
 
-pub fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // TODO explain ideas. and panic safety. cleanup.
-    let len = v.len();
-
-    // SAFETY: TODO
-    unsafe {
-        let next_left = |mut l_ptr: *mut T, r_ptr: *mut T, is_less: &mut F| -> *mut T {
-            while (l_ptr < r_ptr) && is_less(&*l_ptr, pivot) {
-                l_ptr = l_ptr.add(1);
-            }
-
-            l_ptr
-        };
-
-        let next_right = |l_ptr: *mut T, mut r_ptr: *mut T, is_less: &mut F| -> *mut T {
-            // Find next value on the right side that needs to go on the left side.
-            while (l_ptr < r_ptr) && !is_less(&*r_ptr, pivot) {
-                r_ptr = r_ptr.sub(1);
-            }
-
-            r_ptr
-        };
-
-        let arr_ptr = v.as_mut_ptr();
-
-        let mut l_ptr = arr_ptr;
-        let mut r_ptr = arr_ptr.add(len - 1);
-
-        l_ptr = next_left(l_ptr, r_ptr, is_less);
-        r_ptr = next_right(l_ptr, r_ptr, is_less);
-
-        let tmp = ptr::read(l_ptr);
-        ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
-
-        let mut drop_guard = InsertionHole {
-            src: &tmp,
-            dest: r_ptr,
-        };
-
-        while l_ptr < r_ptr {
-            l_ptr = next_left(l_ptr, r_ptr, is_less);
-
-            // Copy left wrong side element into right side wrong side element.
-            ptr::copy_nonoverlapping(l_ptr, r_ptr, 1);
-
-            // The drop_guard also participates in the rotation logic. Only requiring one update per
-            // loop. The two places that could panic are next_left and next_right, If either of them
-            // panics, drop_guard.dest will hold a spot that contains a duplicate element. Which
-            // will be overwritten with the temporary value.
-            drop_guard.dest = l_ptr;
-
-            r_ptr = next_right(l_ptr, r_ptr, is_less);
-            // Copy right wrong side element into left side wrong side element.
-            ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
+impl<T> Drop for GapGuard<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
         }
-
-        ptr::copy_nonoverlapping(&tmp, r_ptr, 1);
-        mem::forget(drop_guard);
-
-        l_ptr.sub_ptr(arr_ptr)
     }
 }
 
-// When dropped, copies from `src` into `dest`.
-struct InsertionHole<T> {
-    src: *const T,
-    dest: *mut T,
-}
+#[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
+fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Optimized for large types that are expensive to move. Not optimized for integers. Optimized
+    // for small code-gen, assuming that is_less is an expensive operation that generates
+    // substantial amounts of code or a call. And that copying elements will likely be a call to
+    // memcpy.
 
-impl<T> Drop for InsertionHole<T> {
-    fn drop(&mut self) {
-        unsafe {
-            ptr::copy_nonoverlapping(self.src, self.dest, 1);
+    let mut gap_guard_opt: Option<GapGuard<T>> = None;
+
+    // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
+    // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
+    // `r == v.len()` and we checked that `l < r` at every indexing operation.
+    //
+    // From here we know that `r` must be at least `r == l` which was shown to be valid from the
+    // first one.
+    unsafe {
+        let arr_ptr = v.as_mut_ptr();
+
+        let mut l_ptr = arr_ptr;
+        let mut r_ptr = arr_ptr.add(v.len());
+
+        let arr_ptr = v.as_mut_ptr();
+
+        loop {
+            // Find the first element greater than the pivot.
+            while l_ptr < r_ptr && is_less(&*l_ptr, pivot) {
+                l_ptr = l_ptr.add(1);
+            }
+
+            // Find the last element equal to the pivot.
+            while l_ptr < r_ptr && !is_less(&*r_ptr.sub(1), pivot) {
+                r_ptr = r_ptr.sub(1);
+            }
+            r_ptr = r_ptr.sub(1);
+
+            // Are we done?
+            if l_ptr >= r_ptr {
+                break;
+            }
+
+            // Swap the found pair of out-of-order elements via cyclic permutation.
+
+            let is_first_swap_pair = gap_guard_opt.is_none();
+
+            if is_first_swap_pair {
+                gap_guard_opt = Some(GapGuard {
+                    pos: r_ptr,
+                    value: ManuallyDrop::new(ptr::read(l_ptr)),
+                });
+            }
+
+            let gap_guard = gap_guard_opt.as_mut().unwrap_unchecked();
+
+            // Single place where we instantiate ptr::copy_nonoverlapping in the partition.
+            if !is_first_swap_pair {
+                ptr::copy_nonoverlapping(l_ptr, gap_guard.pos, 1);
+            }
+            gap_guard.pos = r_ptr;
+            ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
+
+            l_ptr = l_ptr.add(1);
         }
+
+        l_ptr.sub_ptr(arr_ptr)
+
+        // `gap_guard_opt` goes out of scope and overwrites the last right wrong-side element with
+        // the first left wrong-side element that was initially overwritten by the first right
+        // wrong-side element.
     }
 }
