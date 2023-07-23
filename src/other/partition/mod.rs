@@ -108,6 +108,7 @@ pub mod lomuto_branchless_2way;
 pub mod lomuto_branchless_4way;
 pub mod lomuto_branchless_cyclic;
 pub mod lomuto_branchless_cyclic_opt;
+pub mod lomuto_branchy;
 pub mod lomuto_iterleaved;
 pub mod small_partition;
 pub mod stable_2side_fill;
