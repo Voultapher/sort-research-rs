@@ -1082,7 +1082,7 @@ where
 // Slices of up to this length get sorted using optimized sorting for small slices.
 const fn max_len_small_sort<T>() -> usize {
     if <T as IsFreeze>::value() && has_efficient_in_place_swap::<T>() {
-        36
+        32
     } else {
         20
     }
