@@ -5,12 +5,12 @@ use core::ptr;
 
 partition_impl!("lomuto_branchless_cyclic_opt");
 
-struct GapGuard<T> {
+struct GapGuardOverlapping<T> {
     pos: *mut T,
     value: ManuallyDrop<T>,
 }
 
-impl<T> Drop for GapGuard<T> {
+impl<T> Drop for GapGuardOverlapping<T> {
     fn drop(&mut self) {
         unsafe {
             ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
@@ -33,7 +33,7 @@ where
     unsafe {
         let arr_ptr = v.as_mut_ptr();
 
-        let mut gap = GapGuard {
+        let mut gap = GapGuardOverlapping {
             pos: arr_ptr,
             value: ManuallyDrop::new(ptr::read(arr_ptr)),
         };
