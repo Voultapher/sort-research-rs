@@ -47,6 +47,16 @@ macro_rules! sort_impl {
     };
 }
 
+#[allow(unused_macros)]
+macro_rules! force_print {
+    ($fmt_str:expr $(, $fmt_param:expr)*) => {{
+        use std::io::{self, Write};
+
+        io::stdout().write(format!($fmt_str $(, $fmt_param)*).as_bytes()).unwrap();
+        io::stdout().flush().unwrap();
+    }};
+}
+
 #[macro_use]
 pub mod ffi_util;
 

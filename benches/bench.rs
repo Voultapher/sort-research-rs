@@ -723,6 +723,17 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             sort_comp::other::sort_evolution::stable::timsort_evo4::SortImpl,
         );
 
+        #[cfg(feature = "evolution")]
+        bench_impl(
+            c,
+            test_size,
+            transform_name,
+            &transform,
+            pattern_name,
+            pattern_provider,
+            sort_comp::other::sort_evolution::unstable::quicksort_evo0::SortImpl,
+        );
+
         #[cfg(feature = "small_sort")]
         bench_impl(
             c,
