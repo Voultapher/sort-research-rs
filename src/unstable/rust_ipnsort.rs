@@ -651,7 +651,6 @@ where
 
             // Are we done?
             if l_ptr >= r_ptr {
-                assert!(l_ptr != r_ptr);
                 break;
             }
 
@@ -856,23 +855,7 @@ where
     }
 }
 
-// --- Insertion sorts ---
-
-// TODO merge with local variants
-
-// When dropped, copies from `src` into `dest`.
-struct SingleValueDropGuard<T> {
-    src: *const T,
-    dest: *mut T,
-}
-
-impl<T> Drop for SingleValueDropGuard<T> {
-    fn drop(&mut self) {
-        unsafe {
-            ptr::copy_nonoverlapping(self.src, self.dest, 1);
-        }
-    }
-}
+// --- Insertion sort ---
 
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
 /// becomes sorted.
@@ -880,7 +863,9 @@ unsafe fn insert_tail<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    debug_assert!(v.len() >= 2);
+    if v.len() < 2 {
+        intrinsics::abort();
+    }
 
     let arr_ptr = v.as_mut_ptr();
     let i = v.len() - 1;
@@ -897,34 +882,33 @@ where
             // It's important, that we use tmp for comparison from now on. As it is the value that
             // will be copied back. And notionally we could have created a divergence if we copy
             // back the wrong value.
-            let tmp = mem::ManuallyDrop::new(ptr::read(i_ptr));
-            // Intermediate state of the insertion process is always tracked by `hole`, which
+            // Intermediate state of the insertion process is always tracked by `gap`, which
             // serves two purposes:
             // 1. Protects integrity of `v` from panics in `is_less`.
-            // 2. Fills the remaining hole in `v` in the end.
+            // 2. Fills the remaining gap in `v` in the end.
             //
             // Panic safety:
             //
-            // If `is_less` panics at any point during the process, `hole` will get dropped and
-            // fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
+            // If `is_less` panics at any point during the process, `gap` will get dropped and
+            // fill the gap in `v` with `tmp`, thus ensuring that `v` still holds every object it
             // initially held exactly once.
-            let mut hole = SingleValueDropGuard {
-                src: &*tmp,
-                dest: i_ptr.sub(1),
+            let mut gap = GapGuardNonoverlapping {
+                pos: i_ptr.sub(1),
+                value: mem::ManuallyDrop::new(ptr::read(i_ptr)),
             };
-            ptr::copy_nonoverlapping(hole.dest, i_ptr, 1);
+            ptr::copy_nonoverlapping(gap.pos, i_ptr, 1);
 
             // SAFETY: We know i is at least 1.
             for j in (0..(i - 1)).rev() {
                 let j_ptr = arr_ptr.add(j);
-                if !is_less(&*tmp, &*j_ptr) {
+                if !is_less(&*gap.value, &*j_ptr) {
                     break;
                 }
 
-                ptr::copy_nonoverlapping(j_ptr, hole.dest, 1);
-                hole.dest = j_ptr;
+                ptr::copy_nonoverlapping(j_ptr, gap.pos, 1);
+                gap.pos = j_ptr;
             }
-            // `hole` gets dropped and thus copies `tmp` into the remaining hole in `v`.
+            // `gap` gets dropped and thus copies `tmp` into the remaining gap in `v`.
         }
     }
 }
@@ -936,8 +920,9 @@ where
 {
     let len = v.len();
 
-    // Using assert here improves performance.
-    assert!(offset != 0 && offset <= len);
+    if offset == 0 || offset > len {
+        intrinsics::abort();
+    }
 
     // Shift each element of the unsorted region v[i..] as far left as is needed to make v sorted.
     for i in offset..len {
@@ -1112,13 +1097,13 @@ const fn max_len_small_sort<T>() -> usize {
 #[inline(always)]
 pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool) {
     // SAFETY: the caller must guarantee that `a_ptr` and `b_ptr` are valid for writes
-    // and properly aligned, and part of the same allocation, and do not alias.
+    // and properly aligned, and part of the same allocation.
 
     // This is a branchless version of swap if.
     // The equivalent code with a branch would be:
     //
     // if should_swap {
-    //     ptr::swap_nonoverlapping(a_ptr, b_ptr, 1);
+    //     ptr::swap(a_ptr, b_ptr, 1);
     // }
 
     // Give ourselves some scratch space to work with.
@@ -1140,9 +1125,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: the caller must guarantee that `a` and `b` each added to `arr_ptr` yield valid
-    // pointers into `arr_ptr`, and are properly aligned, and part of the same allocation, and do
-    // not alias. `a` and `b` must be different numbers.
-    debug_assert!(a != b);
+    // pointers into `arr_ptr`, and are properly aligned, and part of the same allocation.
 
     let a_ptr = arr_ptr.add(a);
     let b_ptr = arr_ptr.add(b);
@@ -1164,7 +1147,9 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v.len() >=9.
-    assert!(v.len() == 9);
+    if v.len() != 9 {
+        intrinsics::abort();
+    }
 
     let arr_ptr = v.as_mut_ptr();
 
@@ -1209,7 +1194,9 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v.len() >= 13.
-    assert!(v.len() == 13);
+    if v.len() != 13 {
+        intrinsics::abort();
+    }
 
     let arr_ptr = v.as_mut_ptr();
 
@@ -1275,7 +1262,9 @@ where
     let len = v.len();
     const MAX_BRANCHLESS_SMALL_SORT: usize = max_len_small_sort::<i32>();
 
-    assert!(len >= 13 && len <= MAX_BRANCHLESS_SMALL_SORT);
+    if len < 13 || len > MAX_BRANCHLESS_SMALL_SORT {
+        intrinsics::abort();
+    }
 
     if len < 18 {
         sort13_optimal(&mut v[0..13], is_less);
