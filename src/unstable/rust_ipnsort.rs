@@ -728,51 +728,34 @@ where
 {
     let len = v.len();
 
-    // It's a logic bug if this get's called on slice that would be small-sorted.
-    debug_assert!(len > max_len_small_sort::<T>());
+    if len < max_len_small_sort::<T>() {
+        // It's a logic bug if this get's called on slice that would be small-sorted.
+        intrinsics::abort();
+    }
 
     let len_div_2 = len / 2;
     let arr_ptr = v.as_ptr();
 
-    let median_guess_ptr = if len < PSEUDO_MEDIAN_REC_THRESHOLD {
-        // For small sizes it's crucial to pick a good median, just doing median3 is not great.
-        let start = len_div_2 - 3;
-        median7_approx(&v[start..(start + 7)], is_less)
-    } else {
-        // SAFETY: TODO
-        unsafe {
+    // SAFETY: Assuming that `max_len_small_sort::<T>()` is larger than 0 all pointer calculations
+    // below yield valid in-bounds pointers.
+    unsafe {
+        let median_guess_ptr = if len < PSEUDO_MEDIAN_REC_THRESHOLD {
+            median3(
+                arr_ptr,
+                arr_ptr.add(len_div_2),
+                arr_ptr.add(len - 1),
+                is_less,
+            )
+        } else {
             let len_div_8 = len / 8;
             let a = arr_ptr;
             let b = arr_ptr.add(len_div_8 * 4);
             let c = arr_ptr.add(len_div_8 * 7);
 
             median3_rec(a, b, c, len_div_8, is_less)
-        }
-    };
+        };
 
-    // SAFETY: median_guess_ptr is part of v if median7_approx and median3_rec work as expected.
-    unsafe { median_guess_ptr.sub_ptr(arr_ptr) }
-}
-
-// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
-// performance impact.
-#[inline(never)]
-fn median7_approx<T, F>(v: &[T], is_less: &mut F) -> *const T
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: caller must ensure v.len() >= 7.
-    assert!(v.len() == 7);
-
-    let arr_ptr = v.as_ptr();
-
-    // We checked the len.
-    unsafe {
-        let lower_median3 = median3(arr_ptr.add(0), arr_ptr.add(1), arr_ptr.add(2), is_less);
-        let upper_median3 = median3(arr_ptr.add(4), arr_ptr.add(5), arr_ptr.add(6), is_less);
-
-        let median_approx_ptr = median3(lower_median3, arr_ptr.add(3), upper_median3, is_less);
-        median_approx_ptr
+        median_guess_ptr.sub_ptr(arr_ptr)
     }
 }
 
