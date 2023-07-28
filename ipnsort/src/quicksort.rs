@@ -176,10 +176,13 @@ impl<T> PartitionImpl for T {
     }
 }
 
-/// Specialize for types that are relatively cheap to copy.
+const MAX_BRANCHLESS_PARTITION_SIZE: usize = 96;
+
+/// Specialize for types that are relatively cheap to copy, where branchless optimizations have
+/// large leverage e.g. `u64` and `String`.
 impl<T> PartitionImpl for T
 where
-    (): IsTrue<{ mem::size_of::<T>() <= 64 }>,
+    (): IsTrue<{ mem::size_of::<T>() <= MAX_BRANCHLESS_PARTITION_SIZE }>,
 {
     fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
     where
