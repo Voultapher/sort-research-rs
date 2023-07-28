@@ -423,14 +423,15 @@ fn recurse<'a, T, F>(
         limit -= 1;
 
         // Choose a pivot and try guessing whether the slice is already sorted.
-        let pivot = choose_pivot(v, is_less);
+        let pivot_pos = choose_pivot(v, is_less);
 
         // If the chosen pivot is equal to the predecessor, then it's the smallest element in the
         // slice. Partition the slice into elements equal to and elements greater than the pivot.
         // This case is usually hit when the slice contains many duplicate elements.
         if let Some(p) = ancestor_pivot {
-            if !is_less(p, &v[pivot]) {
-                let mid = partition_equal(v, pivot, is_less);
+            // SAFETY: We assume choose_pivot yields an in-bounds position.
+            if !is_less(p, unsafe { v.get_unchecked(pivot_pos) }) {
+                let mid = partition_equal(v, pivot_pos, is_less);
 
                 // Continue sorting elements greater than the pivot. We know that mid contains the
                 // pivot. So we can continue after mid.
@@ -441,24 +442,20 @@ fn recurse<'a, T, F>(
         }
 
         // Partition the slice.
-        let mid = partition(v, pivot, is_less);
+        let mid = partition(v, pivot_pos, is_less);
 
         // Split the slice into `left`, `pivot`, and `right`.
         let (left, right) = v.split_at_mut(mid);
         let (pivot, right) = right.split_at_mut(1);
         let pivot = &pivot[0];
 
-        // Recurse into the shorter side only in order to minimize the total number of recursive
-        // calls and consume less stack space. Then just continue with the longer side (this is
-        // akin to tail recursion).
-        if left.len() < right.len() {
-            recurse(left, is_less, ancestor_pivot, limit);
-            v = right;
-            ancestor_pivot = Some(pivot);
-        } else {
-            recurse(right, is_less, Some(pivot), limit);
-            v = left;
-        }
+        // Recurse into the left side. We have a fixed recursion limit, testing shows no real
+        // benefit for recursing into the shorter side.
+        recurse(left, is_less, ancestor_pivot, limit);
+
+        // Continue with the right side.
+        v = right;
+        ancestor_pivot = Some(pivot);
     }
 }
 
