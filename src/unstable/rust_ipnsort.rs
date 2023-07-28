@@ -1135,7 +1135,6 @@ pub unsafe fn branchless_swap<T>(a_ptr: *mut T, b_ptr: *mut T, should_swap: bool
 }
 
 /// Swap two values in array pointed to by a_ptr and b_ptr if b is less than a.
-#[inline(always)]
 pub unsafe fn swap_if_less<T, F>(arr_ptr: *mut T, a: usize, b: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
