@@ -1,0 +1,23 @@
+[package]
+name = "ipnsort"
+version = "0.1.0"
+edition = "2021"
+authors = ["Lukas Bergdoll <lukas.bergdoll@gmail.com>"]
+
+[lib]
+# They are just noisy and this is not meant as a documented library, but as a testbed.
+doctest = false
+# Arguably everything you want to test should be your oberservable interface.
+# Plus it's faster to run everything as integration test.
+# See https://matklad.github.io/2021/02/27/delete-cargo-integration-tests.html
+test = false
+
+[dependencies]
+
+[dev-dependencies]
+sort_test_tools = { path = "../sort_test_tools", default-features = false }
+
+[features]
+default = ["large_test_sizes"]
+
+large_test_sizes = ["sort_test_tools/large_test_sizes"]

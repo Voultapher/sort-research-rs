@@ -259,6 +259,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipnsort"
+version = "0.1.0"
+
+[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -572,6 +576,7 @@ dependencies = [
  "crumsort",
  "dmsort",
  "glidesort",
+ "ipnsort",
  "once_cell",
  "paste",
  "proc-macro2",
