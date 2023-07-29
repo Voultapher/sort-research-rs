@@ -2,7 +2,7 @@ use core::intrinsics;
 use core::mem::{self, MaybeUninit};
 use core::ptr;
 
-use crate::{has_efficient_in_place_swap, Freeze, GapGuardNonoverlapping, IsTrue};
+use crate::{has_efficient_in_place_swap, Freeze, GapGuard, IsTrue};
 
 // Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
 // LLVM-IR for the sorting-network and median-networks for types that don't qualify.
@@ -655,7 +655,7 @@ where
             // If `is_less` panics at any point during the process, `gap` will get dropped and
             // fill the gap in `v` with `tmp`, thus ensuring that `v` still holds every object it
             // initially held exactly once.
-            let mut gap = GapGuardNonoverlapping {
+            let mut gap = GapGuard {
                 pos: i_ptr.sub(1),
                 value: mem::ManuallyDrop::new(ptr::read(i_ptr)),
             };

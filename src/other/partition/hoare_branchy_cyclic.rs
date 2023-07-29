@@ -3,12 +3,12 @@ use core::ptr;
 
 partition_impl!("hoare_branchy_cyclic");
 
-struct GapGuardNonoverlapping<T> {
+struct GapGuard<T> {
     pos: *mut T,
     value: ManuallyDrop<T>,
 }
 
-impl<T> Drop for GapGuardNonoverlapping<T> {
+impl<T> Drop for GapGuard<T> {
     fn drop(&mut self) {
         unsafe {
             ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
@@ -28,7 +28,7 @@ where
     // `ptr::swap_nonoverlapping` because `memcpy` can use wide SIMD based on runtime feature
     // detection. Benchmarks support this analysis.
 
-    let mut gap_guard_opt: Option<GapGuardNonoverlapping<T>> = None;
+    let mut gap_guard_opt: Option<GapGuard<T>> = None;
 
     // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
     // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
@@ -64,7 +64,7 @@ where
             let is_first_swap_pair = gap_guard_opt.is_none();
 
             if is_first_swap_pair {
-                gap_guard_opt = Some(GapGuardNonoverlapping {
+                gap_guard_opt = Some(GapGuard {
                     pos: r_ptr,
                     value: ManuallyDrop::new(ptr::read(l_ptr)),
                 });

@@ -76,28 +76,15 @@ fn type_info() {
 trait IsTrue<const B: bool> {}
 impl IsTrue<true> for () {}
 
-struct GapGuardNonoverlapping<T> {
+struct GapGuard<T> {
     pos: *mut T,
     value: ManuallyDrop<T>,
 }
 
-impl<T> Drop for GapGuardNonoverlapping<T> {
+impl<T> Drop for GapGuard<T> {
     fn drop(&mut self) {
         unsafe {
-            ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
-        }
-    }
-}
-
-struct GapGuardOverlapping<T> {
-    pos: *mut T,
-    value: ManuallyDrop<T>,
-}
-
-impl<T> Drop for GapGuardOverlapping<T> {
-    fn drop(&mut self) {
-        unsafe {
-            ptr::write(self.pos, ManuallyDrop::take(&mut self.value));
+            ptr::copy_nonoverlapping(&*self.value, self.pos, 1);
         }
     }
 }

@@ -2,7 +2,7 @@ use core::mem::{self, ManuallyDrop};
 use core::ptr;
 
 use crate::smallsort::SmallSortImpl;
-use crate::{GapGuardNonoverlapping, GapGuardOverlapping, IsTrue};
+use crate::{GapGuard, IsTrue};
 
 /// Sorts `v` recursively.
 ///
@@ -204,7 +204,7 @@ where
     // `ptr::swap_nonoverlapping` because `memcpy` can use wide SIMD based on runtime feature
     // detection. Benchmarks support this analysis.
 
-    let mut gap_guard_opt: Option<GapGuardNonoverlapping<T>> = None;
+    let mut gap_guard_opt: Option<GapGuard<T>> = None;
 
     // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
     // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
@@ -239,7 +239,7 @@ where
             let is_first_swap_pair = gap_guard_opt.is_none();
 
             if is_first_swap_pair {
-                gap_guard_opt = Some(GapGuardNonoverlapping {
+                gap_guard_opt = Some(GapGuard {
                     pos: r_ptr,
                     value: ManuallyDrop::new(ptr::read(l_ptr)),
                 });
@@ -284,7 +284,7 @@ where
     unsafe {
         let arr_ptr = v.as_mut_ptr();
 
-        let mut gap = GapGuardOverlapping {
+        let mut gap = GapGuard {
             pos: arr_ptr,
             value: ManuallyDrop::new(ptr::read(arr_ptr)),
         };
