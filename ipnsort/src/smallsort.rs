@@ -377,11 +377,11 @@ where
         intrinsics::abort();
     }
 
-    // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
-    let even_len = len - (len % 2 != 0) as usize;
+    // This should optimize to a shift right.
+    let even_len = len - (len % 2) as usize;
     let len_div_2 = even_len / 2;
 
-    let mid = if len < 26 {
+    let presort_len = if len < 26 {
         sort9_optimal(&mut v[0..9], is_less);
         sort9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
 
@@ -393,8 +393,8 @@ where
         13
     };
 
-    insertion_sort_shift_left(&mut v[0..len_div_2], mid, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..], mid, is_less);
+    insertion_sort_shift_left(&mut v[0..len_div_2], presort_len, is_less);
+    insertion_sort_shift_left(&mut v[len_div_2..], presort_len, is_less);
 
     let mut scratch = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let scratch_base = scratch.as_mut_ptr() as *mut T;
