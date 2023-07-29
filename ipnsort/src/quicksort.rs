@@ -213,25 +213,25 @@ where
     // From here we know that `r` must be at least `r == l` which was shown to be valid from the
     // first one.
     unsafe {
-        let arr_ptr = v.as_mut_ptr();
+        let v_base = v.as_mut_ptr();
 
-        let mut l_ptr = arr_ptr;
-        let mut r_ptr = arr_ptr.add(v.len());
+        let mut left = v_base;
+        let mut right = v_base.add(v.len());
 
         loop {
             // Find the first element greater than the pivot.
-            while l_ptr < r_ptr && is_less(&*l_ptr, pivot) {
-                l_ptr = l_ptr.add(1);
+            while left < right && is_less(&*left, pivot) {
+                left = left.add(1);
             }
 
             // Find the last element equal to the pivot.
-            while l_ptr < r_ptr && !is_less(&*r_ptr.sub(1), pivot) {
-                r_ptr = r_ptr.sub(1);
+            while left < right && !is_less(&*right.sub(1), pivot) {
+                right = right.sub(1);
             }
-            r_ptr = r_ptr.sub(1);
+            right = right.sub(1);
 
             // Are we done?
-            if l_ptr >= r_ptr {
+            if left >= right {
                 break;
             }
 
@@ -240,8 +240,8 @@ where
 
             if is_first_swap_pair {
                 gap_guard_opt = Some(GapGuard {
-                    pos: r_ptr,
-                    value: ManuallyDrop::new(ptr::read(l_ptr)),
+                    pos: right,
+                    value: ManuallyDrop::new(ptr::read(left)),
                 });
             }
 
@@ -249,15 +249,15 @@ where
 
             // Single place where we instantiate ptr::copy_nonoverlapping in the partition.
             if !is_first_swap_pair {
-                ptr::copy_nonoverlapping(l_ptr, gap_guard.pos, 1);
+                ptr::copy_nonoverlapping(left, gap_guard.pos, 1);
             }
-            gap_guard.pos = r_ptr;
-            ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
+            gap_guard.pos = right;
+            ptr::copy_nonoverlapping(right, left, 1);
 
-            l_ptr = l_ptr.add(1);
+            left = left.add(1);
         }
 
-        l_ptr.sub_ptr(arr_ptr)
+        left.sub_ptr(v_base)
 
         // `gap_guard_opt` goes out of scope and overwrites the last right wrong-side element with
         // the first left wrong-side element that was initially overwritten by the first right
@@ -282,23 +282,23 @@ where
     }
 
     unsafe {
-        let arr_ptr = v.as_mut_ptr();
+        let v_base = v.as_mut_ptr();
 
         let mut gap = GapGuard {
-            pos: arr_ptr,
-            value: ManuallyDrop::new(ptr::read(arr_ptr)),
+            pos: v_base,
+            value: ManuallyDrop::new(ptr::read(v_base)),
         };
 
-        let end = arr_ptr.add(len);
+        let end = v_base.add(len);
         let mut lt_count = 0;
         while gap.pos.wrapping_add(UNROLL_LEN) < end {
             for _ in 0..UNROLL_LEN {
-                let lt_ptr = arr_ptr.add(lt_count);
+                let v_lt = v_base.add(lt_count);
                 let next_gap_pos = gap.pos.add(1);
                 let is_next_lt = is_less(&*next_gap_pos, pivot);
 
-                ptr::copy(lt_ptr, gap.pos, 1);
-                ptr::copy_nonoverlapping(next_gap_pos, lt_ptr, 1);
+                ptr::copy(v_lt, gap.pos, 1);
+                ptr::copy_nonoverlapping(next_gap_pos, v_lt, 1);
 
                 gap.pos = next_gap_pos;
                 lt_count += is_next_lt as usize;
@@ -310,7 +310,7 @@ where
 
         while scan < end {
             let is_lomuto_less = is_less(&*scan, pivot);
-            ptr::swap(arr_ptr.add(lt_count), scan);
+            ptr::swap(v_base.add(lt_count), scan);
             scan = scan.add(1);
             lt_count += is_lomuto_less as usize;
         }

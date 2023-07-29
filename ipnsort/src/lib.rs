@@ -23,72 +23,6 @@ mod pivot;
 mod quicksort;
 mod smallsort;
 
-// // #[rustc_unsafe_specialization_marker]
-// trait Freeze {}
-
-// Can the type have interior mutability, this is checked by testing if T is Freeze. If the type can
-// have interior mutability it may alter itself during comparison in a way that must be observed
-// after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
-// double free.
-unsafe auto trait Freeze {}
-
-impl<T: ?Sized> !Freeze for core::cell::UnsafeCell<T> {}
-unsafe impl<T: ?Sized> Freeze for core::marker::PhantomData<T> {}
-unsafe impl<T: ?Sized> Freeze for *const T {}
-unsafe impl<T: ?Sized> Freeze for *mut T {}
-unsafe impl<T: ?Sized> Freeze for &T {}
-unsafe impl<T: ?Sized> Freeze for &mut T {}
-
-#[const_trait]
-trait IsFreeze {
-    fn value() -> bool;
-}
-
-impl<T> const IsFreeze for T {
-    default fn value() -> bool {
-        false
-    }
-}
-
-impl<T: Freeze> const IsFreeze for T {
-    fn value() -> bool {
-        true
-    }
-}
-
-#[must_use]
-const fn has_efficient_in_place_swap<T>() -> bool {
-    mem::size_of::<T>() <= mem::size_of::<u64>()
-}
-
-#[test]
-fn type_info() {
-    assert!(has_efficient_in_place_swap::<i32>());
-    assert!(has_efficient_in_place_swap::<u64>());
-    assert!(!has_efficient_in_place_swap::<u128>());
-    assert!(!has_efficient_in_place_swap::<String>());
-
-    assert!(<u64 as IsFreeze>::value());
-    assert!(<String as IsFreeze>::value());
-    assert!(!<core::cell::Cell<u64> as IsFreeze>::value());
-}
-
-trait IsTrue<const B: bool> {}
-impl IsTrue<true> for () {}
-
-struct GapGuard<T> {
-    pos: *mut T,
-    value: ManuallyDrop<T>,
-}
-
-impl<T> Drop for GapGuard<T> {
-    fn drop(&mut self) {
-        unsafe {
-            ptr::copy_nonoverlapping(&*self.value, self.pos, 1);
-        }
-    }
-}
-
 /// Sorts the slice, but might not preserve the order of equal elements.
 ///
 /// This sort is unstable (i.e., may reorder equal elements), in-place
@@ -277,6 +211,72 @@ where
                 end += 1;
             }
             (end, false)
+        }
+    }
+}
+
+// // #[rustc_unsafe_specialization_marker]
+// trait Freeze {}
+
+// Can the type have interior mutability, this is checked by testing if T is Freeze. If the type can
+// have interior mutability it may alter itself during comparison in a way that must be observed
+// after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
+// double free.
+unsafe auto trait Freeze {}
+
+impl<T: ?Sized> !Freeze for core::cell::UnsafeCell<T> {}
+unsafe impl<T: ?Sized> Freeze for core::marker::PhantomData<T> {}
+unsafe impl<T: ?Sized> Freeze for *const T {}
+unsafe impl<T: ?Sized> Freeze for *mut T {}
+unsafe impl<T: ?Sized> Freeze for &T {}
+unsafe impl<T: ?Sized> Freeze for &mut T {}
+
+#[const_trait]
+trait IsFreeze {
+    fn value() -> bool;
+}
+
+impl<T> const IsFreeze for T {
+    default fn value() -> bool {
+        false
+    }
+}
+
+impl<T: Freeze> const IsFreeze for T {
+    fn value() -> bool {
+        true
+    }
+}
+
+#[must_use]
+const fn has_efficient_in_place_swap<T>() -> bool {
+    mem::size_of::<T>() <= mem::size_of::<u64>()
+}
+
+#[test]
+fn type_info() {
+    assert!(has_efficient_in_place_swap::<i32>());
+    assert!(has_efficient_in_place_swap::<u64>());
+    assert!(!has_efficient_in_place_swap::<u128>());
+    assert!(!has_efficient_in_place_swap::<String>());
+
+    assert!(<u64 as IsFreeze>::value());
+    assert!(<String as IsFreeze>::value());
+    assert!(!<core::cell::Cell<u64> as IsFreeze>::value());
+}
+
+trait IsTrue<const B: bool> {}
+impl IsTrue<true> for () {}
+
+struct GapGuard<T> {
+    pos: *mut T,
+    value: ManuallyDrop<T>,
+}
+
+impl<T> Drop for GapGuard<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::copy_nonoverlapping(&*self.value, self.pos, 1);
         }
     }
 }

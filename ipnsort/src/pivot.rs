@@ -22,28 +22,23 @@ where
     }
 
     let len_div_2 = len / 2;
-    let arr_ptr = v.as_ptr();
+    let v_base = v.as_ptr();
 
     // SAFETY: Assuming that `max_len_small_sort::<T>()` is larger than 0 all pointer calculations
     // below yield valid in-bounds pointers.
     unsafe {
-        let median_guess_ptr = if len < PSEUDO_MEDIAN_REC_THRESHOLD {
-            median3(
-                arr_ptr,
-                arr_ptr.add(len_div_2),
-                arr_ptr.add(len - 1),
-                is_less,
-            )
+        let median_guess = if len < PSEUDO_MEDIAN_REC_THRESHOLD {
+            median3(v_base, v_base.add(len_div_2), v_base.add(len - 1), is_less)
         } else {
             let len_div_8 = len / 8;
-            let a = arr_ptr;
-            let b = arr_ptr.add(len_div_8 * 4);
-            let c = arr_ptr.add(len_div_8 * 7);
+            let a = v_base;
+            let b = v_base.add(len_div_8 * 4);
+            let c = v_base.add(len_div_8 * 7);
 
             median3_rec(a, b, c, len_div_8, is_less)
         };
 
-        median_guess_ptr.sub_ptr(arr_ptr)
+        median_guess.sub_ptr(v_base)
     }
 }
 

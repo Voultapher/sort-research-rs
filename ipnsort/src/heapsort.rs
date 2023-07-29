@@ -51,7 +51,7 @@ where
 
     let len = v.len();
 
-    let arr_ptr = v.as_mut_ptr();
+    let v_base = v.as_mut_ptr();
 
     loop {
         // Children of `node`.
@@ -67,17 +67,17 @@ where
                 // We need a branch to be sure not to out-of-bounds index,
                 // but it's highly predictable.  The comparison, however,
                 // is better done branchless, especially for primitives.
-                child += is_less(&*arr_ptr.add(child), &*arr_ptr.add(child + 1)) as usize;
+                child += is_less(&*v_base.add(child), &*v_base.add(child + 1)) as usize;
             }
 
             // Stop if the invariant holds at `node`.
-            if !is_less(&*arr_ptr.add(node), &*arr_ptr.add(child)) {
+            if !is_less(&*v_base.add(node), &*v_base.add(child)) {
                 break;
             }
 
             // Swap `node` with the greater child, move one step down, and continue sifting.
             // Same as v.swap_unchecked(node, child); which is unstable.
-            ptr::swap(arr_ptr.add(node), arr_ptr.add(child))
+            ptr::swap(v_base.add(node), v_base.add(child))
         }
 
         node = child;
