@@ -365,7 +365,7 @@ where
     }
 }
 
-fn sort13_plus<T, F>(v: &mut [T], is_less: &mut F)
+fn sort18_plus<T, F>(v: &mut [T], is_less: &mut F)
 where
     T: Freeze,
     F: FnMut(&T, &T) -> bool,
@@ -373,15 +373,8 @@ where
     let len = v.len();
     const MAX_BRANCHLESS_SMALL_SORT: usize = i32::MAX_SMALL_SORT_LEN;
 
-    if len < 13 || len > MAX_BRANCHLESS_SMALL_SORT {
+    if len < 18 || len > MAX_BRANCHLESS_SMALL_SORT {
         intrinsics::abort();
-    }
-
-    // TODO move inside the caller to reduce binary size.
-    if len < 18 {
-        sort13_optimal(&mut v[0..13], is_less);
-        insertion_sort_shift_left(v, 13, is_less);
-        return;
     }
 
     // This should optimize to a shift right https://godbolt.org/z/vYGsznPPW.
@@ -435,15 +428,18 @@ where
     // Patterns should have already been found by the other analysis steps.
     //
     // Small total slices are handled separately, see function quicksort.
-    if len >= 13 {
-        sort13_plus(v, is_less);
+    if len >= 18 {
+        sort18_plus(v, is_less);
     } else if len >= 2 {
-        let end = if len >= 9 {
+        let mut end = 1;
+
+        if len >= 13 {
+            sort13_optimal(&mut v[0..13], is_less);
+            end = 13;
+        } else if len >= 9 {
             sort9_optimal(&mut v[0..9], is_less);
-            9
-        } else {
-            1
-        };
+            end = 9;
+        }
 
         insertion_sort_shift_left(v, end, is_less);
     }
