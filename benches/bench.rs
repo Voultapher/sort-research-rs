@@ -283,10 +283,10 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
             patterns::random_uniform(len, 0..=(((len as f64 / 3.0).round()) as i32))
         }),
         ("random__div5", |len| {
-            patterns::random_uniform(len, 0..=(((len as f64 / 3.0).round()) as i32))
+            patterns::random_uniform(len, 0..=(((len as f64 / 5.0).round()) as i32))
         }),
         ("random__div8", |len| {
-            patterns::random_uniform(len, 0..=(((len as f64 / 3.0).round()) as i32))
+            patterns::random_uniform(len, 0..=(((len as f64 / 8.0).round()) as i32))
         }),
         ("random_d2", |len| patterns::random_uniform(len, 0..2)),
         ("random_d3", |len| patterns::random_uniform(len, 0..3)),
