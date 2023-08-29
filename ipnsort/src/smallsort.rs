@@ -447,58 +447,109 @@ where
 {
     // This implementation is tuned to be efficient for various types that are larger than u64.
 
-    const MAX_SIZE: usize = String::MAX_SMALL_SORT_LEN;
-
     let len = v.len();
 
-    let mut scratch = MaybeUninit::<[T; MAX_SIZE]>::uninit();
-    let scratch_base = scratch.as_mut_ptr() as *mut T;
+    if len >= 2 {
+        const SCRATCH_LEN: usize = String::MAX_SMALL_SORT_LEN + 16;
+        let mut scratch = MaybeUninit::<[T; SCRATCH_LEN]>::uninit();
 
-    if len >= 16 && len <= MAX_SIZE {
-        let even_len = len - (len % 2);
-        let len_div_2 = even_len / 2;
-
-        // SAFETY: scratch_base is valid and has enough space. And we checked that both
-        // v[..len_div_2] and v[len_div_2..] are at least 8 large.
-        unsafe {
-            let v_base = v.as_mut_ptr();
-            sort8_indirect(v_base, scratch_base, is_less);
-            sort8_indirect(v_base.add(len_div_2), scratch_base, is_less);
+        if SCRATCH_LEN < (T::MAX_SMALL_SORT_LEN + 16) {
+            intrinsics::abort();
         }
 
-        insertion_sort_shift_left(&mut v[0..len_div_2], 8, is_less);
-        insertion_sort_shift_left(&mut v[len_div_2..], 8, is_less);
+        let v_base = v.as_mut_ptr();
 
-        // SAFETY: We checked that T is Freeze and thus observation safe. Should is_less panic v
-        // was not modified in parity_merge and retains it's original input. swap and v must not
-        // alias and swap has v.len() space.
-        unsafe {
-            bi_directional_merge_even(&mut v[..even_len], scratch_base, is_less);
-            ptr::copy_nonoverlapping(scratch_base, v.as_mut_ptr(), even_len);
-        }
-
-        if len != even_len {
-            insert_tail(v, is_less);
-        }
-    } else if len >= 2 {
         let offset = if len >= 8 {
-            // SAFETY: scratch_base is valid and has enough space.
-            unsafe {
-                sort8_indirect(v.as_mut_ptr(), scratch_base, is_less);
-            }
+            let len_div_2 = len / 2;
 
-            8
+            // SAFETY: TODO
+            unsafe {
+                let scratch_base = scratch.as_mut_ptr() as *mut T;
+
+                let presorted_len = if len >= 16 {
+                    // SAFETY: scratch_base is valid and has enough space.
+                    sort8_stable(
+                        v_base,
+                        scratch_base.add(T::MAX_SMALL_SORT_LEN),
+                        scratch_base,
+                        is_less,
+                    );
+
+                    sort8_stable(
+                        v_base.add(len_div_2),
+                        scratch_base.add(T::MAX_SMALL_SORT_LEN + 8),
+                        scratch_base.add(len_div_2),
+                        is_less,
+                    );
+
+                    8
+                } else {
+                    // SAFETY: scratch_base is valid and has enough space.
+                    sort4_stable(v_base, scratch_base, is_less);
+                    sort4_stable(v_base.add(len_div_2), scratch_base.add(len_div_2), is_less);
+
+                    4
+                };
+
+                for offset in [0, len_div_2] {
+                    let src = scratch_base.add(offset);
+                    let dst = v_base.add(offset);
+
+                    for i in presorted_len..len_div_2 {
+                        ptr::copy_nonoverlapping(dst.add(i), src.add(i), 1);
+                        let scratch_slice = &mut *ptr::slice_from_raw_parts_mut(src, i + 1);
+                        insert_tail(scratch_slice, is_less);
+                    }
+                }
+
+                let even_len = len - (len % 2);
+
+                // See comment in `DropGuard::drop`.
+                let drop_guard = DropGuard {
+                    src: scratch_base,
+                    dst: v_base,
+                    len: even_len,
+                };
+
+                // It's faster to merge directly into `v` and copy over the 'safe' elements of
+                // `scratch` into v only if there was a panic. This technique is similar to
+                // ping-pong merging.
+                bi_directional_merge_even(
+                    &*ptr::slice_from_raw_parts(drop_guard.src, drop_guard.len),
+                    drop_guard.dst,
+                    is_less,
+                );
+                mem::forget(drop_guard);
+
+                even_len
+            }
         } else {
             1
         };
 
         insertion_sort_shift_left(v, offset, is_less);
     }
+
+    struct DropGuard<T> {
+        src: *mut T,
+        dst: *mut T,
+        len: usize,
+    }
+
+    impl<T> Drop for DropGuard<T> {
+        fn drop(&mut self) {
+            // SAFETY: `src` must hold the original `len` elements of `v` in any order. And dst
+            // must be valid to write `len` elements.
+            unsafe {
+                ptr::copy_nonoverlapping(self.src, self.dst, self.len);
+            }
+        }
+    }
 }
 
-/// SAFETY: The caller MUST guarantee that `v_base` is valid for 4 reads and `dst` is valid
-/// for 4 writes.
-pub unsafe fn sort4_indirect<T, F>(v_base: *const T, dst: *mut T, is_less: &mut F)
+/// SAFETY: The caller MUST guarantee that `v_base` is valid for 4 reads and `dest_ptr` is valid
+/// for 4 writes. The result will be stored in `dst[0..4]`.
+pub unsafe fn sort4_stable<T, F>(v_base: *const T, dst: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -511,12 +562,12 @@ where
 
     unsafe {
         // Stably create two pairs a <= b and c <= d.
-        let c1 = is_less(&*v_base.add(1), &*v_base) as usize;
-        let c2 = is_less(&*v_base.add(3), &*v_base.add(2)) as usize;
-        let a = v_base.add(c1);
-        let b = v_base.add(c1 ^ 1);
-        let c = v_base.add(2 + c2);
-        let d = v_base.add(2 + (c2 ^ 1));
+        let c1 = is_less(&*v_base.add(1), &*v_base);
+        let c2 = is_less(&*v_base.add(3), &*v_base.add(2));
+        let a = v_base.add(c1 as usize);
+        let b = v_base.add(!c1 as usize);
+        let c = v_base.add(2 + c2 as usize);
+        let d = v_base.add(2 + (!c2 as usize));
 
         // Compare (a, c) and (b, d) to identify max/min. We're left with two
         // unknown elements, but because we are a stable sort we must know which
@@ -554,55 +605,24 @@ where
     }
 }
 
-/// SAFETY: The caller MUST guarantee that `v_base` is valid for 8 reads and writes, and
-/// `scratch_base` is valid for 8 writes.
+/// SAFETY: The caller MUST guarantee that `v_base` is valid for 8 reads and writes, `scratch_base`
+/// and `dst` MUST be valid for 8 writes. The result will be stored in `dst[0..8]`.
 #[inline(never)]
-unsafe fn sort8_indirect<T, F>(v_base: *mut T, scratch_base: *mut T, is_less: &mut F)
+unsafe fn sort8_stable<T, F>(v_base: *mut T, scratch_base: *mut T, dst: *mut T, is_less: &mut F)
 where
-    T: Freeze,
+    T: crate::Freeze,
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: The caller must guarantee that scratch_base is valid for 8 writes, and that v_base is
     // valid for 8 reads.
     unsafe {
-        sort4_indirect(v_base, scratch_base, is_less);
-        sort4_indirect(v_base.add(4), scratch_base.add(4), is_less);
+        sort4_stable(v_base, scratch_base, is_less);
+        sort4_stable(v_base.add(4), scratch_base.add(4), is_less);
     }
 
-    // SAFETY: We checked that T is Freeze and thus observation safe.
-    // Should is_less panic v was not modified in parity_merge and retains its original input.
-    // swap and v must not alias and swap has v.len() space.
+    // SAFETY: TODO
     unsafe {
-        // It's slightly faster to merge directly into v and copy over the 'safe' elements of swap
-        // into v only if there was a panic. This technique is also known as ping-pong merge.
-        let drop_guard = DropGuard {
-            src: scratch_base,
-            dst: v_base,
-        };
-        bi_directional_merge_even(
-            &*ptr::slice_from_raw_parts(scratch_base, 8),
-            v_base,
-            is_less,
-        );
-        mem::forget(drop_guard);
-    }
-
-    struct DropGuard<T> {
-        src: *const T,
-        dst: *mut T,
-    }
-
-    impl<T> Drop for DropGuard<T> {
-        fn drop(&mut self) {
-            // SAFETY: `T` is not a zero-sized type, src must hold the original 8 elements of v in
-            // any order. And dst must be valid to write 8 elements.
-            //
-            // Use black_box to emit memcpy instead of efficient direct copying. This reduces the
-            // binary size, and this path will only be used if the comparison function panics.
-            unsafe {
-                ptr::copy_nonoverlapping(self.src, self.dst, 8);
-            }
-        }
+        bi_directional_merge_even(&*ptr::slice_from_raw_parts(scratch_base, 8), dst, is_less);
     }
 }
 
