@@ -395,7 +395,7 @@ where
     };
 
     insertion_sort_shift_left(&mut v[0..len_div_2], presorted_len, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..], presorted_len, is_less);
+    insertion_sort_shift_left(&mut v[len_div_2..even_len], presorted_len, is_less);
 
     let mut scratch = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let scratch_base = scratch.as_mut_ptr() as *mut T;
