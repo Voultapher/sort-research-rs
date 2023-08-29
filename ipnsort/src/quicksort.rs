@@ -1,3 +1,4 @@
+use core::intrinsics;
 use core::mem::{self, ManuallyDrop};
 use core::ptr;
 
@@ -59,6 +60,8 @@ pub(crate) fn quicksort<'a, T, F>(
 
         // Partition the slice.
         let mid = partition(v, pivot_pos, is_less);
+        // SAFETY: partition ensures that `mid` will be in-bounds.
+        unsafe { intrinsics::assume(mid < v.len()) };
 
         // Split the slice into `left`, `pivot`, and `right`.
         let (left, right) = v.split_at_mut(mid);
@@ -114,9 +117,16 @@ fn partition<T, F>(v: &mut [T], pivot: usize, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // Proves a bunch of useful stuff to the compiler.
-    if v.len() == 0 {
+    let len = v.len();
+
+    // Allows for panic-free code-gen by proving this property to the compiler.
+    if len == 0 {
         return 0;
+    }
+
+    // Allows for panic-free code-gen by proving this property to the compiler.
+    if pivot >= len {
+        intrinsics::abort();
     }
 
     // Place the pivot at the beginning of slice.
@@ -130,29 +140,7 @@ where
     // a drop guard.
     let pivot = &mut pivot[0];
 
-    // type DebugT = i32;
-    // let v_as_x = unsafe { mem::transmute::<&[T], &[DebugT]>(v_without_pivot) };
-    // let pivot_as_x = unsafe { mem::transmute::<&T, &DebugT>(pivot) };
-
-    // println!("pivot: {}", pivot_as_x);
-    // println!("before: {v_as_x:?}");
-    // let lt_count = <crate::other::partition::hoare_branchy_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
-    // println!("after:  {v_as_x:?}");
-    // println!("sub: {:?}\n", &v_as_x[..lt_count]);
-
-    // for val in &v_as_x[lt_count..] {
-    //     if val < pivot_as_x {
-    //         println!("wrong val: {val}");
-    //         panic!("partition impl is wrong");
-    //     }
-    // }
-
     let lt_count = T::partition(v_without_pivot, pivot, is_less);
-
-    // let lt_count = <crate::other::partition::lomuto_branchless_cyclic_opt::PartitionImpl as crate::other::partition::Partition>::partition_by(v_without_pivot, pivot, is_less);
-
-    // pivot quality measurement.
-    // println!("len: {} is_less: {}", v.len(), l + lt_count);
 
     // Place the pivot between the two partitions.
     v.swap(0, lt_count);

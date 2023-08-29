@@ -176,6 +176,7 @@ where
 
     let len = v.len();
     let src = v.as_ptr();
+    unsafe { intrinsics::assume(len > 0) };
 
     let len_div_2 = len / 2;
 
@@ -365,7 +366,7 @@ where
     }
 }
 
-fn sort18_plus<T, F>(v: &mut [T], is_less: &mut F)
+fn sort18_plus<T, F>(v: &mut [T], is_less: &mut F) -> usize
 where
     T: Freeze,
     F: FnMut(&T, &T) -> bool,
@@ -378,10 +379,10 @@ where
     }
 
     // This should optimize to a shift right.
-    let even_len = len - (len % 2) as usize;
+    let even_len = len - (len % 2);
     let len_div_2 = even_len / 2;
 
-    let presort_len = if len < 26 {
+    let presorted_len = if len < 26 {
         sort9_optimal(&mut v[0..9], is_less);
         sort9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
 
@@ -393,8 +394,8 @@ where
         13
     };
 
-    insertion_sort_shift_left(&mut v[0..len_div_2], presort_len, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..], presort_len, is_less);
+    insertion_sort_shift_left(&mut v[0..len_div_2], presorted_len, is_less);
+    insertion_sort_shift_left(&mut v[len_div_2..], presorted_len, is_less);
 
     let mut scratch = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
     let scratch_base = scratch.as_mut_ptr() as *mut T;
@@ -407,12 +408,7 @@ where
         ptr::copy_nonoverlapping(scratch_base, v.as_mut_ptr(), even_len);
     }
 
-    if len != even_len {
-        // SAFETY: We know len >= 2.
-        unsafe {
-            insert_tail(v, is_less);
-        }
-    }
+    even_len
 }
 
 fn small_sort_network<T, F>(v: &mut [T], is_less: &mut F)
@@ -428,12 +424,11 @@ where
     // Patterns should have already been found by the other analysis steps.
     //
     // Small total slices are handled separately, see function quicksort.
-    if len >= 18 {
-        sort18_plus(v, is_less);
-    } else if len >= 2 {
+    if len >= 2 {
         let mut end = 1;
-
-        if len >= 13 {
+        if len >= 18 {
+            end = sort18_plus(v, is_less);
+        } else if len >= 13 {
             sort13_optimal(&mut v[0..13], is_less);
             end = 13;
         } else if len >= 9 {
@@ -483,10 +478,7 @@ where
         }
 
         if len != even_len {
-            // SAFETY: We know len >= 2.
-            unsafe {
-                insert_tail(v, is_less);
-            }
+            insert_tail(v, is_less);
         }
     } else if len >= 2 {
         let offset = if len >= 8 {
@@ -618,7 +610,7 @@ where
 
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
 /// becomes sorted.
-unsafe fn insert_tail<T, F>(v: &mut [T], is_less: &mut F)
+fn insert_tail<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
@@ -629,7 +621,7 @@ where
     let v_base = v.as_mut_ptr();
     let i = v.len() - 1;
 
-    // SAFETY: caller must ensure v is at least len 2.
+    // SAFETY: We checked that `v.len()` is at least 2.
     unsafe {
         // See insert_head which talks about why this approach is beneficial.
         let v_i = v_base.add(i);
@@ -679,17 +671,12 @@ where
 {
     let len = v.len();
 
-    if offset == 0 || offset > len {
-        intrinsics::abort();
-    }
+    // This would be a logic bug in other code.
+    debug_assert!(offset != 0 && offset <= len);
 
     // Shift each element of the unsorted region v[i..] as far left as is needed to make v sorted.
     for i in offset..len {
-        // SAFETY: we tested that `offset` must be at least 1, so this loop is only entered if len
-        // >= 2.
-        unsafe {
-            insert_tail(&mut v[..=i], is_less);
-        }
+        insert_tail(&mut v[..=i], is_less);
     }
 }
 
