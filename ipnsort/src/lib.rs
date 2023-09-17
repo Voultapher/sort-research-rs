@@ -233,7 +233,9 @@ unsafe impl<T: ?Sized> Freeze for &mut T {}
 
 #[must_use]
 const fn has_efficient_in_place_swap<T>() -> bool {
-    mem::size_of::<T>() <= mem::size_of::<u64>()
+    const MEM_SIZE_U64: usize = mem::size_of::<u64>();
+
+    mem::size_of::<T>() <= MEM_SIZE_U64
 }
 
 #[test]
