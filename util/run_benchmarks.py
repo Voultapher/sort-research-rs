@@ -53,6 +53,7 @@ def run_benchmarks(test_name):
             "2",
             "--measurement-time",
             "4",
+            "--noplot",
             "--save-baseline",
             test_name,
         ],
