@@ -178,6 +178,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     // --- Other sorts ---
 
+    #[cfg(feature = "rust_radsort")]
+    bench_inst!(other::rust_radsort);
+
     #[cfg(feature = "cpp_simdsort")]
     bench_inst!(other::cpp_simdsort);
 
