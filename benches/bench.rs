@@ -1,6 +1,7 @@
+use std::cmp;
 use std::env;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[allow(unused_imports)]
 use sort_test_tools::ffi_types::{FFIOneKiloByte, FFIString, F128};
@@ -242,6 +243,43 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
     }
 }
 
+fn shift_i32_to_u32(val: i32) -> u32 {
+    (val as i64 + (i32::MAX as i64 + 1)) as u32
+}
+
+fn compress_i32<'a>(values: &'a [i32], compression_range: f64) -> impl Iterator<Item = u32> + 'a {
+    // (val & u8::MAX as i32) as u8
+
+    let mut min_val = u32::MAX;
+    let mut max_val = u32::MIN;
+
+    for elem in values {
+        let elem_as_u32 = shift_i32_to_u32(*elem);
+
+        min_val = cmp::min(min_val, elem_as_u32);
+        max_val = cmp::max(max_val, elem_as_u32);
+    }
+
+    let range = max_val - min_val;
+    let mult = (compression_range - 1.0) / (range as f64);
+
+    values
+        .iter()
+        .map(move |val| (((shift_i32_to_u32(*val) - min_val) as f64 * mult).round() as u32))
+}
+
+fn extend_i32_to_u64(val: i32) -> u64 {
+    // Extends the value into the 64 bit range,
+    // while preserving input order.
+    (shift_i32_to_u32(val) as u64) * i32::MAX as u64
+}
+
+fn extend_i32_to_u128(val: i32) -> u128 {
+    // Extends the value into the 64 bit range,
+    // while preserving input order.
+    (shift_i32_to_u32(val) as u128) * i64::MAX as u128
+}
+
 fn ensure_true_random() {
     // Ensure that random vecs are actually different.
     let random_vec_a = patterns::random(5);
@@ -264,20 +302,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     for test_len in test_sizes {
         // Basic type often used to test sorting algorithms.
-        bench_patterns(c, test_len, "i32", |values| values);
+        bench_patterns(c, test_len, "i32", |values| -> Vec<i32> { values });
 
         // Common type for usize on 64-bit machines.
         // Sorting indices is very common.
-        bench_patterns(c, test_len, "u64", |values| {
-            values
-                .iter()
-                .map(|val| -> u64 {
-                    // Extends the value into the 64 bit range,
-                    // while preserving input order.
-                    let x = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
-                    x.checked_mul(i32::MAX as u64).unwrap()
-                })
-                .collect()
+        bench_patterns(c, test_len, "u64", |values| -> Vec<u64> {
+            values.into_iter().map(extend_i32_to_u64).collect()
         });
 
         // Larger type that is not Copy and does heap access.
@@ -312,6 +342,38 @@ fn criterion_benchmark(c: &mut Criterion) {
             });
         }
 
+        #[cfg(feature = "bench_type_u8")]
+        {
+            bench_patterns(c, test_len, "u8", |values| -> Vec<u8> {
+                compress_i32(&values, 2u32.pow(u8::BITS) as f64)
+                    .map(|val| val as u8)
+                    .collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u16")]
+        {
+            bench_patterns(c, test_len, "u16", |values| -> Vec<u16> {
+                compress_i32(&values, 2u32.pow(u16::BITS) as f64)
+                    .map(|val| val as u16)
+                    .collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u32")]
+        {
+            bench_patterns(c, test_len, "u32", |values| -> Vec<u32> {
+                values.into_iter().map(shift_i32_to_u32).collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u128")]
+        {
+            bench_patterns(c, test_len, "u128", |values| -> Vec<u128> {
+                values.into_iter().map(extend_i32_to_u128).collect()
+            });
+        }
+
         #[cfg(feature = "bench_type_val_with_mutex")]
         {
             use std::cmp::Ordering;
@@ -319,7 +381,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
             #[derive(Debug)]
             struct ValWithMutex {
-                val: u64,
+                val: i32,
                 mutex: Mutex<u64>,
             }
 
@@ -345,65 +407,17 @@ fn criterion_benchmark(c: &mut Criterion) {
 
             bench_patterns(c, test_len, "val_with_mutex", |values| {
                 values
-                    .iter()
+                    .into_iter()
                     .map(|val| -> ValWithMutex {
-                        let mut val_u64 = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
-                        val_u64 = val_u64.checked_mul(i32::MAX as u64).unwrap();
-
-                        let mut this = ValWithMutex {
-                            val: val_u64,
-                            mutex: Mutex::new(val_u64),
+                        let this = ValWithMutex {
+                            val,
+                            mutex: Mutex::new(val.wrapping_abs() as u64),
                         };
 
-                        // To make sure mutex is not optimized away.
-                        this.val = *this.mutex.lock().unwrap();
+                        // To make sure the mutex is not optimized away.
+                        black_box(this.val * *this.mutex.lock().unwrap() as i32);
 
                         this
-                    })
-                    .collect()
-            });
-        }
-
-        #[cfg(feature = "bench_type_u8")]
-        {
-            bench_patterns(c, test_len, "u8", |values| {
-                values
-                    .iter()
-                    .map(|val| -> u8 { (val & u8::MAX as i32) as u8 })
-                    .collect()
-            });
-        }
-
-        #[cfg(feature = "bench_type_u16")]
-        {
-            bench_patterns(c, test_len, "u16", |values| {
-                values
-                    .iter()
-                    .map(|val| -> u16 { (val & u16::MAX as i32) as u16 })
-                    .collect()
-            });
-        }
-
-        #[cfg(feature = "bench_type_u32")]
-        {
-            bench_patterns(c, test_len, "u32", |values| {
-                values
-                    .iter()
-                    .map(|val| -> u32 { (val & u32::MAX as i32) as u32 })
-                    .collect()
-            });
-        }
-
-        #[cfg(feature = "bench_type_u128")]
-        {
-            bench_patterns(c, test_len, "u128", |values| {
-                values
-                    .iter()
-                    .map(|val| -> u128 {
-                        // Extends the value into the 128 bit range,
-                        // while preserving input order.
-                        let x = ((*val as i128) + (i32::MAX as i128) + 1) as u128;
-                        x.checked_mul(i64::MAX as u128).unwrap()
                     })
                     .collect()
             });
