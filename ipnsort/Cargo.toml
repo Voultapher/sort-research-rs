@@ -13,6 +13,9 @@ doctest = false
 test = false
 
 [dependencies]
+# sort_comp = { git = "https://github.com/Voultapher/sort-research-rs", rev = "37f8b56b7d8af1b3578feabee3c2193c0743bdc4", default-features = false, features = [
+#     "partition",
+# ] }
 
 [dev-dependencies]
 sort_test_tools = { path = "../sort_test_tools", default-features = false }

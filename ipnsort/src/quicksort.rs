@@ -257,9 +257,9 @@ fn partition_lomuto_branchless_cyclic<T, F>(v: &mut [T], pivot: &T, is_less: &mu
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // A Kind of branchless Lomuto partition paired with a cyclic permutation. As far as I can tell
-    // this is a novel idea, developed by the author Lukas Bergdoll. Refined code-gen by Orson
-    // Peters to avoid the cmov.
+    // A Kind of branchless Lomuto partition paired with a cyclic permutation. To the author's
+    // knowledge this is a novel idea, developed by Lukas Bergdoll. Refined code-gen by Orson Peters
+    // to avoid a cmov.
 
     // Manually unrolled to ensure consistent performance across various targets.
     const UNROLL_LEN: usize = 2;
