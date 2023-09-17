@@ -869,17 +869,23 @@ fn calc_comps_required<T: Clone, S: Sort>(
     comp_counter
 }
 
-pub fn panic_retain_original_set<S: Sort>() {
+pub fn panic_retain_original_set_impl<S: Sort, T: Ord + Clone>(
+    type_into_fn: impl Fn(i32) -> T + Copy,
+    type_from_fn: impl Fn(&T) -> i32,
+) {
     let _seed = get_or_init_random_seed::<S>();
 
     let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let mut test_data = pattern_fn(test_size);
+        let mut test_data: Vec<T> = pattern_fn(test_size)
+            .into_iter()
+            .map(type_into_fn)
+            .collect();
 
-        let sum_before: i64 = test_data.iter().map(|x| *x as i64).sum();
+        let sum_before: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
 
         // Calculate a specific comparison that should panic.
         // Ensure that it can be any of the possible comparisons and that it always panics.
-        let required_comps = calc_comps_required::<i32, S>(&test_data, |a, b| a.cmp(b));
+        let required_comps = calc_comps_required::<T, S>(&test_data, |a, b| a.cmp(b));
         let panic_threshold =
             patterns::random_uniform(1, 1..=required_comps as i32)[0] as usize - 1;
 
@@ -903,14 +909,32 @@ pub fn panic_retain_original_set<S: Sort>() {
 
         // If the sum before and after don't match, it means the set of elements hasn't remained the
         // same.
-        let sum_after: i64 = test_data.iter().map(|x| *x as i64).sum();
+        let sum_after: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
         assert_eq!(sum_before, sum_after);
     };
 
     test_impl_custom(test_fn);
 }
 
-pub fn panic_observable_is_less<S: Sort>() {
+pub fn panic_retain_original_set_i32<S: Sort>() {
+    panic_retain_original_set_impl::<S, i32>(|val| val, |val| *val);
+}
+
+pub fn panic_retain_original_set_ffi_string<S: Sort>() {
+    panic_retain_original_set_impl::<S, FFIString>(
+        |val| FFIString::new(format!("{:010}", val.saturating_abs())),
+        |val| val.as_str().parse::<i32>().unwrap(),
+    );
+}
+
+pub fn panic_retain_original_set_cell_i32<S: Sort>() {
+    panic_retain_original_set_impl::<S, Cell<i32>>(|val| Cell::new(val), |val| val.get());
+}
+
+fn panic_observable_is_less_impl<S: Sort, T: Ord + Clone>(
+    type_into_fn: impl Fn(i32) -> T + Copy,
+    type_from_fn: impl Fn(&T) -> i32,
+) {
     let _seed = get_or_init_random_seed::<S>();
 
     // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
@@ -923,13 +947,13 @@ pub fn panic_observable_is_less<S: Sort>() {
 
     #[derive(PartialEq, Eq, Debug, Clone)]
     #[repr(C)]
-    struct CompCount {
-        val: i32,
+    struct CompCount<T> {
+        val: T,
         comp_count: Cell<u32>,
     }
 
-    impl CompCount {
-        fn new(val: i32) -> Self {
+    impl<T> CompCount<T> {
+        fn new(val: T) -> Self {
             Self {
                 val,
                 comp_count: Cell::new(0),
@@ -938,19 +962,17 @@ pub fn panic_observable_is_less<S: Sort>() {
     }
 
     let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let pattern = pattern_fn(test_size);
-
-        let mut test_input = pattern
-            .iter()
-            .map(|val| CompCount::new(*val))
+        let mut test_input = pattern_fn(test_size)
+            .into_iter()
+            .map(|val| CompCount::new(type_into_fn(val)))
             .collect::<Vec<_>>();
+
+        let sum_before: i64 = test_input.iter().map(|x| type_from_fn(&x.val) as i64).sum();
 
         // Calculate a specific comparison that should panic.
         // Ensure that it can be any of the possible comparisons and that it always panics.
         let required_comps =
-            calc_comps_required::<CompCount, S>(&test_input, |a, b| a.val.cmp(&b.val));
-
-        let sum_before: i64 = pattern.iter().map(|x| *x as i64).sum();
+            calc_comps_required::<CompCount<T>, S>(&test_input, |a, b| a.val.cmp(&b.val));
 
         let panic_threshold = patterns::random_uniform(1, 1..=required_comps as i32)[0] as u64 - 1;
 
@@ -981,14 +1003,32 @@ pub fn panic_observable_is_less<S: Sort>() {
 
         // If the sum before and after don't match, it means the set of elements hasn't remained the
         // same.
-        let sum_after: i64 = pattern.iter().map(|x| *x as i64).sum();
+        let sum_after: i64 = test_input.iter().map(|x| type_from_fn(&x.val) as i64).sum();
         assert_eq!(sum_before, sum_after);
     };
 
     test_impl_custom(test_fn);
 }
 
-pub fn violate_ord_retain_original_set<S: Sort>() {
+pub fn panic_observable_is_less_i32<S: Sort>() {
+    panic_observable_is_less_impl::<S, i32>(|val| val, |val| *val);
+}
+
+pub fn panic_observable_is_less_ffi_string<S: Sort>() {
+    panic_observable_is_less_impl::<S, FFIString>(
+        |val| FFIString::new(format!("{:010}", val.saturating_abs())),
+        |val| val.as_str().parse::<i32>().unwrap(),
+    );
+}
+
+pub fn panic_observable_is_less_cell_i32<S: Sort>() {
+    panic_observable_is_less_impl::<S, Cell<i32>>(|val| Cell::new(val), |val| val.get());
+}
+
+fn violate_ord_retain_original_set_impl<S: Sort, T: Ord>(
+    type_into_fn: impl Fn(i32) -> T + Copy,
+    type_from_fn: impl Fn(&T) -> i32,
+) {
     let _seed = get_or_init_random_seed::<S>();
 
     // A user may implement Ord incorrectly for a type or violate it by calling sort_by with a
@@ -1028,7 +1068,7 @@ pub fn violate_ord_retain_original_set<S: Sort>() {
 
     // Examples, a = 3, b = 5, c = 9.
     // Correct Ord -> 10010 | is_less(a, b) is_less(a, a) is_less(b, a) is_less(a, c) is_less(c, a)
-    let mut invalid_ord_comp_functions: Vec<Box<dyn FnMut(&i32, &i32) -> Ordering>> = vec![
+    let mut invalid_ord_comp_functions: Vec<Box<dyn FnMut(&T, &T) -> Ordering>> = vec![
         Box::new(|_a, _b| -> Ordering {
             // random
             // Eg. is_less(3, 5) == true, is_less(3, 5) == false
@@ -1062,10 +1102,13 @@ pub fn violate_ord_retain_original_set<S: Sort>() {
             let lea = last_element_a;
             let leb = last_element_b;
 
-            last_element_a = *a;
-            last_element_b = *b;
+            let a_as_i32 = type_from_fn(a);
+            let b_as_i32 = type_from_fn(b);
 
-            if *a == lea && *b != leb {
+            last_element_a = a_as_i32;
+            last_element_b = b_as_i32;
+
+            if a_as_i32 == lea && b_as_i32 != leb {
                 b.cmp(a)
             } else {
                 a.cmp(b)
@@ -1127,8 +1170,11 @@ pub fn violate_ord_retain_original_set<S: Sort>() {
 
     for comp_func in &mut invalid_ord_comp_functions {
         let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-            let mut test_data = pattern_fn(test_size);
-            let sum_before: i64 = test_data.iter().map(|x| *x as i64).sum();
+            let mut test_data: Vec<T> = pattern_fn(test_size)
+                .into_iter()
+                .map(type_into_fn)
+                .collect();
+            let sum_before: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
 
             // It's ok to panic on Ord violation or to complete.
             // In both cases the original elements must still be present.
@@ -1138,7 +1184,7 @@ pub fn violate_ord_retain_original_set<S: Sort>() {
 
             // If the sum before and after don't match, it means the set of elements hasn't remained the
             // same.
-            let sum_after: i64 = test_data.iter().map(|x| *x as i64).sum();
+            let sum_after: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
             assert_eq!(sum_before, sum_after);
         };
 
@@ -1151,6 +1197,21 @@ pub fn violate_ord_retain_original_set<S: Sort>() {
             break;
         }
     }
+}
+
+pub fn violate_ord_retain_original_set_i32<S: Sort>() {
+    violate_ord_retain_original_set_impl::<S, i32>(|val| val, |val| *val);
+}
+
+pub fn violate_ord_retain_original_set_ffi_string<S: Sort>() {
+    violate_ord_retain_original_set_impl::<S, FFIString>(
+        |val| FFIString::new(format!("{:010}", val.saturating_abs())),
+        |val| val.as_str().parse::<i32>().unwrap(),
+    );
+}
+
+pub fn violate_ord_retain_original_set_cell_i32<S: Sort>() {
+    violate_ord_retain_original_set_impl::<S, Cell<i32>>(|val| Cell::new(val), |val| val.get());
 }
 
 pub fn sort_vs_sort_by<S: Sort>() {
@@ -1259,8 +1320,12 @@ macro_rules! instantiate_sort_tests {
             [miri_yes, observable_is_less],
             [miri_yes, observable_is_less_mut_ptr],
             [miri_yes, observable_is_less_u64],
-            [miri_yes, panic_observable_is_less],
-            [miri_yes, panic_retain_original_set],
+            [miri_yes, panic_observable_is_less_i32],
+            [miri_no, panic_observable_is_less_ffi_string],
+            [miri_no, panic_observable_is_less_cell_i32],
+            [miri_yes, panic_retain_original_set_i32],
+            [miri_no, panic_retain_original_set_ffi_string],
+            [miri_no, panic_retain_original_set_cell_i32],
             [miri_yes, pipe_organ],
             [miri_yes, random],
             [miri_no, random_binary],
@@ -1287,7 +1352,9 @@ macro_rules! instantiate_sort_tests {
             [miri_yes, sort_vs_sort_by],
             [miri_yes, stability],
             [miri_no, stability_with_patterns],
-            [miri_yes, violate_ord_retain_original_set]
+            [miri_yes, violate_ord_retain_original_set_i32],
+            [miri_no, violate_ord_retain_original_set_ffi_string],
+            [miri_no, violate_ord_retain_original_set_cell_i32]
         );
     };
 }
