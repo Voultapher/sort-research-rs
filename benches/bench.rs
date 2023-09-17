@@ -75,8 +75,8 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_d20_start_block", |len| {
             let mut v = patterns::random_uniform(len, 0..20);
             let loop_end = std::cmp::min(len, 100);
-            for i in 0..loop_end {
-                v[i] = 0;
+            for elem in v.iter_mut().take(loop_end) {
+                *elem = 0;
             }
 
             v
@@ -248,7 +248,7 @@ fn shift_i32_to_u32(val: i32) -> u32 {
 }
 
 #[allow(unused)]
-fn compress_i32<'a>(values: &'a [i32], compression_range: f64) -> impl Iterator<Item = u32> + 'a {
+fn compress_i32(values: &[i32], compression_range: f64) -> impl Iterator<Item = u32> + '_ {
     // (val & u8::MAX as i32) as u8
 
     let mut min_val = u32::MAX;

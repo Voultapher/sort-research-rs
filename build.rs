@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 // Adjust this if you have a custom clang build, or path.
 #[allow(unused)]
-const CLANG_PATH: &'static str = "clang++";
+const CLANG_PATH: &str = "clang++";
 
 #[allow(dead_code)]
 fn build_and_link_cpp_sort(

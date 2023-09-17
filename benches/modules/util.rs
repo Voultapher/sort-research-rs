@@ -32,7 +32,7 @@ pub fn pin_thread_to_core() {
 pub fn cpu_max_freq_hz() -> Option<f64> {
     static MAX_FREQUENCY: OnceCell<Option<f64>> = OnceCell::new();
 
-    MAX_FREQUENCY
+    *MAX_FREQUENCY
         .get_or_init(|| {
             // I tried using heim-cpu but that introduced too many dependencies.
             if let Ok(val) = env::var("CPU_MAX_FREQ_GHZ") {
@@ -42,7 +42,6 @@ pub fn cpu_max_freq_hz() -> Option<f64> {
                 None
             }
         })
-        .clone()
 }
 
 pub fn should_run_benchmark(name: &str) -> bool {
@@ -87,7 +86,7 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     let name_overwrite = NAME_OVERWRITE.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
 
     if let Some(name) = name_overwrite {
-        let split_pos = name.find(":").unwrap();
+        let split_pos = name.find(':').unwrap();
         let match_name = &name[..split_pos];
         if bench_name == match_name {
             bench_name = &name[(split_pos + 1)..];
