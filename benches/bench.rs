@@ -1,7 +1,7 @@
 use std::cmp;
 use std::env;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 #[allow(unused_imports)]
 use sort_test_tools::ffi_types::{FFIOneKiloByte, FFIString, F128};
@@ -247,6 +247,7 @@ fn shift_i32_to_u32(val: i32) -> u32 {
     (val as i64 + (i32::MAX as i64 + 1)) as u32
 }
 
+#[allow(unused)]
 fn compress_i32<'a>(values: &'a [i32], compression_range: f64) -> impl Iterator<Item = u32> + 'a {
     // (val & u8::MAX as i32) as u8
 
@@ -274,6 +275,7 @@ fn extend_i32_to_u64(val: i32) -> u64 {
     (shift_i32_to_u32(val) as u64) * i32::MAX as u64
 }
 
+#[allow(unused)]
 fn extend_i32_to_u128(val: i32) -> u128 {
     // Extends the value into the 64 bit range,
     // while preserving input order.
@@ -415,7 +417,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                         };
 
                         // To make sure the mutex is not optimized away.
-                        black_box(this.val * *this.mutex.lock().unwrap() as i32);
+                        criterion::black_box(this.val * *this.mutex.lock().unwrap() as i32);
 
                         this
                     })
