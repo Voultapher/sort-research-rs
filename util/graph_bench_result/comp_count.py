@@ -28,7 +28,7 @@ def is_stable_sort(sort_name):
 def extract_groups(comp_data, stable):
     # Result layout:
     # { type (eg. u64):
-    #   { test_size (eg. 500):
+    #   { test_len (eg. 500):
     #     { pattern (eg. descending):
     #       { sort_name (eg. rust_std_stable):
     #          comp_count
@@ -51,14 +51,14 @@ def extract_groups(comp_data, stable):
 
         ty = entry_parts[1]
         pattern = entry_parts[2]
-        test_size = int(entry_parts[3].partition(":")[0])
+        test_len = int(entry_parts[3].partition(":")[0])
 
-        if test_size < 2:
+        if test_len < 2:
             continue  # These don't make sense and mess up calc
 
         comp_count = int(entry.rpartition(":")[2].strip())
 
-        groups[ty][test_size][pattern][sort_name] = comp_count
+        groups[ty][test_len][pattern][sort_name] = comp_count
 
     return groups
 
@@ -118,12 +118,12 @@ def make_map_val_to_color(values):
     return map_sort_to_color
 
 
-def plot_single_size(ty, test_size, values):
+def plot_single_size(ty, test_len, values):
     sort_names = sorted(list(list(values.values())[0].keys()))
     map_sort_to_color = make_map_val_to_color(sort_names)
 
     max_comp_count = max([max(val.values()) for val in values.values()])
-    comp_div = test_size - 1
+    comp_div = test_len - 1
 
     y = []
     comp_counts = []
@@ -150,9 +150,9 @@ def plot_single_size(ty, test_size, values):
         }
     )
 
-    log_n = math.log(test_size)
+    log_n = math.log(test_len)
 
-    plot_name = f"comp-{ty}-{test_size}"
+    plot_name = f"comp-{ty}-{test_len}"
     plot = figure(
         x_axis_label=f"Comparisons performed / (N - 1), log(N) == {log_n:.1f} | Lower is better",
         x_range=(0, max_comp_count / comp_div * 1.1),
@@ -197,13 +197,13 @@ def plot_single_size(ty, test_size, values):
 def plot_comparisons(groups, stable_name):
     # Assumes all entries were tested for the same patterns.
     for ty, val1 in groups.items():
-        for test_size, val2 in val1.items():
-            if test_size != 19:
+        for test_len, val2 in val1.items():
+            if test_len != 19:
                 continue
 
             init_bar_tools()
 
-            plot_name, plot = plot_single_size(ty, test_size, val2)
+            plot_name, plot = plot_single_size(ty, test_len, val2)
 
             show(plot)
 
@@ -235,7 +235,7 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
     map_pattern_to_color = make_map_val_to_color(patterns)
 
     pattern_comp_counts = {}
-    for test_size, val1 in sorted(values.items()):
+    for test_len, val1 in sorted(values.items()):
         for pattern, val2 in val1.items():
             for sort_name_x, comp_count in val2.items():
                 if sort_name_x != sort_name:
@@ -243,11 +243,11 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
 
                 pattern_comp_counts.setdefault(pattern, {}).setdefault(
                     "test_sizes", []
-                ).append(test_size)
+                ).append(test_len)
 
                 pattern_comp_counts[pattern].setdefault(
                     "comp_counts", []
-                ).append(comp_count / (test_size - 1))
+                ).append(comp_count / (test_len - 1))
 
                 pattern_comp_counts[pattern].setdefault(
                     "comp_counts_full", []

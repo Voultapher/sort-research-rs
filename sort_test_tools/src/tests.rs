@@ -101,8 +101,8 @@ fn sort_comp<T: Ord + Clone + Debug, S: Sort>(v: &mut [T]) {
 }
 
 fn test_impl<T: Ord + Clone + Debug, S: Sort>(pattern_fn: impl Fn(usize) -> Vec<T>) {
-    for test_size in TEST_SIZES {
-        let mut test_data = pattern_fn(test_size);
+    for test_len in TEST_SIZES {
+        let mut test_data = pattern_fn(test_len);
         sort_comp::<T, S>(test_data.as_mut_slice());
     }
 }
@@ -128,12 +128,12 @@ fn test_impl_custom(mut test_fn: impl FnMut(usize, fn(usize) -> Vec<i32>)) {
     ];
 
     for test_pattern_fn in test_pattern_fns {
-        for test_size in &TEST_SIZES[..TEST_SIZES.len() - 2] {
-            if *test_size < 2 {
+        for test_len in &TEST_SIZES[..TEST_SIZES.len() - 2] {
+            if *test_len < 2 {
                 continue;
             }
 
-            test_fn(*test_size, test_pattern_fn);
+            test_fn(*test_len, test_pattern_fn);
         }
     }
 }
@@ -379,25 +379,25 @@ pub fn descending<S: Sort>() {
 }
 
 pub fn saw_ascending<S: Sort>() {
-    test_impl::<i32, S>(|test_size| {
-        patterns::saw_ascending(test_size, ((test_size as f64).log2().round()) as usize)
+    test_impl::<i32, S>(|test_len| {
+        patterns::saw_ascending(test_len, ((test_len as f64).log2().round()) as usize)
     });
 }
 
 pub fn saw_descending<S: Sort>() {
-    test_impl::<i32, S>(|test_size| {
-        patterns::saw_descending(test_size, ((test_size as f64).log2().round()) as usize)
+    test_impl::<i32, S>(|test_len| {
+        patterns::saw_descending(test_len, ((test_len as f64).log2().round()) as usize)
     });
 }
 
 pub fn saw_mixed<S: Sort>() {
-    test_impl::<i32, S>(|test_size| {
-        patterns::saw_mixed(test_size, ((test_size as f64).log2().round()) as usize)
+    test_impl::<i32, S>(|test_len| {
+        patterns::saw_mixed(test_len, ((test_len as f64).log2().round()) as usize)
     });
 }
 
 pub fn saw_mixed_range<S: Sort>() {
-    test_impl::<i32, S>(|test_size| patterns::saw_mixed_range(test_size, 20..50));
+    test_impl::<i32, S>(|test_len| patterns::saw_mixed_range(test_len, 20..50));
 }
 
 pub fn pipe_organ<S: Sort>() {
@@ -504,8 +504,8 @@ pub fn stability_with_patterns<S: Sort>() {
         (a, b)
     }
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let pattern = pattern_fn(test_size);
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_len);
 
         let mut counts = [0i32; 128];
 
@@ -547,8 +547,8 @@ pub fn stability_with_patterns<S: Sort>() {
 }
 
 pub fn random_ffi_str<S: Sort>() {
-    test_impl::<FFIString, S>(|test_size| {
-        patterns::random(test_size)
+    test_impl::<FFIString, S>(|test_len| {
+        patterns::random(test_len)
             .into_iter()
             .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
             .collect::<Vec<_>>()
@@ -556,8 +556,8 @@ pub fn random_ffi_str<S: Sort>() {
 }
 
 pub fn random_f128<S: Sort>() {
-    test_impl::<F128, S>(|test_size| {
-        patterns::random(test_size)
+    test_impl::<F128, S>(|test_len| {
+        patterns::random(test_len)
             .into_iter()
             .map(|val| F128::new(val))
             .collect::<Vec<_>>()
@@ -565,8 +565,8 @@ pub fn random_f128<S: Sort>() {
 }
 
 pub fn random_str<S: Sort>() {
-    test_impl::<String, S>(|test_size| {
-        patterns::random(test_size)
+    test_impl::<String, S>(|test_len| {
+        patterns::random(test_len)
             .into_iter()
             .map(|val| format!("{}", val))
             .collect::<Vec<_>>()
@@ -574,13 +574,13 @@ pub fn random_str<S: Sort>() {
 }
 
 pub fn random_large_val<S: Sort>() {
-    test_impl::<FFIOneKiloByte, S>(|test_size| {
-        if test_size == TEST_SIZES[TEST_SIZES.len() - 1] {
+    test_impl::<FFIOneKiloByte, S>(|test_len| {
+        if test_len == TEST_SIZES[TEST_SIZES.len() - 1] {
             // That takes too long skip.
             return vec![];
         }
 
-        patterns::random(test_size)
+        patterns::random(test_len)
             .into_iter()
             .map(|val| FFIOneKiloByte::new(val))
             .collect::<Vec<_>>()
@@ -589,8 +589,8 @@ pub fn random_large_val<S: Sort>() {
 
 pub fn dyn_val<S: Sort>() {
     // Dyn values are fat pointers, something the implementation might have overlooked.
-    test_impl::<Rc<dyn DynTrait>, S>(|test_size| {
-        patterns::random(test_size)
+    test_impl::<Rc<dyn DynTrait>, S>(|test_len| {
+        patterns::random(test_len)
             .into_iter()
             .map(|val| -> Rc<dyn DynTrait> {
                 if val < (i32::MAX / 2) {
@@ -610,19 +610,19 @@ pub fn comp_panic<S: Sort>() {
 
     let seed = get_or_init_random_seed::<S>();
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
         // Needs to be non trivial dtor.
-        let mut pattern = pattern_fn(test_size)
+        let mut pattern = pattern_fn(test_len)
             .into_iter()
             .map(|val| vec![val, val, val])
             .collect::<Vec<Vec<i32>>>();
 
         let val = panic::catch_unwind(AssertUnwindSafe(|| {
             <S as Sort>::sort_by(&mut pattern, |a, b| {
-                if a[0].abs() < (i32::MAX / test_size as i32) {
+                if a[0].abs() < (i32::MAX / test_len as i32) {
                     panic!(
-                        "Explicit panic. Seed: {}. test_size: {}. a: {} b: {}",
-                        seed, test_size, a[0], b[0]
+                        "Explicit panic. Seed: {}. test_len: {}. a: {} b: {}",
+                        seed, test_len, a[0], b[0]
                     );
                 }
 
@@ -704,8 +704,8 @@ pub fn observable_is_less_u64<S: Sort>() {
         }
     }
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let pattern = pattern_fn(test_size);
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_len);
         let mut test_input = pattern
             .into_iter()
             .map(|val| CompCount::new(val).to_u64())
@@ -761,8 +761,8 @@ pub fn observable_is_less<S: Sort>() {
         }
     }
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let pattern = pattern_fn(test_size);
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_len);
         let mut test_input = pattern
             .into_iter()
             .map(|val| CompCount::new(val))
@@ -804,8 +804,8 @@ pub fn observable_is_less_mut_ptr<S: Sort>() {
     // This test, tests the same as observable_is_less but instead of mutating a Cell like object it
     // mutates *mut pointers.
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let pattern = pattern_fn(test_size);
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let pattern = pattern_fn(test_len);
 
         // The sort type T is Copy, yet it still allows mutable access during comparison.
         let mut test_input: Vec<*mut CompCount> = pattern
@@ -875,11 +875,8 @@ pub fn panic_retain_original_set_impl<S: Sort, T: Ord + Clone>(
 ) {
     let _seed = get_or_init_random_seed::<S>();
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let mut test_data: Vec<T> = pattern_fn(test_size)
-            .into_iter()
-            .map(type_into_fn)
-            .collect();
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let mut test_data: Vec<T> = pattern_fn(test_len).into_iter().map(type_into_fn).collect();
 
         let sum_before: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
 
@@ -961,8 +958,8 @@ fn panic_observable_is_less_impl<S: Sort, T: Ord + Clone>(
         }
     }
 
-    let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-        let mut test_input = pattern_fn(test_size)
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let mut test_input = pattern_fn(test_len)
             .into_iter()
             .map(|val| CompCount::new(type_into_fn(val)))
             .collect::<Vec<_>>();
@@ -1169,11 +1166,9 @@ fn violate_ord_retain_original_set_impl<S: Sort, T: Ord>(
     ];
 
     for comp_func in &mut invalid_ord_comp_functions {
-        let test_fn = |test_size: usize, pattern_fn: fn(usize) -> Vec<i32>| {
-            let mut test_data: Vec<T> = pattern_fn(test_size)
-                .into_iter()
-                .map(type_into_fn)
-                .collect();
+        let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+            let mut test_data: Vec<T> =
+                pattern_fn(test_len).into_iter().map(type_into_fn).collect();
             let sum_before: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
 
             // It's ok to panic on Ord violation or to complete.

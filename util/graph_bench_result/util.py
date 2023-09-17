@@ -14,7 +14,7 @@ def extract_groups(bench_result):
     # Result layout:
     # { type (eg. u64):
     #   { prediction_state (eg. hot):
-    #     { test_size (eg. 500):
+    #     { test_len (eg. 500):
     #       { pattern (eg. descending):
     #         { sort_name (eg. rust_std_stable):
     #            bench_time_ns
@@ -32,7 +32,7 @@ def extract_groups(bench_result):
         pred_state = entry_parts[0]
         ty = entry_parts[1]
         pattern = entry_parts[2]
-        test_size = int(entry_parts[3])
+        test_len = int(entry_parts[3])
 
         if sort_name == "c_fluxsort_stable" and ty not in ("u64", "i32"):
             continue
@@ -41,7 +41,7 @@ def extract_groups(bench_result):
             "point_estimate"
         ]
 
-        groups[ty][pred_state][test_size][pattern][sort_name] = bench_time_ns
+        groups[ty][pred_state][test_len][pattern][sort_name] = bench_time_ns
 
     return groups
 

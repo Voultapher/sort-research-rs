@@ -34,7 +34,7 @@ def extract_groups(bench_result):
     for benchmark_full, value in bench_result["benchmarks"].items():
         benchmark = benchmark_full.partition(name)[2][1:]
         entry_parts = benchmark.split("-")
-        test_size = int(entry_parts[3].partition(":")[0])
+        test_len = int(entry_parts[3].partition(":")[0])
 
         ty = "-".join(entry_parts[:3])
         bench_time = value["criterion_estimates_v1"]["median"][
@@ -42,7 +42,7 @@ def extract_groups(bench_result):
         ]
 
         groups.setdefault(ty, {})[benchmark] = BenchEntry(
-            bench_time, test_size
+            bench_time, test_len
         )
 
     return groups
@@ -237,9 +237,9 @@ def plot_distribution(temp, transform, name_a, groups_a, name_b, groups_b):
         [
             s
             for t, s, n in zip(test_sizes, speedups, names)
-            if t == test_size and "-random-" in n
+            if t == test_len and "-random-" in n
         ][0]
-        for test_size in test_sizes_unique
+        for test_len in test_sizes_unique
     ]
 
     plot.line(

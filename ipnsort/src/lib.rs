@@ -231,23 +231,6 @@ unsafe impl<T: ?Sized> Freeze for *mut T {}
 unsafe impl<T: ?Sized> Freeze for &T {}
 unsafe impl<T: ?Sized> Freeze for &mut T {}
 
-#[const_trait]
-trait IsFreeze {
-    fn value() -> bool;
-}
-
-impl<T> const IsFreeze for T {
-    default fn value() -> bool {
-        false
-    }
-}
-
-impl<T: Freeze> const IsFreeze for T {
-    fn value() -> bool {
-        true
-    }
-}
-
 #[must_use]
 const fn has_efficient_in_place_swap<T>() -> bool {
     mem::size_of::<T>() <= mem::size_of::<u64>()
@@ -259,10 +242,6 @@ fn type_info() {
     assert!(has_efficient_in_place_swap::<u64>());
     assert!(!has_efficient_in_place_swap::<u128>());
     assert!(!has_efficient_in_place_swap::<String>());
-
-    assert!(<u64 as IsFreeze>::value());
-    assert!(<String as IsFreeze>::value());
-    assert!(!<core::cell::Cell<u64> as IsFreeze>::value());
 }
 
 trait IsTrue<const B: bool> {}

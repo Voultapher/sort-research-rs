@@ -57,11 +57,17 @@ harness = false
 [features]
 default = [
     "large_test_sizes",
+    # "cold_benchmarks",
     # "evolution",
     # "small_sort",
     # "partition",
     # "partition_point",
-    # "cold_benchmarks",
+    # "bench_type_rust_string",
+    # "bench_type_val_with_mutex",
+    # "bench_type_u8",
+    # "bench_type_u16",
+    # "bench_type_u32",
+    # "bench_type_u128",
 
     # "cpp_std_sys",
     # "cpp_std_libcxx",
@@ -186,5 +192,24 @@ no_inline_sub_functions = []
 
 # Cold benchmarks, enable cold benchmarks that clobber the btb and other CPU caches.
 cold_benchmarks = []
+
+# Enable the Rust String "rust_string" type for benchmarks.
+# The string benchmarks are performed with FFIString, which should be very close to rust_string.
+bench_type_rust_string = []
+
+# Enable the "val_with_mutex" type for benchmarks
+bench_type_val_with_mutex = []
+
+# Enable the "u8" type for benchmarks
+bench_type_u8 = []
+
+# Enable the "u16" type for benchmarks
+bench_type_u16 = []
+
+# Enable the "u32" type for benchmarks
+bench_type_u32 = []
+
+# Enable the "u128" type for benchmarks
+bench_type_u128 = []
 
 large_test_sizes = ["sort_test_tools/large_test_sizes"]

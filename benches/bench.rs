@@ -1,10 +1,6 @@
-use std::cell::RefCell;
-use std::collections::HashSet;
 use std::env;
-use std::rc::Rc;
-use std::sync::Mutex;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 #[allow(unused_imports)]
 use sort_test_tools::ffi_types::{FFIOneKiloByte, FFIString, F128};
@@ -17,119 +13,9 @@ use sort_comp::{stable, unstable};
 #[cfg(feature = "cold_benchmarks")]
 mod trash_prediction;
 
-mod bench_other;
+mod modules;
 
-use crate::bench_other::bench_other;
-use crate::bench_other::util::bench_fn;
-
-fn measure_comp_count(
-    name: &str,
-    test_size: usize,
-    instrumented_sort_func: impl Fn(),
-    comp_count: Rc<RefCell<u64>>,
-) {
-    // Measure how many comparisons are performed by a specific implementation and input
-    // combination.
-    let run_count: usize = if test_size <= 20 {
-        100_000
-    } else if test_size < 10_000 {
-        3000
-    } else if test_size < 100_000 {
-        1000
-    } else if test_size < 1_000_000 {
-        100
-    } else {
-        10
-    };
-
-    *comp_count.borrow_mut() = 0;
-    for _ in 0..run_count {
-        instrumented_sort_func();
-    }
-
-    // If there is on average less than a single comparison this will be wrong.
-    // But that's such a corner case I don't care about it.
-    let total = *comp_count.borrow() / (run_count as u64);
-    println!("{name}: mean comparisons: {total}");
-}
-
-#[inline(never)]
-fn bench_impl<T: Ord + std::fmt::Debug, Sort: sort_test_tools::Sort>(
-    c: &mut Criterion,
-    test_size: usize,
-    transform_name: &str,
-    transform: &fn(Vec<i32>) -> Vec<T>,
-    pattern_name: &str,
-    pattern_provider: &fn(usize) -> Vec<i32>,
-    _sort_impl: Sort,
-) {
-    let bench_name = Sort::name();
-
-    if env::var("MEASURE_COMP").is_ok() {
-        // Configure this to filter results. For now the only real difference is copy types.
-        // if transform_name == "i32" && bench_name.contains("unstable") && test_size <= 100000 {
-        if transform_name == "u64" && test_size >= 1_000_000 {
-            // Abstracting over sort_by is kinda tricky without HKTs so a macro will do.
-            let name = format!(
-                "{}-comp-{}-{}-{}",
-                bench_name, transform_name, pattern_name, test_size
-            );
-
-            // Instrument via sort_by to ensure the type properties such as Copy of the type
-            // that is being sorted doesn't change. And we get representative numbers.
-            let comp_count = Rc::new(RefCell::new(0u64));
-            let comp_count_copy = comp_count.clone();
-            let instrumented_sort_func = || {
-                let mut test_data = transform(pattern_provider(test_size));
-                Sort::sort_by(black_box(test_data.as_mut_slice()), |a, b| {
-                    *comp_count_copy.borrow_mut() += 1;
-                    a.cmp(b)
-                })
-            };
-            measure_comp_count(&name, test_size, instrumented_sort_func, comp_count);
-        }
-    } else if env::var("BENCH_OTHER").is_ok() {
-        static SEEN_BENCHMARKS: Mutex<Option<HashSet<String>>> = Mutex::new(None);
-
-        let mut seen_benchmarks = SEEN_BENCHMARKS.lock().unwrap();
-
-        if seen_benchmarks.is_none() {
-            *seen_benchmarks = Some(HashSet::new());
-        }
-
-        let combination_name = format!("{transform_name}-{pattern_name}-{test_size}");
-        let seen_before = !seen_benchmarks.as_mut().unwrap().insert(combination_name);
-
-        // Other benchmarks will not use the sort functions so only call the other benchmark builder
-        // once per pattern-type-len combination.
-        if !seen_before {
-            let args = env::args().collect::<Vec<_>>();
-            // No clue how stable that is.
-            let filter_arg = &args[args.len() - 2];
-
-            bench_other(
-                c,
-                filter_arg,
-                test_size,
-                transform_name,
-                transform,
-                pattern_name,
-                pattern_provider,
-            );
-        }
-    } else {
-        bench_fn(
-            c,
-            test_size,
-            transform_name,
-            transform,
-            pattern_name,
-            pattern_provider,
-            &bench_name,
-            Sort::sort,
-        );
-    }
-}
+use crate::modules::bench_len_type_pattern_combo;
 
 fn shuffle_vec<T: Ord>(mut v: Vec<T>) -> Vec<T> {
     use rand::seq::SliceRandom;
@@ -163,11 +49,11 @@ fn random_x_percent(len: usize, percent: f64) -> Vec<i32> {
 
 fn bench_patterns<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
-    test_size: usize,
+    test_len: usize,
     transform_name: &str,
     transform: fn(Vec<i32>) -> Vec<T>,
 ) {
-    if test_size > 100_000 && !(transform_name == "i32" || transform_name == "u64") {
+    if test_len > 100_000 && !(transform_name == "i32" || transform_name == "u64") {
         // These are just too expensive.
         return;
     }
@@ -340,473 +226,23 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         pattern_providers.append(&mut extra_pattern_providers);
     }
 
+    let args = env::args().collect::<Vec<_>>();
+    // No clue how stable that is.
+    let filter_arg = &args[args.len() - 2];
+
     for (pattern_name, pattern_provider) in pattern_providers.iter() {
-        if test_size < 3 && *pattern_name != "random" {
+        if test_len < 3 && *pattern_name != "random" {
             continue;
         }
 
-        // --- Stable sorts ---
-
-        // bench_impl(
-        //     c,
-        //     test_size,
-        //     transform_name,
-        //     &transform,
-        //     pattern_name,
-        //     pattern_provider,
-        //     stable::rust_ipn::SortImpl,
-        // );
-
-        bench_impl(
+        bench_len_type_pattern_combo(
             c,
-            test_size,
+            filter_arg,
+            test_len,
             transform_name,
             &transform,
             pattern_name,
             pattern_provider,
-            stable::rust_std::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_std_sys")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::cpp_std_sys::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_std_libcxx")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::cpp_std_libcxx::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_std_gcc4_3")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::cpp_std_gcc4_3::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_powersort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::cpp_powersort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_powersort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::cpp_powersort_4way::SortImpl,
-        );
-
-        #[cfg(feature = "c_fluxsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::c_fluxsort::SortImpl,
-        );
-
-        #[cfg(feature = "rust_wpwoodjr")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::rust_wpwoodjr::SortImpl,
-        );
-
-        #[cfg(feature = "rust_glidesort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::rust_glidesort::SortImpl,
-        );
-
-        #[cfg(feature = "rust_tinysort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            stable::rust_tinysort::SortImpl,
-        );
-
-        // --- Unstable sorts ---
-
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::rust_ipnsort::SortImpl,
-        );
-
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::rust_std::SortImpl,
-        );
-
-        #[cfg(feature = "rust_dmsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::rust_dmsort::SortImpl,
-        );
-
-        #[cfg(feature = "rust_crumsort_rs")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::rust_crumsort_rs::SortImpl,
-        );
-
-        #[cfg(feature = "rust_tinysort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::rust_tinysort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_pdqsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_pdqsort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_ips4o")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_ips4o::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_blockquicksort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_blockquicksort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_gerbens_qsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_gerbens_qsort::SortImpl,
-        );
-
-        #[cfg(feature = "c_crumsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::c_crumsort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_std_sys")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_std_sys::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_std_libcxx")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_std_libcxx::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_std_gcc4_3")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            unstable::cpp_std_gcc4_3::SortImpl,
-        );
-
-        // --- Other sorts ---
-
-        #[cfg(feature = "rust_radsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::rust_radsort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_simdsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::cpp_simdsort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_vqsort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::cpp_vqsort::SortImpl,
-        );
-
-        #[cfg(feature = "cpp_intel_avx512")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::cpp_intel_avx512::SortImpl,
-        );
-
-        #[cfg(feature = "singeli_singelisort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::singeli_singelisort::SortImpl,
-        );
-
-        // --- Evolution ---
-
-        #[cfg(feature = "evolution")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::sort_evolution::stable::timsort_evo0::SortImpl,
-        );
-
-        #[cfg(feature = "evolution")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::sort_evolution::stable::timsort_evo1::SortImpl,
-        );
-
-        #[cfg(feature = "evolution")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::sort_evolution::stable::timsort_evo2::SortImpl,
-        );
-
-        #[cfg(feature = "evolution")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::sort_evolution::stable::timsort_evo3::SortImpl,
-        );
-
-        #[cfg(feature = "evolution")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::sort_evolution::stable::timsort_evo4::SortImpl,
-        );
-
-        #[cfg(feature = "evolution")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::sort_evolution::unstable::quicksort_evo0::SortImpl,
-        );
-
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort4_unstable_cmp_swap::SortImpl,
-        );
-
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort4_unstable_ptr_select::SortImpl,
-        );
-
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort4_unstable_branchy::SortImpl,
-        );
-
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort4_stable_orson::SortImpl,
-        );
-
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort10_unstable_cmp_swaps::SortImpl,
-        );
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort10_unstable_experimental::SortImpl,
-        );
-        #[cfg(feature = "small_sort")]
-        bench_impl(
-            c,
-            test_size,
-            transform_name,
-            &transform,
-            pattern_name,
-            pattern_provider,
-            sort_comp::other::small_sort::sort10_unstable_ptr_select::SortImpl,
         );
     }
 }
@@ -831,13 +267,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     patterns::disable_fixed_seed();
     ensure_true_random();
 
-    for test_size in test_sizes {
+    for test_len in test_sizes {
         // Basic type often used to test sorting algorithms.
-        bench_patterns(c, test_size, "i32", |values| values);
+        bench_patterns(c, test_len, "i32", |values| values);
 
         // Common type for usize on 64-bit machines.
         // Sorting indices is very common.
-        bench_patterns(c, test_size, "u64", |values| {
+        bench_patterns(c, test_len, "u64", |values| {
             values
                 .iter()
                 .map(|val| -> u64 {
@@ -849,19 +285,9 @@ fn criterion_benchmark(c: &mut Criterion) {
                 .collect()
         });
 
-        // bench_patterns(c, test_size, "rust_string", |values| {
-        //     // Strings are compared lexicographically, so we zero extend them to maintain the input
-        //     // order.
-        //     // See: https://godbolt.org/z/M38zTK6nv and https://godbolt.org/z/G18Yb7zoE
-        //     values
-        //         .iter()
-        //         .map(|val| format!("{:010}", val.saturating_abs()))
-        //         .collect()
-        // });
-
         // Larger type that is not Copy and does heap access.
         // FFI String
-        bench_patterns(c, test_size, "string", |values| {
+        bench_patterns(c, test_len, "string", |values| {
             values
                 .iter()
                 .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
@@ -869,70 +295,124 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
 
         // Very large stack value.
-        bench_patterns(c, test_size, "1k", |values| {
+        bench_patterns(c, test_len, "1k", |values| {
             values.iter().map(|val| FFIOneKiloByte::new(*val)).collect()
         });
 
         // 16 byte stack value that is Copy but has a relatively expensive cmp implementation.
-        bench_patterns(c, test_size, "f128", |values| {
+        bench_patterns(c, test_len, "f128", |values| {
             values.iter().map(|val| F128::new(*val)).collect()
         });
 
-        // use std::cmp::Ordering;
-        // use std::sync::Mutex;
+        #[cfg(feature = "bench_type_rust_string")]
+        {
+            bench_patterns(c, test_len, "rust_string", |values| {
+                // Strings are compared lexicographically, so we zero extend them to maintain the input
+                // order.
+                // See: https://godbolt.org/z/M38zTK6nv and https://godbolt.org/z/G18Yb7zoE
+                values
+                    .iter()
+                    .map(|val| format!("{:010}", val.saturating_abs()))
+                    .collect()
+            });
+        }
 
-        // #[derive(Debug)]
-        // struct ValWithMutex {
-        //     val: u64,
-        //     mutex: Mutex<u64>,
-        // }
+        #[cfg(feature = "bench_type_val_with_mutex")]
+        {
+            use std::cmp::Ordering;
+            use std::sync::Mutex;
 
-        // impl PartialEq for ValWithMutex {
-        //     fn eq(&self, other: &Self) -> bool {
-        //         self.val == other.val
-        //     }
-        // }
+            #[derive(Debug)]
+            struct ValWithMutex {
+                val: u64,
+                mutex: Mutex<u64>,
+            }
 
-        // impl Eq for ValWithMutex {}
+            impl PartialEq for ValWithMutex {
+                fn eq(&self, other: &Self) -> bool {
+                    self.val == other.val
+                }
+            }
 
-        // impl PartialOrd for ValWithMutex {
-        //     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        //         self.val.partial_cmp(&other.val)
-        //     }
-        // }
+            impl Eq for ValWithMutex {}
 
-        // impl Ord for ValWithMutex {
-        //     fn cmp(&self, other: &Self) -> Ordering {
-        //         self.partial_cmp(other).unwrap()
-        //     }
-        // }
+            impl PartialOrd for ValWithMutex {
+                fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                    self.val.partial_cmp(&other.val)
+                }
+            }
 
-        // bench_patterns(c, test_size, "val_with_mutex", |values| {
-        //     values
-        //         .iter()
-        //         .map(|val| -> ValWithMutex {
-        //             let mut val_u64 = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
-        //             val_u64 = val_u64.checked_mul(i32::MAX as u64).unwrap();
+            impl Ord for ValWithMutex {
+                fn cmp(&self, other: &Self) -> Ordering {
+                    self.partial_cmp(other).unwrap()
+                }
+            }
 
-        //             let mut this = ValWithMutex {
-        //                 val: val_u64,
-        //                 mutex: Mutex::new(val_u64),
-        //             };
+            bench_patterns(c, test_len, "val_with_mutex", |values| {
+                values
+                    .iter()
+                    .map(|val| -> ValWithMutex {
+                        let mut val_u64 = ((*val as i64) + (i32::MAX as i64) + 1) as u64;
+                        val_u64 = val_u64.checked_mul(i32::MAX as u64).unwrap();
 
-        //             // To make sure mutex is not optimized away.
-        //             this.val = *this.mutex.lock().unwrap();
+                        let mut this = ValWithMutex {
+                            val: val_u64,
+                            mutex: Mutex::new(val_u64),
+                        };
 
-        //             this
-        //         })
-        //         .collect()
-        // });
+                        // To make sure mutex is not optimized away.
+                        this.val = *this.mutex.lock().unwrap();
 
-        // bench_patterns(c, test_size, "u8", |values| {
-        //     values
-        //         .iter()
-        //         .map(|val| -> u8 { (val & u8::MAX as i32) as u8 })
-        //         .collect()
-        // });
+                        this
+                    })
+                    .collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u8")]
+        {
+            bench_patterns(c, test_len, "u8", |values| {
+                values
+                    .iter()
+                    .map(|val| -> u8 { (val & u8::MAX as i32) as u8 })
+                    .collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u16")]
+        {
+            bench_patterns(c, test_len, "u16", |values| {
+                values
+                    .iter()
+                    .map(|val| -> u16 { (val & u16::MAX as i32) as u16 })
+                    .collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u32")]
+        {
+            bench_patterns(c, test_len, "u32", |values| {
+                values
+                    .iter()
+                    .map(|val| -> u32 { (val & u32::MAX as i32) as u32 })
+                    .collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_u128")]
+        {
+            bench_patterns(c, test_len, "u128", |values| {
+                values
+                    .iter()
+                    .map(|val| -> u128 {
+                        // Extends the value into the 128 bit range,
+                        // while preserving input order.
+                        let x = ((*val as i128) + (i32::MAX as i128) + 1) as u128;
+                        x.checked_mul(i64::MAX as u128).unwrap()
+                    })
+                    .collect()
+            });
+        }
     }
 }
 

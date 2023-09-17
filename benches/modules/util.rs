@@ -48,7 +48,7 @@ pub fn cpu_max_freq_hz() -> Option<f64> {
 #[inline(never)]
 pub fn bench_fn<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
-    test_size: usize,
+    test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
     pattern_name: &str,
@@ -61,7 +61,7 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     // throughput.
     pin_thread_to_core();
 
-    let batch_size = if test_size > 30 {
+    let batch_size = if test_len > 30 {
         BatchSize::LargeInput
     } else {
         BatchSize::SmallInput
@@ -94,11 +94,11 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
         }
     }
 
-    let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_size}");
+    let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_len}");
     if is_bench_name_ok(&bench_name_hot) {
         c.bench_function(&bench_name_hot, |b| {
             b.iter_batched_ref(
-                || transform(pattern_provider(test_size)),
+                || transform(pattern_provider(test_len)),
                 |test_data| {
                     test_fn(black_box(test_data.as_mut_slice()));
                     black_box(test_data); // side-effect
@@ -111,12 +111,12 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "cold_benchmarks")]
     {
         let bench_name_cold =
-            format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_size}");
+            format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_len}");
         if is_bench_name_ok(&bench_name_cold) {
             c.bench_function(&bench_name_cold, |b| {
                 b.iter_batched_ref(
                     || {
-                        let mut test_ints = pattern_provider(test_size);
+                        let mut test_ints = pattern_provider(test_len);
 
                         if test_ints.len() == 0 {
                             return vec![];

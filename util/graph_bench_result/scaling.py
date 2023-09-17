@@ -52,8 +52,8 @@ def extract_line(ty, sort_name, pattern, values):
 
     # type_size_bytes = type_size(ty)
 
-    for test_size, val in sorted(values.items(), key=lambda x: x[0]):
-        if test_size < 1:
+    for test_len, val in sorted(values.items(), key=lambda x: x[0]):
+        if test_len < 1:
             continue
 
         for pattern_x, val2 in val.items():
@@ -64,8 +64,8 @@ def extract_line(ty, sort_name, pattern, values):
                 if sort_name_x != sort_name:
                     continue
 
-                x.append(test_size)
-                input_size_mil = (test_size) / 1e6
+                x.append(test_len)
+                input_size_mil = (test_len) / 1e6
                 bench_time_s = bench_time_ns / 1e9
                 million_elem_per_s = input_size_mil / bench_time_s
                 y.append(million_elem_per_s)

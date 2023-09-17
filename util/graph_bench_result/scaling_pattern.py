@@ -51,7 +51,7 @@ def add_tools_to_plot(plot):
     plot.toolbar.active_drag = TOOLS[1]
 
 
-def extract_line(sort_name, test_size, prefix, values):
+def extract_line(sort_name, test_len, prefix, values):
     def extract_property(pattern):
         return float(pattern.partition(prefix)[2].replace("_", "."))
 
@@ -59,7 +59,7 @@ def extract_line(sort_name, test_size, prefix, values):
     y = []
 
     for test_size_x, val in values.items():
-        if test_size_x != test_size:
+        if test_size_x != test_len:
             continue
 
         for pattern, val2 in sorted(
@@ -70,15 +70,15 @@ def extract_line(sort_name, test_size, prefix, values):
                     continue
 
                 x.append(extract_property(pattern))
-                elem_per_ns = test_size / bench_time_ns
+                elem_per_ns = test_len / bench_time_ns
                 elem_per_cycle = elem_per_ns / CPU_BOOST_GHZ
                 y.append(elem_per_cycle)
 
     return x, y
 
 
-def plot_scaling(ty, prediction_state, prefix, test_size, values):
-    plot_name = f"{prediction_state}-{ty}-{test_size}-scaling-{prefix}"
+def plot_scaling(ty, prediction_state, prefix, test_len, values):
+    plot_name = f"{prediction_state}-{ty}-{test_len}-scaling-{prefix}"
     plot = figure(
         title=plot_name,
         x_axis_label=f"{X_AXIS_LABEL} (log)",
@@ -96,7 +96,7 @@ def plot_scaling(ty, prediction_state, prefix, test_size, values):
     sort_names = sorted(list(list(values.values())[0].values())[0].keys())
 
     for sort_name in sort_names:
-        x, y = extract_line(sort_name, test_size, prefix, values)
+        x, y = extract_line(sort_name, test_len, prefix, values)
         color = COLOR_PALETTE[sort_name]
 
         data = {"x": x, "y": y, "name": [sort_name] * len(x)}
@@ -128,11 +128,11 @@ def plot_patterns(name, groups):
 
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
-            for test_size in test_sizes:
+            for test_len in test_sizes:
                 init_tools()
 
                 plot_name, plot = plot_scaling(
-                    ty, prediction_state, prefix, test_size, val2
+                    ty, prediction_state, prefix, test_len, val2
                 )
 
                 html = file_html(plot, CDN, plot_name)

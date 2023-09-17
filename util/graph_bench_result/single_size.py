@@ -71,7 +71,7 @@ def format_time(time_val):
 COLOR_PALETTE = build_color_palette()
 
 
-def plot_single_size(ty, prediction_state, test_size, values):
+def plot_single_size(ty, prediction_state, test_len, values):
     max_time_ns = max([max(val.values()) for val in values.values()])
     time_div, time_unit = find_time_scale(max_time_ns)
     max_time = max_time_ns / time_div
@@ -98,7 +98,7 @@ def plot_single_size(ty, prediction_state, test_size, values):
         }
     )
 
-    plot_name = f"{prediction_state}-{ty}-{test_size}"
+    plot_name = f"{prediction_state}-{ty}-{test_len}"
     plot = figure(
         x_axis_label=f"Time ({time_unit}) | Lower is better | {CPU_INFO}",
         x_range=(0, max_time * 1.1),
@@ -144,11 +144,11 @@ def plot_sizes(name, groups):
     # Assumes all entries were tested for the same patterns.
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
-            for test_size, val3 in val2.items():
+            for test_len, val3 in val2.items():
                 init_tools()
 
                 plot_name, plot = plot_single_size(
-                    ty, prediction_state, test_size, val3
+                    ty, prediction_state, test_len, val3
                 )
 
                 # show(plot)

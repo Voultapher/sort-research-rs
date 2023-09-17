@@ -79,8 +79,8 @@ def relative_speedup(time_a, time_b):
 def extract_line(sort_name_a, sort_name_b, pattern, values):
     x = []
     y = []
-    for test_size, val in sorted(values.items(), key=lambda x: x[0]):
-        if test_size < 1:
+    for test_len, val in sorted(values.items(), key=lambda x: x[0]):
+        if test_len < 1:
             continue
 
         for pattern_x, val2 in val.items():
@@ -89,7 +89,7 @@ def extract_line(sort_name_a, sort_name_b, pattern, values):
 
             bench_time_ns_a = val2[sort_name_a]
             bench_time_ns_b = val2[sort_name_b]
-            x.append(test_size)
+            x.append(test_len)
             y.append(relative_speedup(bench_time_ns_a, bench_time_ns_b))
 
     return x, y

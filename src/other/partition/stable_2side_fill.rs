@@ -23,27 +23,11 @@ unsafe impl<T: ?Sized> Freeze for *mut T {}
 unsafe impl<T: ?Sized> Freeze for &T {}
 unsafe impl<T: ?Sized> Freeze for &mut T {}
 
-#[const_trait]
-trait IsFreeze {
-    fn value() -> bool;
-}
-
-impl<T> const IsFreeze for T {
-    default fn value() -> bool {
-        false
-    }
-}
-
-impl<T: Freeze> const IsFreeze for T {
-    fn value() -> bool {
-        true
-    }
-}
-
 #[must_use]
 const fn is_int_like_type<T>() -> bool {
     // A heuristic that guesses whether a type looks like an int for optimization purposes.
-    <T as IsFreeze>::value() && mem::size_of::<T>() <= mem::size_of::<u64>()
+    /*<T as IsFreeze>::value() &&*/
+    mem::size_of::<T>() <= mem::size_of::<u64>()
 }
 
 /// Takes the input slice `v` and re-arranges elements such that when the call returns normally all

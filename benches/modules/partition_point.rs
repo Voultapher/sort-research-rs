@@ -6,12 +6,12 @@ use rand::prelude::*;
 
 use sort_comp::other::partition_point::{self, PartitionPoint};
 
-use crate::bench_other::util::bench_fn;
+use crate::modules::util::bench_fn;
 
 #[inline(never)]
 fn bench_impl<T: Ord + std::fmt::Debug, P: PartitionPoint>(
     c: &mut Criterion,
-    test_size: usize,
+    test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
     pattern_name: &str,
@@ -41,7 +41,7 @@ fn bench_impl<T: Ord + std::fmt::Debug, P: PartitionPoint>(
 
     bench_fn(
         c,
-        test_size,
+        test_len,
         transform_name,
         transform,
         pattern_name,
@@ -54,7 +54,7 @@ fn bench_impl<T: Ord + std::fmt::Debug, P: PartitionPoint>(
 pub fn bench<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
     _filter_arg: &str,
-    test_size: usize,
+    test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
     pattern_name: &str,
@@ -67,7 +67,7 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     bench_impl(
         c,
-        test_size,
+        test_len,
         transform_name,
         &transform,
         pattern_name,
@@ -77,7 +77,7 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     bench_impl(
         c,
-        test_size,
+        test_len,
         transform_name,
         &transform,
         pattern_name,
@@ -87,7 +87,7 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     bench_impl(
         c,
-        test_size,
+        test_len,
         transform_name,
         &transform,
         pattern_name,

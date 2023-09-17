@@ -20,8 +20,8 @@ def bucketize_comp_data(name: str):
             entry = line.partition("-comp-")[2]
 
             entry_parts = entry.split("-")
-            test_size = int(entry_parts[2].partition(":")[0])
-            if test_size <= 20:
+            test_len = int(entry_parts[2].partition(":")[0])
+            if test_len <= 20:
                 size_range = "-20-sub"
             else:
                 size_range = "-20-plus"

@@ -9,7 +9,7 @@ use criterion::{black_box, Criterion};
 
 use sort_comp::other::partition::{self, Partition};
 
-use crate::bench_other::util::{cpu_max_freq_hz, pin_thread_to_core};
+use crate::modules::util::{cpu_max_freq_hz, pin_thread_to_core};
 
 fn median(mut values: Vec<f64>) -> f64 {
     values.sort_unstable_by(|a, b| a.total_cmp(b));

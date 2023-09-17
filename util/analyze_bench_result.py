@@ -20,8 +20,8 @@ def extract_groups(bench_result):
 
     for benchmark, value in bench_result["benchmarks"].items():
         entry_parts = benchmark.split("-")
-        test_size = int(entry_parts[3].partition(":")[0])
-        # if test_size < 20:
+        test_len = int(entry_parts[3].partition(":")[0])
+        # if test_len < 20:
         #     size_range = "-20-sub"
         # else:
         #     size_range = "-20-plus"
@@ -29,7 +29,7 @@ def extract_groups(bench_result):
         ty = "-".join(entry_parts[:3])
         bench_time = value["criterion_estimates_v1"]["median"]["point_estimate"]
 
-        groups.setdefault(ty, {})[benchmark] = BenchEntry(bench_time, test_size)
+        groups.setdefault(ty, {})[benchmark] = BenchEntry(bench_time, test_len)
 
     return groups
 
