@@ -226,10 +226,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         pattern_providers.append(&mut extra_pattern_providers);
     }
 
-    let args = env::args().collect::<Vec<_>>();
-    // No clue how stable that is.
-    let filter_arg = &args[args.len() - 2];
-
     for (pattern_name, pattern_provider) in pattern_providers.iter() {
         if test_len < 3 && *pattern_name != "random" {
             continue;
@@ -237,7 +233,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
         bench_len_type_pattern_combo(
             c,
-            filter_arg,
             test_len,
             transform_name,
             &transform,

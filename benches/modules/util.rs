@@ -45,6 +45,21 @@ pub fn cpu_max_freq_hz() -> Option<f64> {
         .clone()
 }
 
+pub fn should_run_benchmark(name: &str) -> bool {
+    static FILTER_REGEX: OnceCell<Option<regex::Regex>> = OnceCell::new();
+
+    let filter_regex = FILTER_REGEX.get_or_init(|| {
+        env::var("BENCH_REGEX")
+            .ok()
+            .map(|filter_regex| Regex::new(&filter_regex).unwrap())
+    });
+
+    filter_regex
+        .as_ref()
+        .map(|reg| reg.is_match(name))
+        .unwrap_or(true)
+}
+
 #[inline(never)]
 pub fn bench_fn<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
@@ -67,21 +82,6 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
         BatchSize::SmallInput
     };
 
-    static FILTER_REGEX: OnceCell<Option<regex::Regex>> = OnceCell::new();
-
-    let is_bench_name_ok = |name: &str| -> bool {
-        let filter_regex = FILTER_REGEX.get_or_init(|| {
-            env::var("CUSTOM_BENCH_REGEX")
-                .ok()
-                .map(|filter_regex| Regex::new(&filter_regex).unwrap())
-        });
-
-        filter_regex
-            .as_ref()
-            .map(|reg| reg.is_match(name))
-            .unwrap_or(true)
-    };
-
     static NAME_OVERWRITE: OnceCell<Option<String>> = OnceCell::new();
 
     let name_overwrite = NAME_OVERWRITE.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
@@ -95,7 +95,7 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     }
 
     let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_len}");
-    if is_bench_name_ok(&bench_name_hot) {
+    if should_run_benchmark(&bench_name_hot) {
         c.bench_function(&bench_name_hot, |b| {
             b.iter_batched_ref(
                 || transform(pattern_provider(test_len)),
@@ -112,7 +112,7 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     {
         let bench_name_cold =
             format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_len}");
-        if is_bench_name_ok(&bench_name_cold) {
+        if should_run_benchmark(&bench_name_cold) {
             c.bench_function(&bench_name_cold, |b| {
                 b.iter_batched_ref(
                     || {

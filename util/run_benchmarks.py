@@ -30,13 +30,13 @@ def run_benchmarks(test_name):
     if os.path.exists(crit_dir):
         shutil.rmtree(crit_dir)
 
-    if "CUSTOM_BENCH_REGEX" not in os.environ:
+    if "BENCH_REGEX" not in os.environ:
         user_val = input(
             "Are you sure you want to run all the benchmarks without a custom filter? This may take days to complete. [y/N]"
         )
         if user_val.lower().strip() != "y":
             print(
-                "\nSpecify a custom filter by setting the enviroment variable CUSTOM_BENCH_REGEX. See the README.md for more info."
+                "\nSpecify a custom filter by setting the enviroment variable BENCH_REGEX. See the README.md for more info."
             )
             sys.exit(1)
 

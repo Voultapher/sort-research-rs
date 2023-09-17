@@ -53,7 +53,6 @@ fn bench_impl<T: Ord + std::fmt::Debug, P: PartitionPoint>(
 
 pub fn bench<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
-    _filter_arg: &str,
     test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,

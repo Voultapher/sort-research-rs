@@ -13,7 +13,6 @@ pub mod partition;
 #[allow(unused)]
 pub fn bench_len_type_pattern_combo<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
-    filter_arg: &str,
     test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
@@ -26,7 +25,6 @@ pub fn bench_len_type_pattern_combo<T: Ord + std::fmt::Debug>(
             "partition_point" => {
                 partition_point::bench(
                     c,
-                    filter_arg,
                     test_len,
                     transform_name,
                     transform,
@@ -38,7 +36,6 @@ pub fn bench_len_type_pattern_combo<T: Ord + std::fmt::Debug>(
             "partition" => {
                 partition::bench(
                     c,
-                    filter_arg,
                     test_len,
                     transform_name,
                     transform,
@@ -54,7 +51,6 @@ pub fn bench_len_type_pattern_combo<T: Ord + std::fmt::Debug>(
     } else {
         sort::bench(
             c,
-            filter_arg,
             test_len,
             transform_name,
             transform,

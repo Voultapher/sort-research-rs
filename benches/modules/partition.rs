@@ -9,7 +9,7 @@ use criterion::{black_box, Criterion};
 
 use sort_comp::other::partition::{self, Partition};
 
-use crate::modules::util::{cpu_max_freq_hz, pin_thread_to_core};
+use crate::modules::util::{cpu_max_freq_hz, pin_thread_to_core, should_run_benchmark};
 
 fn median(mut values: Vec<f64>) -> f64 {
     values.sort_unstable_by(|a, b| a.total_cmp(b));
@@ -18,7 +18,6 @@ fn median(mut values: Vec<f64>) -> f64 {
 }
 
 fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
-    filter_arg: &str,
     test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
@@ -32,14 +31,14 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     pin_thread_to_core();
 
     let bench_name = format!(
-        "{}-{}-{}-{}-",
+        "{}-{}-{}-{}",
         P::name(),
         transform_name,
         pattern_name,
         test_len
     );
 
-    if !bench_name.contains(filter_arg) {
+    if !should_run_benchmark(&bench_name) {
         return;
     }
 
@@ -259,7 +258,6 @@ where
 
 pub fn bench<T: Ord + std::fmt::Debug>(
     _c: &mut Criterion,
-    filter_arg: &str,
     test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
@@ -288,7 +286,6 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     macro_rules! bench_inst {
         ($partition_impl:ident) => {
             bench_partition_impl(
-                filter_arg,
                 test_len,
                 transform_name,
                 transform,

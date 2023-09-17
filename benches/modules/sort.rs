@@ -49,7 +49,6 @@ fn measure_comp_count<S: Sort, T: Ord + std::fmt::Debug>(
 
 pub fn bench_fn<S: Sort, T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
-    filter_arg: &str,
     test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
@@ -64,7 +63,7 @@ pub fn bench_fn<S: Sort, T: Ord + std::fmt::Debug>(
             bench_name, transform_name, pattern_name, test_len
         );
 
-        if name.contains(filter_arg) {
+        if util::should_run_benchmark(&name) {
             measure_comp_count::<S, T>(&name, test_len, transform, pattern_provider);
         }
     } else {
@@ -83,7 +82,6 @@ pub fn bench_fn<S: Sort, T: Ord + std::fmt::Debug>(
 
 pub fn bench<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
-    filter_arg: &str,
     test_len: usize,
     transform_name: &str,
     transform: &fn(Vec<i32>) -> Vec<T>,
@@ -96,7 +94,6 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
             bench_fn::<SortImpl, T>(
                 c,
-                filter_arg,
                 test_len,
                 transform_name,
                 transform,

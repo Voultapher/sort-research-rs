@@ -52,14 +52,14 @@ cargo bench random
 You can also set a custom regex to filter the benchmarks you want to run:
 
 ```
-CUSTOM_BENCH_REGEX="std.*i32-random-8$" cargo bench
+BENCH_REGEX="std.*i32-random-8$" cargo bench
 ```
 
 If you want to collect a set of results that can then later be used to create graphs, you can use the `run_benchmarks.py` utility script:
 
 ```
 # Will write results to my_test_zen3.json
-CUSTOM_BENCH_REGEX="_stable.*random-" python util/run_benchmarks.py my_test_zen3
+BENCH_REGEX="_stable.*random-" python util/run_benchmarks.py my_test_zen3
 ```
 
 To run the `graph_all.py` script to create graphs from this data you need to first install the dependencies as specified in requirements.txt e.g. on Linux:
