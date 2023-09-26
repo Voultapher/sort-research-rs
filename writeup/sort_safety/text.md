@@ -16,7 +16,7 @@ Bias disclaimer. The author of this analysis is the author of ipnsort.
 
 Implementing a sort operation with the help of computers goes back to the early 1950s. The problem statement is deceptively simple. Take a list of elements and use a comparison function that implements a [strict weak ordering](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings) to swap elements until it's sorted. Now, 70 years later new and more resource-efficient ways to implement this operation are still being discovered. It's an active field of study in science, [BlockQuicksort](https://arxiv.org/pdf/1604.06697.pdf) 2016, [ips4o](https://arxiv.org/pdf/1705.02257.pdf) 2017, [pdqsort](https://arxiv.org/pdf/2106.05123.pdf) 2021, [Multiway Powersort](https://arxiv.org/pdf/2209.06909.pdf) 2022, and many more. There are various directions science is exploring. Efficient sort implementations running single threaded on modern superscalar, out-of-order and speculative CPUs. Efficient implementations running on multiple such threads. Implementations running on massively parallel in-order GPUs. Exploration of better best-case, average-case and worst-case runtime. Exploiting existing patterns in the input data. Exploration of different characteristics, stable/unstable in-place/allocating and more. This analysis focuses on a lesser known and talked about aspect. How do implementations deal with a user-defined comparison function that implements arbitrary logic, may not implement a strict weak ordering, may leave the function without returning and can modify values as they are being compared.
 
-The words sort implementation and sort algorithm, are expressly *not* used interchangeably. Practically all modern implementations are hybrids, using multiple sort algorithms.
+The words sort implementation and sort algorithm, are explicitly *not* used interchangeably. Practically all modern implementations are hybrids, using multiple sort algorithms.
 
 ## Safe-to-use abstractions
 
@@ -58,7 +58,7 @@ Say the user wants to sort this input of integers:
 [6, 3, 3, 2, 9, 1]
 ```
 
-By mistake a comparison function is provided which does implement the required strict weak ordering. What are possible outcomes?
+By mistake a comparison function is provided which does not implement the required strict weak ordering. What are possible outcomes?
 
 ```
 A: [2, 3, 9, 3, 1, 6]
@@ -70,9 +70,9 @@ F: UB
 ```
 
 By definition the result cannot be the input sorted by the predicate, the concept of "sorted" is nonsense without strict weak ordering. Yet not all possible outcomes are equal. Variant A returns after some time to the user and leaves the input in an unspecified order. The set of elements remains the same. Variant B is the same, with addition of raising
-an exception in C++ and a panic in Rust informing the user of the logic bug in their program. Variant C also returns after some time but duplicated some elements and "looses" some elements. Variant D "invents" new elements that were never found in the original input. Variant E never returns to the user. And Variant F could be a wide range things like an out-of-bounds read that causes a CPU MMU exception, illegal CPU instructions, stack smashing,altering unrelated program state and more.
+an exception in C++ and a panic in Rust informing the user of the logic bug in their program. Variant C also returns after some time but duplicated some elements and "looses" some elements. Variant D "invents" new elements that were never found in the original input. Variant E never returns to the user. And Variant F could be a wide range things like an out-of-bounds read that causes a CPU MMU exception, illegal CPU instructions, stack smashing, altering unrelated program state and more.
 
-If the sort operation is understood as a series of swaps, C, D and E can all be quite surprising. How could they lead to UB?
+If the sort operation is understood as a series of swaps, C, D, E and F can all be quite surprising. How could they lead to UB?
 
 - **C**: The duplication usually happens at the bit level, ignoring type semantics. If the element type is for example a `unique_ptr<int32_t>`/`Box<i32>`, these types assume unique ownership of an allocation. And their destructors will hand a pointer to the allocator for freeing. A bitwise copy results in use-after-free UB, most likely in the form of a double-free.
 - **D**: Same as Variant C, with the addition of arbitrary UB usually caused by interpreting uninitialized memory as a valid occupancy of a type.
@@ -110,7 +110,7 @@ In practice a lack of exception safety manifests itself in the variants C and or
 
 ### Observation safety
 
-Both C++ and Rust offer ways to mutate a value through a const/shared reference. In Rust this is called interior mutability. C++ achieves this with the help of the `mutable` type specifier, while Rust builds safe-to-use abstractions on top of the language builtin `UnsafeCell`. As a consequence of this it's possible to observe every call to the user-provided comparison function as a stack value modification. However, as soon as auxiliary memory, be it stack or heap, is used, unsafe bitwise duplications of the object are performed. If such a duplicated element is used as input to the user-provided comparison function, it may be modified in a way that must be observed when the sort completes, either by returning normally or by raising an exception/panic. A benign scenario with surprising consequences would be counting the comparisons performed by incrementing a counter held within the elements inside each call to the user-provided comparison function. If the property of guaranteed observable comparison is not met, the result may be wildly inaccurate in describing how many times the user-provided comparison function has been called. A more problematic scenario invoking UB would be, a user-defined type holding a pointer that is conditionally freed and set to null as part of the user-provided comparison function. If this modification is not observed after the sort completes, code that relies on a null-pointer check to see if it was already freed will run into use-after-free UB.
+Both C++ and Rust offer ways to mutate a value through a const/shared reference. In Rust this is called interior mutability. C++ achieves this with the help of the `mutable` type specifier, while Rust builds safe-to-use abstractions on top of the language builtin `UnsafeCell`. As a consequence of this it's possible to observe every call to the user-provided comparison function as a stack value modification. As soon as auxiliary memory, be it stack or heap, is used, unsafe bitwise duplications of the object are performed. If such a duplicated element is used as input to the user-provided comparison function, it may be modified in a way that must be observed when the sort completes, either by returning normally or by raising an exception/panic. A benign scenario with surprising consequences would be counting the comparisons performed by incrementing a counter held within the elements inside each call to the user-provided comparison function. If the property of guaranteed observable comparison is not met, the result may be wildly inaccurate in describing how many times the user-provided comparison function has been called. A more problematic scenario invoking UB would be, a user-defined type holding a pointer that is conditionally freed and set to null as part of the user-provided comparison function. If this modification is not observed after the sort completes, code that relies on a null-pointer check to see if it was already freed will run into use-after-free UB.
 
 C++:
 
