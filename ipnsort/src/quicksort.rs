@@ -156,9 +156,9 @@ trait PartitionImpl: Sized {
 }
 
 impl<T> PartitionImpl for T {
-    default fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    default fn partition<F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
     where
-        F: FnMut(&Self, &Self) -> bool,
+        F: FnMut(&T, &T) -> bool,
     {
         partition_hoare_branchy_cyclic(v, pivot, is_less)
     }
@@ -172,9 +172,9 @@ impl<T> PartitionImpl for T
 where
     (): IsTrue<{ mem::size_of::<T>() <= MAX_BRANCHLESS_PARTITION_SIZE }>,
 {
-    fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
+    fn partition<F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
     where
-        F: FnMut(&Self, &Self) -> bool,
+        F: FnMut(&T, &T) -> bool,
     {
         partition_lomuto_branchless_cyclic(v, pivot, is_less)
     }

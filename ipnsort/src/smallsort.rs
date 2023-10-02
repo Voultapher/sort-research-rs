@@ -18,9 +18,9 @@ pub(crate) trait SmallSortImpl: Sized {
 impl<T> SmallSortImpl for T {
     default const SMALL_SORT_THRESHOLD: usize = 20;
 
-    default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    default fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
-        F: FnMut(&Self, &Self) -> bool,
+        F: FnMut(&T, &T) -> bool,
     {
         if v.len() >= 2 {
             insertion_sort_shift_left(v, 1, is_less);
@@ -31,9 +31,9 @@ impl<T> SmallSortImpl for T {
 impl<T: Freeze> SmallSortImpl for T {
     default const SMALL_SORT_THRESHOLD: usize = 20;
 
-    default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    default fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
-        F: FnMut(&Self, &Self) -> bool,
+        F: FnMut(&T, &T) -> bool,
     {
         small_sort_general(v, is_less);
     }
@@ -46,9 +46,9 @@ where
 {
     const SMALL_SORT_THRESHOLD: usize = 32;
 
-    fn small_sort<F>(v: &mut [Self], is_less: &mut F)
+    fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
-        F: FnMut(&Self, &Self) -> bool,
+        F: FnMut(&T, &T) -> bool,
     {
         // I suspect that generalized efficient indirect branchless sorting constructs like
         // sort4_indirect for larger sizes exist. But finding them is an open research problem.
