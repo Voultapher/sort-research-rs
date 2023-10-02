@@ -22,7 +22,7 @@ pub(crate) fn quicksort<'a, T, F>(
     loop {
         // println!("len: {}", v.len());
 
-        if v.len() <= T::MAX_SMALL_SORT_LEN {
+        if v.len() <= T::SMALL_SORT_THRESHOLD {
             T::small_sort(v, is_less);
             return;
         }

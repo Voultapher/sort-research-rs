@@ -16,7 +16,7 @@ where
 {
     let len = v.len();
 
-    if len < T::MAX_SMALL_SORT_LEN {
+    if len < T::SMALL_SORT_THRESHOLD {
         // It's a logic bug if this get's called on slice that would be small-sorted.
         intrinsics::abort();
     }

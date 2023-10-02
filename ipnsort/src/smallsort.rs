@@ -7,7 +7,7 @@ use crate::{has_efficient_in_place_swap, Freeze, GapGuard, IsTrue};
 // Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
 // LLVM-IR for the sorting-network and median-networks for types that don't qualify.
 pub(crate) trait SmallSortImpl: Sized {
-    const MAX_SMALL_SORT_LEN: usize;
+    const SMALL_SORT_THRESHOLD: usize;
 
     /// Sorts `v` using strategies optimized for small sizes.
     fn small_sort<F>(v: &mut [Self], is_less: &mut F)
@@ -16,7 +16,7 @@ pub(crate) trait SmallSortImpl: Sized {
 }
 
 impl<T> SmallSortImpl for T {
-    default const MAX_SMALL_SORT_LEN: usize = 20;
+    default const SMALL_SORT_THRESHOLD: usize = 20;
 
     default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
     where
@@ -29,7 +29,7 @@ impl<T> SmallSortImpl for T {
 }
 
 impl<T: Freeze> SmallSortImpl for T {
-    default const MAX_SMALL_SORT_LEN: usize = 20;
+    default const SMALL_SORT_THRESHOLD: usize = 20;
 
     default fn small_sort<F>(v: &mut [Self], is_less: &mut F)
     where
@@ -44,7 +44,7 @@ where
     T: Freeze + Copy,
     (): IsTrue<{ has_efficient_in_place_swap::<T>() }>,
 {
-    const MAX_SMALL_SORT_LEN: usize = 32;
+    const SMALL_SORT_THRESHOLD: usize = 32;
 
     fn small_sort<F>(v: &mut [Self], is_less: &mut F)
     where
@@ -372,7 +372,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
-    const MAX_BRANCHLESS_SMALL_SORT: usize = i32::MAX_SMALL_SORT_LEN;
+    const MAX_BRANCHLESS_SMALL_SORT: usize = i32::SMALL_SORT_THRESHOLD;
 
     if len < 18 || len > MAX_BRANCHLESS_SMALL_SORT {
         intrinsics::abort();
@@ -450,10 +450,10 @@ where
     let len = v.len();
 
     if len >= 2 {
-        const SCRATCH_LEN: usize = String::MAX_SMALL_SORT_LEN + 16;
+        const SCRATCH_LEN: usize = String::SMALL_SORT_THRESHOLD + 16;
         let mut scratch = MaybeUninit::<[T; SCRATCH_LEN]>::uninit();
 
-        if SCRATCH_LEN < (T::MAX_SMALL_SORT_LEN + 16) {
+        if SCRATCH_LEN < (T::SMALL_SORT_THRESHOLD + 16) {
             intrinsics::abort();
         }
 
@@ -470,14 +470,14 @@ where
                     // SAFETY: scratch_base is valid and has enough space.
                     sort8_stable(
                         v_base,
-                        scratch_base.add(T::MAX_SMALL_SORT_LEN),
+                        scratch_base.add(T::SMALL_SORT_THRESHOLD),
                         scratch_base,
                         is_less,
                     );
 
                     sort8_stable(
                         v_base.add(len_div_2),
-                        scratch_base.add(T::MAX_SMALL_SORT_LEN + 8),
+                        scratch_base.add(T::SMALL_SORT_THRESHOLD + 8),
                         scratch_base.add(len_div_2),
                         is_less,
                     );
