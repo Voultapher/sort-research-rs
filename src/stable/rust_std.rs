@@ -326,6 +326,8 @@ where
 {
     let len = v.len();
     let v = v.as_mut_ptr();
+
+    // SAFETY: mid and len must be in-bounds of v.
     let (v_mid, v_end) = unsafe { (v.add(mid), v.add(len)) };
 
     // The merge process first copies the shorter run into `buf`. Then it traces the newly copied
@@ -349,6 +351,8 @@ where
 
     if mid <= len - mid {
         // The left run is shorter.
+
+        // SAFETY: buf must have enough capacity for `v[..mid]`.
         unsafe {
             ptr::copy_nonoverlapping(v, buf, mid);
             hole = MergeHole {
@@ -366,17 +370,21 @@ where
         while *left < hole.end && right < v_end {
             // Consume the lesser side.
             // If equal, prefer the left run to maintain stability.
+
+            // SAFETY: left and right must be valid and part of v same for out.
             unsafe {
-                let to_copy = if is_less(&*right, &**left) {
-                    get_and_increment(&mut right)
-                } else {
-                    get_and_increment(left)
-                };
-                ptr::copy_nonoverlapping(to_copy, get_and_increment(out), 1);
+                let is_l = is_less(&*right, &**left);
+                let to_copy = if is_l { right } else { *left };
+                ptr::copy_nonoverlapping(to_copy, *out, 1);
+                *out = out.add(1);
+                right = right.add(is_l as usize);
+                *left = left.add(!is_l as usize);
             }
         }
     } else {
         // The right run is shorter.
+
+        // SAFETY: buf must have enough capacity for `v[mid..]`.
         unsafe {
             ptr::copy_nonoverlapping(v_mid, buf, len - mid);
             hole = MergeHole {
@@ -394,29 +402,20 @@ where
         while v < *left && buf < *right {
             // Consume the greater side.
             // If equal, prefer the right run to maintain stability.
+
+            // SAFETY: left and right must be valid and part of v same for out.
             unsafe {
-                let to_copy = if is_less(&*right.offset(-1), &*left.offset(-1)) {
-                    decrement_and_get(left)
-                } else {
-                    decrement_and_get(right)
-                };
-                ptr::copy_nonoverlapping(to_copy, decrement_and_get(&mut out), 1);
+                let is_l = is_less(&*right.sub(1), &*left.sub(1));
+                *left = left.sub(is_l as usize);
+                *right = right.sub(!is_l as usize);
+                let to_copy = if is_l { *left } else { *right };
+                out = out.sub(1);
+                ptr::copy_nonoverlapping(to_copy, out, 1);
             }
         }
     }
     // Finally, `hole` gets dropped. If the shorter run was not fully consumed, whatever remains of
     // it will now be copied into the hole in `v`.
-
-    unsafe fn get_and_increment<T>(ptr: &mut *mut T) -> *mut T {
-        let old = *ptr;
-        *ptr = unsafe { ptr.offset(1) };
-        old
-    }
-
-    unsafe fn decrement_and_get<T>(ptr: &mut *mut T) -> *mut T {
-        *ptr = unsafe { ptr.offset(-1) };
-        *ptr
-    }
 
     // When dropped, copies the range `start..end` into `dest..`.
     struct MergeHole<T> {
@@ -427,7 +426,7 @@ where
 
     impl<T> Drop for MergeHole<T> {
         fn drop(&mut self) {
-            // `T` is not a zero-sized type, and these are pointers into a slice's elements.
+            // SAFETY: `T` is not a zero-sized type, and these are pointers into a slice's elements.
             unsafe {
                 let len = self.end.sub_ptr(self.start);
                 ptr::copy_nonoverlapping(self.start, self.dest, len);
