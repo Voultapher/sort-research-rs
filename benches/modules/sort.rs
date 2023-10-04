@@ -140,9 +140,6 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     bench_inst!(unstable::rust_std);
 
-    #[cfg(feature = "cpp_std_sys")]
-    bench_inst!(stable::cpp_std_sys);
-
     #[cfg(feature = "rust_dmsort")]
     bench_inst!(unstable::rust_dmsort);
 
