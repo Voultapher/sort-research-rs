@@ -173,6 +173,14 @@ fn build_and_link_cpp_gerbens_qsort() {
 #[cfg(not(feature = "cpp_gerbens_qsort"))]
 fn build_and_link_cpp_gerbens_qsort() {}
 
+#[cfg(feature = "c_std_sys")]
+fn build_and_link_c_std_sys() {
+    build_and_link_cpp_sort("c_std_sys", None);
+}
+
+#[cfg(not(feature = "c_std_sys"))]
+fn build_and_link_c_std_sys() {}
+
 #[cfg(feature = "c_crumsort")]
 fn build_and_link_c_crumsort() {
     build_and_link_cpp_sort(
@@ -275,6 +283,7 @@ fn main() {
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
     build_and_link_cpp_gerbens_qsort();
+    build_and_link_c_std_sys();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
     build_and_link_cpp_std_sys();

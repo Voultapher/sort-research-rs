@@ -26,6 +26,10 @@ pub mod cpp_blockquicksort;
 #[cfg(feature = "cpp_gerbens_qsort")]
 pub mod cpp_gerbens_qsort;
 
+// Call qsort sort via FFI.
+#[cfg(feature = "c_std_sys")]
+pub mod c_std_sys;
+
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
 pub mod c_crumsort;

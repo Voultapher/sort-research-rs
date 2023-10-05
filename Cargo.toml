@@ -80,6 +80,7 @@ default = [
     # "cpp_ips4o",
     # "cpp_blockquicksort",
     # "cpp_gerbens_qsort",
+    # "c_std_sys",
     # "c_crumsort",
     # "c_fluxsort",
     # "singeli_singelisort",
@@ -135,6 +136,10 @@ cpp_blockquicksort = []
 # Enable Gerben Stavenga's QuickSort https://github.com/gerben-s/quicksort-blog-post
 # Uses system C++ standard lib.
 cpp_gerbens_qsort = []
+
+# Enable support for C qsort.
+# Uses system C standard lib.
+c_std_sys = []
 
 # Enable crumsort by Igor van den Hoven.
 # Uses system C++ standard lib.
