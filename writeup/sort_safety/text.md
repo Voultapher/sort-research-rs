@@ -1,11 +1,11 @@
-# A categorization of memory safety for various sort implementations
+# Safety vs Performance. A case study of C, C++ and Rust sort implementations.
 
 Author: Lukas Bergdoll @Voultapher  
-Date: 04-10-2023 (DD-MM-YYYY)
+Date: 05-10-2023 (DD-MM-YYYY)
 
-This is an analysis of sort implementations and their ability, or lack thereof, to avoid undefined behavior (UB) under various usage scenarios.
+This is an analysis of sort implementations and their ability, or lack thereof, to avoid undefined behavior (UB) under various usage scenarios, and whether this affects their performance.
 
-TL;DR: The combination of complex generic implementations striving for performance with arbitrary logic in user-defined comparison functions, makes generic high-performance sort implementations particularly difficult to implement in a way that avoids UB under every usage scenario. Even a sort implementation using only memory-safe abstractions might not be enough to guarantee UB free adjacent logic.
+TL;DR: The combination of complex generic implementations striving for performance with arbitrary logic in user-defined comparison functions, makes generic high-performance sort implementations particularly difficult to implement in a way that avoids UB under every usage scenario. Even a sort implementation using only memory-safe abstractions are not be enough to guarantee UB free adjacent logic. Overall no correlation between performance and safety could be found, nor whether safe or unsafe internal abstractions are used. However a strong correlation between being implemented for C or C++ users and a lack of safety presents itself.
 
 ---
 
@@ -20,7 +20,7 @@ The words sort implementation and sort algorithm, are explicitly *not* used inte
 
 ## Safe-to-use abstractions
 
-The Rust language has a concept of safe and unsafe interfaces. A safe interface is sound if the implementation avoids UB no matter how it is used, a property that composes. An implementation composed entirely of the usage of other safe interfaces is considered safe. However in the presence of other adjacent unsafe code, further considerations arise. This puts the burden on the interface designers and implementers, instead of the users. The C++ standard has a similar concept, called wide and narrow contracts, and while conceptually it's possible to design interfaces in C++ who's usage cannot lead to UB, common abstraction including standard library types like `std::vector` or algorithms like `std::sort` do not make such promises.
+The Rust language has a concept of safe and unsafe interfaces. A safe interface is sound if the implementation avoids UB no matter how it is used, a property that composes. An implementation composed entirely of the usage of other safe interfaces is considered safe. However, in the presence of other adjacent unsafe code, further considerations arise. This puts the burden on the interface designers and implementers, instead of the users. The C++ standard has a similar concept, called wide and narrow contracts, and while conceptually it's possible to design interfaces in C++ whose usage cannot lead to UB, common abstraction including standard library types like `std::vector` or algorithms like `std::sort` do not make such promises.
 
 With the exception of rust_crumsort_rs_unstable, all Rust sort implementations considered in this analysis use unsafe abstractions in their implementations.
 
@@ -170,9 +170,9 @@ The C language has no constructs that would allow safe modifications through a c
 - rust_std_stable             | `slice::sort` https://github.com/rust-lang/rust (Vendored mid 2022)
 - rust_wpwoodjr_stable        | https://github.com/wpwoodjr/rust-merge-sort (Vendored mid 2022)
 - rust_glidesort_stable       | https://github.com/orlp/glidesort (version 0.1.2)
-- cpp_std_gnu_stable          | libstdc++ `std::stable_sort` (gcc 12.2)
-- cpp_std_libcxx_stable       | libc++ `std::stable_sort` (clang 15.0)
-- cpp_std_msvc_stable         | MSVC (runtime library version 14.30)
+- cpp_std_gnu_stable          | libstdc++ `std::stable_sort` (gcc 13.2.1)
+- cpp_std_libcxx_stable       | libc++ `std::stable_sort` (clang 16.0.6)
+- cpp_std_msvc_stable         | MSVC `std::stable_sort` (runtime library version 14.30)
 - cpp_powersort_stable        | https://github.com/sebawild/powersort (Vendored mid 2022)
 - cpp_powersort_4way_stable   | https://github.com/sebawild/powersort (Vendored mid 2022)
 - c_fluxsort_stable           | https://github.com/scandum/fluxsort (Vendored early 2023)
@@ -183,11 +183,11 @@ The C language has no constructs that would allow safe modifications through a c
 ```
 - rust_std_unstable           | `slice::sort_unstable` https://github.com/rust-lang/rust (Vendored mid 2022)
 - rust_dmsort_unstable        | https://github.com/emilk/drop-merge-sort (version 1.0)
-- rust_ipnsort_unstable       | https://github.com/Voultapher/sort-research-rs/tree/main/ipnsort (2fa4e4f)
+- rust_ipnsort_unstable       | https://github.com/Voultapher/sort-research-rs/tree/main/ipnsort (757478b)
 - rust_crumsort_rs_unstable   | https://github.com/google/crumsort-rs (version 0.1)
-- cpp_std_gnu_unstable        | libstdc++ `std::sort` (gcc 12.2)
-- cpp_std_libcxx_unstable     | libc++ `std::sort` (clang 15.0)
-- cpp_std_msvc_unstable       | MSVC (runtime library version 14.30)
+- cpp_std_gnu_unstable        | libstdc++ `std::sort` (gcc 13.2.1)
+- cpp_std_libcxx_unstable     | libc++ `std::sort` (clang 16.0.6)
+- cpp_std_msvc_unstable       | MSVC `std::sort` (runtime library version 14.30)
 - cpp_pdqsort_unstable        | https://github.com/orlp/pdqsort (Vendored mid 2022)
 - cpp_ips4o_unstable          | https://github.com/ips4o/ips4o (Vendored mid 2022)
 - cpp_blockquicksort_unstable | https://github.com/weissan/BlockQuicksort (Vendored mid 2022)
@@ -221,7 +221,7 @@ Properties:
 | rust_ipnsort_unstable        | ✅         | ✅      | O or E ✅  | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
 | rust_crumsort_rs_unstable    | ✅         | ⚠️ (4)  | D 🚫       | 🚫 (6)           | 1: -  2: -         | S: ⚠️ T: ⚠️ (8) |
 | cpp_std_gnu_unstable         | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_std_libcxx_unstable      | ✅         | ✅      | L 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_std_libcxx_unstable      | ✅         | ✅      | L or C 🚫  | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_std_msvc_unstable        | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_pdqsort_unstable         | ✅         | ✅      | L or C 🚫  | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_ips4o_unstable           | ✅         | ✅      | C 🚫       | 🚫               | 1: 🚫 2: 🚫        | -               |
@@ -248,9 +248,59 @@ Footnotes:
 - rust_dmsort_unstable shows that even if exception safety and the first kind of observation safety are given, having the second kind of observation safety is not a guarantee. ([reported issue](https://github.com/emilk/drop-merge-sort/issues/23))
 - Similar to C++, the language rules of Rust are defined in terms of an abstract machine and not one concrete implementation. And UB is a violation of said rules, a violation that is assumed will never happen. Thus it is possible to perform certain optimizations under the assumptions that certain properties that are tricky or impossible to prove for the compiler are true. For more information about this, see [this talk](https://youtu.be/yG1OZ69H_-o) by Chandler Carruth. Miri is a tool to run Rust code inside a virtual machine that tries to find UB in unsafe code, by strictly modeling said abstract machine, checking as many properties as possible. It checks alignment, aliasing and more. Aliasing in particular is still an open topic in Rust. Miri uses by default the [Stacked Borrows](https://plv.mpi-sws.org/rustbelt/stacked-borrows/paper.pdf) aliasing model for unsafe Rust code. And while code may fail under Miri it is not always clear if that is a serious concern. This can only be answered once Rust has settled on an aliasing model. With the introduction of [Tree Borrows](https://perso.crans.org/vanille/treebor/) there are now two different aliasing models that can be used with Miri. Inadvertently these results validate one of the goals of Tree Borrows, having an aliasing model that avoids surprising authors of unsafe code. Both rust_wpwoodjr_stable and rust_dmsort_unstable fail the test suite with Stacked Borrows and pass it under the rules set by Tree Borrows.
 
+## Performance
+
+### Benchmark setup
+
+```
+Linux 6.5
+rustc 1.75.0-nightly (187b8131d 2023-10-03)
+clang version 16.0.6
+gcc version 13.2.1
+AMD Ryzen 9 5900X 12-Core Processor (Zen 3 micro-architecture)
+CPU boost enabled.
+```
+
+Rust code built with `--release` and `lto=thin` and native code build settings can be found [here](https://github.com/Voultapher/sort-research-rs/blob/190b3ec27f616c139370285b2b8534d1c5eaec1b/build.rs).
+
+Some sort implementations are adaptive, they will try to exploit existing patterns in the data to do less work. A breakdown of the benchmark patterns:
+
+- `ascending`, numbers `0..len`
+- `descending`, numbers `0..len` reversed
+- `random`, random numbers generated by rand `StdRng::gen` [[2](https://github.com/rust-random/rand)]
+- `random_d20`, uniform random numbers in the range `0..=20`
+- `random_p5`, 95% 0 and 5% random data, not uniform
+- `random_s95`, 95% sorted followed by 5% unsorted, simulates append -> sort
+- `random_z1`, Zipfian distribution with characterizing exponent s == 1.0 [[3](https://en.wikipedia.org/wiki/Zipf%27s_law)]
+
+### Results
+
+Only 10k `u64` are tested on Zen 3. A more in depth look at performance of unstable sort implementations [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md) and performance of stable sort implementations [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/glidesort_perf_analysis/text.md). Beware updates to some of the tested implementations and toolchains make the results not directly comparable with the results below.
+
+#### Stable
+
+<img src="assets/stable-hot-u64-10k.png" width=810 />
+
+#### Unstable
+
+<img src="assets/unstable-hot-u64-10k.png" width=810 />
+
+
+## libc++'s (libcxx) new `std::sort`
+
+This is an attempt to untangling the update to libc++'s `std::sort`. A rough timeline to the best of the author's knowledge:
+
+- March 2022 [PR for libc++ opened](https://reviews.llvm.org/D122780)
+- April 2022 [blog post by Danila Kutenin](https://danlark.org/2022/04/20/changing-stdsort-at-googles-scale-and-beyond)
+- December 2022 PR merged, on-track for LLVM 16 release
+- April 2023 [change is reverted on feature branch due to Ord safety concerns](https://github.com/llvm/llvm-project/commit/9ec8096d0d50a353a5bc5a91064c6332bd634021)
+- May 2023 [out-of-bounds read mitigations are added](https://github.com/llvm/llvm-project/commit/36d8b449cfc9850513bb2ed6c07b5b8cc9f1ae3a)
+
+As it stands the updated `std::sort` is on track for LLVM 17. To add to the confusion, the PR title and blog post talk about a partition implementation based on [BlockQuickSort](https://github.com/weissan/BlockQuicksort), but the merged version uses a similar but notably different implementation derived from [bitsetsort](https://github.com/minjaehwang/bitsetsort).
+
 ## Author's conclusion and opinion
 
-As demonstrated [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md) and [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/glidesort_perf_analysis/text.md), the current Rust standard library implementations outperform their C++ counterparts. And that despite providing significantly safer to use implementations. glidesort and ipnsort demonstrate that these properties can be upheld even in state-of-the-art high-performance implementations. The sort implementations in the C++ standard libraries are usually quite old, which can explain their poor performance. Yet even relatively new C++ implementations such as ips4o disregard usage safety completely, even regressing Observation safety compared to the tested standard library implementations. The new and so far untested [libc++ implementation](https://danlark.org/2022/04/20/changing-stdsort-at-googles-scale-and-beyond) shows awareness of some of the analyzed safety properties, mainly Ord safety, but fails to find a way to guarantee UB free usage. Only going as far as performing a sampled strict weak ordering violation check for Debug builds. Which comes as bit of a surprise given the release date of 2022, five years after the pdqsort-derived unstable sort in Rust was [merged in 2017](https://github.com/rust-lang/rust/pull/40601). I see no reason why a straight port from Rust to C++ wouldn't have been possible while satisfying their requirements. The author Danila Kutenin even mentions the Rust implementation, so I assume they are aware of it. To me the Results across all tested implementations is indicative of a pervasive mindset in the C++ world, that argues it's the users responsibility to be careful, even if that has been [proven impossible](https://alexgaynor.net/2020/may/27/science-on-memory-unsafety-and-security/) at scale. Personally I've spent several days debugging some code at work that broke in very strange ways, and was caused by accidentally writing `<=` instead of `<` in a comparison function, affecting logic in a completely different place. Often safety and performance are characterized as a set of zero sum tradeoffs, yet often it's possible to find better tradeoffs who's holistic properties improve upon a previously seen "either or". Taking the 1 to N relationship of foundational library authors to library users into consideration, the impact of safe-to-use abstractions should become apparent.
+As seen in the benchmarks, the current Rust standard library unstable sort implementation outperforms the C++ standard library counterparts. And that despite providing a significantly safer to use implementation. glidesort and ipnsort demonstrate that these properties can be upheld even in state-of-the-art high-performance implementations. The sort implementations in the C++ standard libraries are usually quite old, which can explain their poor performance. Yet even relatively new C++ implementations such as ips4o disregard usage safety completely, even regressing Observation safety compared to the tested standard library implementations. The new and so far untested libc++ implementation shows awareness of some of the analyzed safety properties, mainly Ord safety, but fails to find a way to guarantee UB free usage. Only going as far as performing an optional opt-in out-of-bounds (OOB) check. Disregarding the issues of duplicate elements and exception safety. Which comes as bit of a surprise given the release date of 2022, five years after the pdqsort-derived unstable sort in Rust was [merged in 2017](https://github.com/rust-lang/rust/pull/40601). I see no reason why a straight port from Rust to C++ wouldn't have been possible while satisfying their requirements. The author Danila Kutenin even mentions the Rust implementation in their blog post, so I assume they are aware of it. To me the Results across all tested implementations is indicative of a pervasive mindset in the C and C++ world, that argues it's the users responsibility to be careful, even if that has been [proven impossible](https://alexgaynor.net/2020/may/27/science-on-memory-unsafety-and-security/) at scale. Personally I've spent several days debugging some code at work that broke in very strange ways, and was caused by accidentally writing `<=` instead of `<` in a comparison function, affecting logic in a completely different place. Often safety and performance are characterized as a set of zero sum tradeoffs, yet often it's possible to find better tradeoffs who's holistic properties improve upon a previously seen "either or". Taking the 1 to N relationship of foundational library authors to library users into consideration, the impact of safe-to-use abstractions should become apparent.
 
 ## Thanks
 
