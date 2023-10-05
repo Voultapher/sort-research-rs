@@ -5,7 +5,7 @@ Date: 05-10-2023 (DD-MM-YYYY)
 
 This is an analysis of sort implementations and their ability, or lack thereof, to avoid undefined behavior (UB) under various usage scenarios, and whether this affects their performance.
 
-TL;DR: The combination of complex generic implementations striving for performance with arbitrary logic in user-defined comparison functions, makes generic high-performance sort implementations particularly difficult to implement in a way that avoids UB under every usage scenario. Even a sort implementation using only memory-safe abstractions are not be enough to guarantee UB free adjacent logic. Overall no correlation between performance and safety could be found, nor whether safe or unsafe internal abstractions are used. However a strong correlation between being implemented for C or C++ users and a lack of safety presents itself.
+TL;DR: The combination of complex generic implementations striving for performance with arbitrary logic in user-defined comparison functions, makes generic high-performance sort implementations particularly difficult to implement in a way that avoids UB under every usage scenario. Even a sort implementation using only memory-safe abstractions is no guarantee of UB free adjacent logic. Overall no correlation between performance and safety could be found, nor whether safe or unsafe internal abstractions are used. However a strong correlation between being implemented for C or C++ users and a lack of safety presents itself.
 
 ---
 
