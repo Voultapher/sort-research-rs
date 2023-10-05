@@ -288,7 +288,7 @@ Only 10k `u64` are tested on Zen 3. A more in depth look at performance of unsta
 
 ## libc++'s (libcxx) new `std::sort`
 
-This is an attempt to untangling the update to libc++'s `std::sort`. A rough timeline to the best of the author's knowledge:
+This is an attempt at untangling the update to libc++'s `std::sort`. A rough timeline to the best of the author's knowledge:
 
 - March 2022 [PR for libc++ opened](https://reviews.llvm.org/D122780)
 - April 2022 [blog post by Danila Kutenin](https://danlark.org/2022/04/20/changing-stdsort-at-googles-scale-and-beyond)
