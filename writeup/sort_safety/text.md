@@ -106,7 +106,7 @@ data.sort_by(|a, b| {
 });
 ```
 
-In practice a lack of exception safety manifests itself in the variants C and or D described in the section about Ord safety.
+In practice a lack of exception safety manifests itself in the variants C and or D described in the section about Ord safety. In C++ types are considered either trivially copyable by the type system or not. For example `uint64_t` is, and `std::string` isn't. In essence the question asked is, does copying the bits of the type suffice to have a meaningful new value, or must a user-defined copy or move operation be called. Some of the tested C++ implementations use this property to specialize their implementations and the logic changes accordingly. Assuming the user is using types that follow C++ best practices, this helps avoid direct UB, for example `std::string` leaves behind a value in a moved from state, which is safe to destroy, avoiding a potential double-free. This analysis does not consider this enough to mark an implementation as exception safe. The general theme is one of analyzing behavior in the presence of user mistakes, and types that don't follow C++ best practices are a not too uncommon mistake in C++. In addition there are situation where users have no alternative but to interact with thirdparty libraries and or C code with limited or broken RAII semantics. Even assuming a world filled exclusively with C++ types following best practices, while duplicating integers will not directly lead to UB, it can easily break adjacent assumptions made about a sort operation only re-arranging elements and not duplicating them, as shown [here](https://github.com/google/crumsort-rs/issues/1).
 
 ### Observation safety
 
