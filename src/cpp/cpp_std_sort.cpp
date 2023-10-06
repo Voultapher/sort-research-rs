@@ -5,13 +5,13 @@
 
 #include "shared.h"
 
-template <typename T>
+template <typename T, typename F>
 uint32_t sort_stable_by_impl(T* data,
                              size_t len,
-                             CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
+                             F cmp_fn,
                              uint8_t* ctx) noexcept {
   try {
-    std::stable_sort(data, data + len, make_compare_fn(cmp_fn, ctx));
+    std::stable_sort(data, data + len, make_compare_fn<T>(cmp_fn, ctx));
   } catch (...) {
     return 1;
   }
@@ -19,15 +19,13 @@ uint32_t sort_stable_by_impl(T* data,
   return 0;
 }
 
-template <typename T>
+template <typename T, typename F>
 uint32_t sort_unstable_by_impl(T* data,
                                size_t len,
-                               CompResult (*cmp_fn)(const T&,
-                                                    const T&,
-                                                    uint8_t*),
+                               F cmp_fn,
                                uint8_t* ctx) noexcept {
   try {
-    std::sort(data, data + len, make_compare_fn(cmp_fn, ctx));
+    std::sort(data, data + len, make_compare_fn<T>(cmp_fn, ctx));
   } catch (...) {
     return 1;
   }
@@ -106,7 +104,8 @@ uint32_t MAKE_FUNC_NAME(sort_stable, ffi_string_by)(
     size_t len,
     CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
     uint8_t* ctx) {
-  return sort_stable_by_impl(data, len, cmp_fn, ctx);
+  return sort_stable_by_impl(reinterpret_cast<FFIStringCpp*>(data), len, cmp_fn,
+                             ctx);
 }
 
 void MAKE_FUNC_NAME(sort_unstable, ffi_string)(FFIString* data, size_t len) {
@@ -119,7 +118,8 @@ uint32_t MAKE_FUNC_NAME(sort_unstable, ffi_string_by)(
     size_t len,
     CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
     uint8_t* ctx) {
-  return sort_unstable_by_impl(data, len, cmp_fn, ctx);
+  return sort_unstable_by_impl(reinterpret_cast<FFIStringCpp*>(data), len,
+                               cmp_fn, ctx);
 }
 
 // --- f128 ---
@@ -135,7 +135,8 @@ uint32_t MAKE_FUNC_NAME(sort_stable, f128_by)(F128* data,
                                                                    const F128&,
                                                                    uint8_t*),
                                               uint8_t* ctx) {
-  return sort_stable_by_impl(data, len, cmp_fn, ctx);
+  return sort_stable_by_impl(reinterpret_cast<F128Cpp*>(data), len, cmp_fn,
+                             ctx);
 }
 
 void MAKE_FUNC_NAME(sort_unstable, f128)(F128* data, size_t len) {
@@ -148,7 +149,8 @@ uint32_t MAKE_FUNC_NAME(sort_unstable, f128_by)(
     size_t len,
     CompResult (*cmp_fn)(const F128&, const F128&, uint8_t*),
     uint8_t* ctx) {
-  return sort_unstable_by_impl(data, len, cmp_fn, ctx);
+  return sort_unstable_by_impl(reinterpret_cast<F128Cpp*>(data), len, cmp_fn,
+                               ctx);
 }
 
 // --- 1k ---
@@ -165,7 +167,8 @@ uint32_t MAKE_FUNC_NAME(sort_stable,
                                                     const FFIOneKiloByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
-  return sort_stable_by_impl(data, len, cmp_fn, ctx);
+  return sort_stable_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len,
+                             cmp_fn, ctx);
 }
 
 void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKiloByte* data, size_t len) {
@@ -180,6 +183,7 @@ uint32_t MAKE_FUNC_NAME(sort_unstable,
                                                     const FFIOneKiloByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
-  return sort_unstable_by_impl(data, len, cmp_fn, ctx);
+  return sort_unstable_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len,
+                               cmp_fn, ctx);
 }
 }  // extern "C"

@@ -35,6 +35,49 @@ struct FFIStringCpp : public FFIString {
     return std::string_view{data, len};
   }
 
+// Disable the define if you want a version of FFIStringCpp that behaves like
+// a trivially copyable type. Can impact behavior and performance.
+#define FFI_STRING_AS_SEMANTIC_CPP_TYPE
+
+#if defined(FFI_STRING_AS_SEMANTIC_CPP_TYPE) && \
+    !defined(SORT_INCOMPATIBLE_WITH_SEMANTIC_CPP_TYPE)
+
+  FFIStringCpp(const FFIStringCpp&) = delete;
+  FFIStringCpp(FFIStringCpp&& other) {
+    data = other.data;
+    len = other.len;
+    capacity = other.capacity;
+
+    other.data = nullptr;
+  }
+
+  FFIStringCpp& operator=(const FFIStringCpp&) = delete;
+  FFIStringCpp& operator=(FFIStringCpp&& other) {
+    if (this != &other) {
+      data = other.data;
+      len = other.len;
+      capacity = other.capacity;
+
+      other.data = nullptr;
+    }
+
+    return *this;
+  }
+
+  ~FFIStringCpp() {
+    // C++ is allowed to destroy moved from FFIStringCpp values, but those
+    // should have set data to nullptr.
+    if (data) {
+      // This should really never be called from C++ code. Rust owns the data
+      // and the C++ code only every should have access to a pointer underlying
+      // the Rust owned slice. free is the wrong function to call, the right one
+      // would be the Rust allocator that was used to build the Rust side
+      // FFIString. It serves only code-gen reasons to make a comparison fairer.
+      free(data);
+    }
+  }
+#endif  // FFI_STRING_AS_SEMANTIC_CPP_TYPE
+
   bool operator<(const FFIStringCpp& other) const noexcept {
     return as_str() < other.as_str();
   }
@@ -94,12 +137,10 @@ struct FFIOneKiloByteCpp : public FFIOneKiloByte {
   }
 };
 
-template <typename T>
+template <typename T, typename F>
 struct CompWrapper {
   // Not a big fan of this approach, but it works.
-  thread_local static inline CompResult (*cmp_fn_local)(const T&,
-                                                        const T&,
-                                                        uint8_t*);
+  thread_local static inline F cmp_fn_local;
   thread_local static inline uint8_t* ctx_local;
 
   std::strong_ordering operator<=>(const CompWrapper& other) const {
@@ -124,9 +165,8 @@ struct CompWrapper {
   T _value;  // Let's just pray it has the same layout as T.
 };
 
-template <typename T>
-auto make_compare_fn(CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                     uint8_t* ctx) {
+template <typename T, typename F>
+auto make_compare_fn(F cmp_fn, uint8_t* ctx) {
   return [cmp_fn, ctx](const T& a, const T& b) mutable -> bool {
     const auto comp_result = cmp_fn(a, b, ctx);
 
