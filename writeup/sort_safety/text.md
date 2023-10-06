@@ -215,18 +215,18 @@ Properties:
 | cpp_std_msvc_stable          | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_powersort_stable         | ✅         | ⚠️ (1)  | O ✅       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_powersort_4way_stable    | ✅         | ⚠️ (2)  | O ✅       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| c_fluxsort_stable            | ✅         | ⚠️ (3)  | C 🚫       | 🚫 (5)           | 1: 🚫 2: 🚫 (7)    | -               |
+| c_fluxsort_stable            | ✅         | ⚠️ (3)  | C 🚫       | 🚫 (6)           | 1: 🚫 2: 🚫 (8)    | -               |
 | rust_std_unstable            | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
-| rust_dmsort_unstable         | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: 🚫        | S: 🚫 T: ⚠️ (8) |
+| rust_dmsort_unstable         | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: 🚫        | S: 🚫 T: ⚠️ (9) |
 | rust_ipnsort_unstable        | ✅         | ✅      | O or E ✅  | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
-| rust_crumsort_rs_unstable    | ✅         | ⚠️ (4)  | D 🚫       | 🚫 (6)           | 1: -  2: -         | S: ⚠️ T: ⚠️ (8) |
+| rust_crumsort_rs_unstable    | ✅         | ⚠️ (4)  | D 🚫       | 🚫 (7)           | 1: -  2: -         | S: ⚠️ T: ⚠️ (9) |
 | cpp_std_gnu_unstable         | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_std_libcxx_unstable      | ✅         | ✅      | L or C 🚫  | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_std_msvc_unstable        | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_pdqsort_unstable         | ✅         | ✅      | L or C 🚫  | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_ips4o_unstable           | ✅         | ✅      | C 🚫       | 🚫               | 1: 🚫 2: 🚫        | -               |
-| cpp_blockquicksort_unstable  | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| c_crumsort_unstable          | ✅         | ⚠️ (3)  | C 🚫       | 🚫 (5)           | 1: 🚫 2: 🚫 (7)    | -               |
+| cpp_ips4o_unstable           | ✅         | ⚠️ (5)  | C 🚫       | 🚫               | 1: 🚫 2: 🚫        | -               |
+| cpp_blockquicksort_unstable  | ✅         | ⚠️ (5)  | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| c_crumsort_unstable          | ✅         | ⚠️ (3)  | C 🚫       | 🚫 (6)           | 1: 🚫 2: 🚫 (8)    | -               |
 
 Footnotes:
 
@@ -234,10 +234,11 @@ Footnotes:
 2. cpp_powersort_4way_stable uses `vector::resize` for it's buffer, requiring that `T` is default constructible. cpp_powersort_4way_stable offers many configuration options, one of them is a template parameter called `mergingMethod`. `GENERAL_BY_STAGES` supports all user-defined types, but is relatively slow. `WILLEM_TUNED` is faster but requires a sentinel value for example `u64::MAX`, however this has the effect that the implementation can no longer correctly sort slices that contain the sentinel, making it unsuitable for a general purpose sort.
 3. c_fluxsort_stable and c_crumsort_unstable use auxiliary stack and heap memory that may be under-aligned for types with alignment larger than fundamental alignment. The sort interface requires either, [large performance sacrifices](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#c-sort-interface) or source level modification.
 4. rust_crumsort_rs_unstable limits itself to types that implement the `Copy` Trait, this includes types like integers but excludes all types with user-defined destructors like `String` and currently types with interior mutability like `Cell<i32>`.
-5. c_fluxsort_stable and c_crumsort_unstable are developed as C based sorts. C has no concept of exceptions, or stack unwinding. So this property is only relevant if the code is compiled as C++ code.
-6. By limiting itself to types with trivial destructors rust_crumsort_rs_unstable avoids UB as a direct consequence of a panic during a comparison. However is breaks the assumption that calling `sort` will retain the original set of elements after the call, which can lead to UB in adjacent logic that uses unsafe code otherwise considered sound. Even though rust_crumsort_rs_unstable uses zero lines of unsafe Rust, failing to uphold an intuitive and currently under documented property of sort it can break other unsafe code that relies on this assumption.
-7. c_fluxsort_stable and c_crumsort_unstable are developed as C based sorts. C has no concept of interior mutability.
-8. Passes all tests except those that failed for reasons not unique to the kind of checks Miri performs.
+5. cpp_ips4o_unstable and cpp_blockquicksort_unstable are implemented in a way that requires that `T` implements a by ref copy constructor. This is stricter than the C++ standard library type requirements.
+6. c_fluxsort_stable and c_crumsort_unstable are developed as C based sorts. C has no concept of exceptions, or stack unwinding. So this property is only relevant if the code is compiled as C++ code.
+7. By limiting itself to types with trivial destructors rust_crumsort_rs_unstable avoids UB as a direct consequence of a panic during a comparison. However is breaks the assumption that calling `sort` will retain the original set of elements after the call, which can lead to UB in adjacent logic that uses unsafe code otherwise considered sound. Even though rust_crumsort_rs_unstable uses zero lines of unsafe Rust, failing to uphold an intuitive and currently under documented property of sort it can break other unsafe code that relies on this assumption.
+8. c_fluxsort_stable and c_crumsort_unstable are developed as C based sorts. C has no concept of interior mutability.
+9. Passes all tests except those that failed for reasons not unique to the kind of checks Miri performs.
 
 ### Observations
 

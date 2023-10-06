@@ -70,8 +70,11 @@ impl Clone for FFIString {
 
 impl Drop for FFIString {
     fn drop(&mut self) {
-        let str = unsafe { String::from_raw_parts(self.data as *mut u8, self.len, self.capacity) };
-        drop(str);
+        if !self.data.is_null() {
+            let str =
+                unsafe { String::from_raw_parts(self.data as *mut u8, self.len, self.capacity) };
+            drop(str);
+        }
     }
 }
 

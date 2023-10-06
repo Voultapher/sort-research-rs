@@ -4,15 +4,16 @@
 
 #include <stdint.h>
 
+// ips4o is implemented in a way that requires that T implements a by ref copy
+// constructor. That's incompatible with move only types such as FFIStringCpp.
+#define SORT_INCOMPATIBLE_WITH_SEMANTIC_CPP_TYPE
+
 #include "shared.h"
 
-template <typename T>
-uint32_t sort_by_impl(T* data,
-                      size_t len,
-                      CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                      uint8_t* ctx) noexcept {
+template <typename T, typename F>
+uint32_t sort_by_impl(T* data, size_t len, F cmp_fn, uint8_t* ctx) noexcept {
   try {
-    ips4o::sort(data, data + len, make_compare_fn(cmp_fn, ctx));
+    ips4o::sort(data, data + len, make_compare_fn<T>(cmp_fn, ctx));
   } catch (...) {
     return 1;
   }
@@ -64,7 +65,7 @@ uint32_t ips4o_unstable_ffi_string_by(FFIString* data,
                                                            const FFIString&,
                                                            uint8_t*),
                                       uint8_t* ctx) {
-  return sort_by_impl(data, len, cmp_fn, ctx);
+  return sort_by_impl(reinterpret_cast<FFIStringCpp*>(data), len, cmp_fn, ctx);
 }
 
 // --- f128 ---
@@ -80,7 +81,7 @@ uint32_t ips4o_unstable_f128_by(F128* data,
                                                      const F128&,
                                                      uint8_t*),
                                 uint8_t* ctx) {
-  return sort_by_impl(data, len, cmp_fn, ctx);
+  return sort_by_impl(reinterpret_cast<F128Cpp*>(data), len, cmp_fn, ctx);
 }
 
 // --- 1k ---
@@ -96,6 +97,7 @@ uint32_t ips4o_unstable_1k_by(FFIOneKiloByte* data,
                                                    const FFIOneKiloByte&,
                                                    uint8_t*),
                               uint8_t* ctx) {
-  return sort_by_impl(data, len, cmp_fn, ctx);
+  return sort_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len, cmp_fn,
+                      ctx);
 }
 }  // extern "C"

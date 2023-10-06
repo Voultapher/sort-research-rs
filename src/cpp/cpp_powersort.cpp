@@ -7,6 +7,11 @@
 
 #include <stdint.h>
 
+// powersort is implemented in a way that requires that T is default
+// constructible and implements a by ref copy operator. That's incompatible with
+// move only types such as FFIStringCpp.
+#define SORT_INCOMPATIBLE_WITH_SEMANTIC_CPP_TYPE
+
 #include "shared.h"
 
 template <typename T>
@@ -32,21 +37,18 @@ using powersort_4way = algorithms::powersort_4way<
     /*useCheckFirstMergeLoop=*/true,
     /*useSpecialized3wayMerge=*/true>;
 
-template <typename T, template <typename> class SortT>
-uint32_t sort_by_impl(T* data,
-                      size_t len,
-                      CompResult (*cmp_fn)(const T&, const T&, uint8_t*),
-                      uint8_t* ctx) noexcept {
+template <typename T, template <typename> class SortT, typename F>
+uint32_t sort_by_impl(T* data, size_t len, F cmp_fn, uint8_t* ctx) noexcept {
   try {
     // Powersort does not provide a way to specify a custom comparator function,
     // so we have to wrap it inside a type with custom comparison function.
-    CompWrapper<T>::cmp_fn_local = cmp_fn;
-    CompWrapper<T>::ctx_local = ctx;
+    CompWrapper<T, F>::cmp_fn_local = cmp_fn;
+    CompWrapper<T, F>::ctx_local = ctx;
 
     // Let's just pray they are layout equivalent.
-    SortT<CompWrapper<T>*>{}.sort(
-        reinterpret_cast<CompWrapper<T>*>(data),
-        reinterpret_cast<CompWrapper<T>*>(data + len));
+    SortT<CompWrapper<T, F>*>{}.sort(
+        reinterpret_cast<CompWrapper<T, F>*>(data),
+        reinterpret_cast<CompWrapper<T, F>*>(data + len));
   } catch (const std::exception& exc) {
     // fprintf(stderr, "[ERROR]: %s\n", exc.what());
     return 1;
@@ -103,7 +105,8 @@ uint32_t powersort_stable_ffi_string_by(FFIString* data,
                                                              const FFIString&,
                                                              uint8_t*),
                                         uint8_t* ctx) {
-  return sort_by_impl<FFIString, powersort>(data, len, cmp_fn, ctx);
+  return sort_by_impl<FFIString, powersort>(
+      reinterpret_cast<FFIStringCpp*>(data), len, cmp_fn, ctx);
 }
 
 // --- f128 ---
@@ -119,7 +122,8 @@ uint32_t powersort_stable_f128_by(F128* data,
                                                        const F128&,
                                                        uint8_t*),
                                   uint8_t* ctx) {
-  return sort_by_impl<F128, powersort>(data, len, cmp_fn, ctx);
+  return sort_by_impl<F128, powersort>(reinterpret_cast<F128Cpp*>(data), len,
+                                       cmp_fn, ctx);
 }
 
 // --- 1k ---
@@ -136,7 +140,8 @@ uint32_t powersort_stable_1k_by(FFIOneKiloByte* data,
                                                      const FFIOneKiloByte&,
                                                      uint8_t*),
                                 uint8_t* ctx) {
-  return sort_by_impl<FFIOneKiloByte, powersort>(data, len, cmp_fn, ctx);
+  return sort_by_impl<FFIOneKiloByte, powersort>(
+      reinterpret_cast<FFIOneKiloByteCpp*>(data), len, cmp_fn, ctx);
 }
 
 // --- 4 way merging ---
@@ -186,7 +191,8 @@ uint32_t powersort_4way_stable_ffi_string_by(
     size_t len,
     CompResult (*cmp_fn)(const FFIString&, const FFIString&, uint8_t*),
     uint8_t* ctx) {
-  return sort_by_impl<FFIString, powersort_4way>(data, len, cmp_fn, ctx);
+  return sort_by_impl<FFIString, powersort_4way>(
+      reinterpret_cast<FFIStringCpp*>(data), len, cmp_fn, ctx);
 }
 
 // --- f128 ---
@@ -202,7 +208,8 @@ uint32_t powersort_4way_stable_f128_by(F128* data,
                                                             const F128&,
                                                             uint8_t*),
                                        uint8_t* ctx) {
-  return sort_by_impl<F128, powersort_4way>(data, len, cmp_fn, ctx);
+  return sort_by_impl<F128, powersort_4way>(reinterpret_cast<F128Cpp*>(data),
+                                            len, cmp_fn, ctx);
 }
 
 // --- 1k ---
@@ -219,6 +226,7 @@ uint32_t powersort_4way_stable_1k_by(FFIOneKiloByte* data,
                                                           const FFIOneKiloByte&,
                                                           uint8_t*),
                                      uint8_t* ctx) {
-  return sort_by_impl<FFIOneKiloByte, powersort_4way>(data, len, cmp_fn, ctx);
+  return sort_by_impl<FFIOneKiloByte, powersort_4way>(
+      reinterpret_cast<FFIOneKiloByteCpp*>(data), len, cmp_fn, ctx);
 }
 }  // extern "C"
