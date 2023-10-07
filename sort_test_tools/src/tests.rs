@@ -12,10 +12,6 @@ use crate::ffi_types::{FFIOneKiloByte, FFIString, F128};
 use crate::patterns;
 use crate::Sort;
 
-// use sort_comp::patterns;
-
-// use sort_comp::unstable::rust_ipn as test_sort;
-
 #[cfg(miri)]
 const TEST_SIZES: [usize; 18] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 24, 33, 50, 100, 280, 400,
@@ -869,11 +865,17 @@ fn calc_comps_required<T: Clone, S: Sort>(
     comp_counter
 }
 
+fn should_test_for_strong_exception_safety() -> bool {
+    env::var("ONLY_CHECK_BASIC_EXCEPTION_SAFETY").is_err()
+}
+
 pub fn panic_retain_original_set_impl<S: Sort, T: Ord + Clone>(
     type_into_fn: impl Fn(i32) -> T + Copy,
     type_from_fn: impl Fn(&T) -> i32,
 ) {
     let _seed = get_or_init_random_seed::<S>();
+
+    let should_test_for_strong_exception_safety = should_test_for_strong_exception_safety();
 
     let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
         let mut test_data: Vec<T> = pattern_fn(test_len).into_iter().map(type_into_fn).collect();
@@ -904,10 +906,14 @@ pub fn panic_retain_original_set_impl<S: Sort, T: Ord + Clone>(
 
         assert!(res.is_err());
 
-        // If the sum before and after don't match, it means the set of elements hasn't remained the
-        // same.
-        let sum_after: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
-        assert_eq!(sum_before, sum_after);
+        if should_test_for_strong_exception_safety {
+            // If the sum before and after don't match, it means the set of elements hasn't remained the
+            // same.
+            let sum_after: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
+            assert_eq!(sum_before, sum_after);
+        }
+        // Basic exception safety means we can continue without direct UB, which would most likely
+        // show up as double-free here.
     };
 
     test_impl_custom(test_fn);
@@ -920,7 +926,7 @@ pub fn panic_retain_original_set_i32<S: Sort>() {
 pub fn panic_retain_original_set_ffi_string<S: Sort>() {
     panic_retain_original_set_impl::<S, FFIString>(
         |val| FFIString::new(format!("{:010}", val.saturating_abs())),
-        |val| val.as_str().parse::<i32>().unwrap(),
+        |val| val.as_str().unwrap().parse::<i32>().unwrap(),
     );
 }
 
@@ -1014,7 +1020,7 @@ pub fn panic_observable_is_less_i32<S: Sort>() {
 pub fn panic_observable_is_less_ffi_string<S: Sort>() {
     panic_observable_is_less_impl::<S, FFIString>(
         |val| FFIString::new(format!("{:010}", val.saturating_abs())),
-        |val| val.as_str().parse::<i32>().unwrap(),
+        |val| val.as_str().unwrap().parse::<i32>().unwrap(),
     );
 }
 
@@ -1201,7 +1207,7 @@ pub fn violate_ord_retain_original_set_i32<S: Sort>() {
 pub fn violate_ord_retain_original_set_ffi_string<S: Sort>() {
     violate_ord_retain_original_set_impl::<S, FFIString>(
         |val| FFIString::new(format!("{:010}", val.saturating_abs())),
-        |val| val.as_str().parse::<i32>().unwrap(),
+        |val| val.as_str().unwrap().parse::<i32>().unwrap(),
     );
 }
 
@@ -1297,6 +1303,8 @@ macro_rules! instantiate_sort_test_impl {
     };
 }
 
+// Some tests are not tested with miri to avoid prohibitively long test times.
+// This leaves coverage holes, but the way they are selected should make for relatively small holes.
 #[macro_export]
 macro_rules! instantiate_sort_tests {
     ($sort_impl:ty) => {
