@@ -26,7 +26,25 @@ impl FFIString {
         }
     }
 
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> Option<&str> {
+        // SAFETY: See `as_str_unchecked`.
+        unsafe {
+            if !self.data.is_null() {
+                Some(str::from_utf8_unchecked(&*ptr::slice_from_raw_parts(
+                    self.data as *const u8,
+                    self.len,
+                )))
+            } else {
+                None
+            }
+        }
+    }
+
+    pub unsafe fn as_str_unchecked(&self) -> &str {
+        // SAFETY: The value is valid by construction so from a Rust interface perspective it is a
+        // safe function. However it's possible that C++ sort implementations leave the value in a
+        // moved from state. To keep benchmarks fair this is the one used for the comparison impl
+        // where exception safety tests are not relevant.
         unsafe {
             str::from_utf8_unchecked(&*ptr::slice_from_raw_parts(
                 self.data as *const u8,
@@ -38,7 +56,8 @@ impl FFIString {
 
 impl PartialEq for FFIString {
     fn eq(&self, other: &Self) -> bool {
-        self.as_str() == other.as_str()
+        // SAFETY: See `as_str_unchecked`.
+        unsafe { self.as_str_unchecked() == other.as_str_unchecked() }
     }
 }
 
@@ -46,7 +65,11 @@ impl Eq for FFIString {}
 
 impl PartialOrd for FFIString {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_str().partial_cmp(other.as_str())
+        // SAFETY: See `as_str_unchecked`.
+        unsafe {
+            self.as_str_unchecked()
+                .partial_cmp(other.as_str_unchecked())
+        }
     }
 }
 
@@ -58,13 +81,13 @@ impl Ord for FFIString {
 
 impl std::fmt::Debug for FFIString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.as_str())
+        write!(f, "\"{:?}\"", self.as_str())
     }
 }
 
 impl Clone for FFIString {
     fn clone(&self) -> Self {
-        Self::new(self.as_str().to_owned())
+        Self::new(self.as_str().unwrap().to_owned())
     }
 }
 
