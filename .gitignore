@@ -1,3 +1,10 @@
 /target
 .gdb_history
 .vscode
+
+# generated analysis html
+/analysis
+# python environment
+/venv
+# benchmark output json
+*.json
