@@ -45,3 +45,6 @@ pub mod cpp_std_libcxx;
 // Call stdlib std::sort sort via FFI.
 #[cfg(feature = "cpp_std_gcc4_3")]
 pub mod cpp_std_gcc4_3;
+
+#[cfg(feature = "rust_rayon_parallel")]
+pub mod rust_rayon_parallel;

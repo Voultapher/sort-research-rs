@@ -33,3 +33,6 @@ pub mod cpp_powersort_4way;
 // Note, this sort is only stable if the the supplied comparison returns less, equal and more.
 #[cfg(feature = "c_fluxsort")]
 pub mod c_fluxsort;
+
+#[cfg(feature = "rust_rayon_parallel")]
+pub mod rust_rayon_parallel;

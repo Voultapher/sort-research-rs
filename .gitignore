@@ -1,3 +1,6 @@
 /target
 .gdb_history
 .vscode
+/analysis
+/venv
+*.json

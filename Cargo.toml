@@ -25,6 +25,7 @@ crumsort = { version = "0.1", optional = true }
 tiny_sort = { version = "1.0", optional = true }
 sort_test_tools = { path = "sort_test_tools", default-features = false }
 ipnsort = { path = "ipnsort", default-features = false }
+rayon = { version = "1.8.0", optional = true }
 
 [dev-dependencies]
 rand = "0.8"
@@ -90,6 +91,7 @@ default = [
     # "rust_glidesort",
     # "rust_crumsort_rs",
     # "rust_tinysort",
+    "rust_rayon_parallel",
 ]
 
 # Enable support for C++ std::sort and std::sort_stable.
@@ -174,6 +176,9 @@ rust_crumsort_rs = ["crumsort"]
 
 # Enable binary-size optimized stable and unstable tiny-sort by Lukas Bergdoll.
 rust_tinysort = ["tiny_sort"]
+
+# Enable rayon paralell sorts
+rust_rayon_parallel = ["rayon"]
 
 # Enable the sort evolution code.
 # Demonstrates various stages and optimizations of stable and unstable sorts.

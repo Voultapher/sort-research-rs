@@ -134,6 +134,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "rust_tinysort")]
     bench_inst!(stable::rust_tinysort);
 
+    #[cfg(feature = "rust_rayon_parallel")]
+    bench_inst!(stable::rust_rayon_parallel);
+
     // --- Unstable sorts ---
 
     bench_inst!(unstable::rust_ipnsort);
