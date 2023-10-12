@@ -7,4 +7,4 @@
 # python environment
 /venv
 # benchmark output json
-*.json
+/*.json
