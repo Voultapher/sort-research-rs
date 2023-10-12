@@ -91,7 +91,7 @@ default = [
     # "rust_glidesort",
     # "rust_crumsort_rs",
     # "rust_tinysort",
-    "rust_rayon_parallel",
+    # "rust_rayon_parallel",
 ]
 
 # Enable support for C++ std::sort and std::sort_stable.
