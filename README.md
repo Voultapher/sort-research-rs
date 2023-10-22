@@ -5,10 +5,10 @@
 
 This repository contains:
 
-* An exhaustive test suite, including properties not commonly checked or upheld
+* An exhaustive test suite, including [properties](https://github.com/Voultapher/sort-research-rs/blob/sort-corectness-writeup/writeup/sort_safety/text.md#property-analysis) not commonly checked or upheld
 * An extensive benchmark suite, abstracting over types, patterns and sizes
 * A fuzzing harness
-* Novel sort implementation [ipnsort](ipnsort) (Instruction-Parallel-Network-Sort)
+* A novel sort implementation [ipnsort](ipnsort) (Instruction-Parallel-Network-Sort)
 * Vendored sort implementations (Rust, C++, C), eg. cpp_pdqsort, rust_std_stable
 
 Most tests and benchmarks can be applied to non Rust implementations.
@@ -97,9 +97,14 @@ Adjust `fuzz/fuzz_targets/libfuzzer_main.rs` and
 `fuzz/fuzz_targets/libfuzzer_main.rs` respectively to change the fuzz target.
 Default `rust_ipn_stable`.
 
+
 ## Contributing
 
 Please respect the [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) when contributing.
+
+### Adding a new sort implementation
+
+Please **open a PR before** investing the effort of adding a new sort implementation. The maintainer of this project is currently not interested in building an up-to-date database of all existing sort implementations. Implementations are added based on situational context and relevance to the maintainers' goals. Baseline for all new sort implementations is they must pass all functionality tests, they may pass the [safety tests](https://github.com/Voultapher/sort-research-rs/blob/sort-corectness-writeup/writeup/sort_safety/text.md#property-analysis) but don't have to.
 
 ## Authors
 
