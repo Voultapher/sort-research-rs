@@ -9,6 +9,8 @@ from bokeh.plotting import figure, show
 from bokeh.models import BoxZoomTool
 from bokeh import models
 
+from bokeh.palettes import Colorblind
+
 TEST_SIZE = 10_000
 
 
@@ -44,8 +46,12 @@ def draw_dist_plot(p, len_dist_mean_sorted, max_small_sort, name, color):
     x = [len for len, frequency in len_dist_mean_sorted]
     y = [frequency for len, frequency in len_dist_mean_sorted]
 
-    p.square(x, y, fill_color=None, line_color=color)
-    p.line(x, y, line_color=color, legend_label=name)
+    legend_label = "Average times called"
+
+    p.square(
+        x, y, fill_color=None, line_color=color, legend_label=legend_label
+    )
+    p.line(x, y, line_color=color, legend_label=legend_label)
 
     y2 = [
         frequency if len <= max_small_sort else 0
@@ -56,8 +62,8 @@ def draw_dist_plot(p, len_dist_mean_sorted, max_small_sort, name, color):
         y1=0,
         y2=y2,
         alpha=0.3,
-        fill_color=color,
-        legend_label=f"Handled by dedicated small sort len <= {max_small_sort}",
+        fill_color=Colorblind[8][4],
+        legend_label=f"Handled by dedicated small-sort len <= {max_small_sort}",
     )
 
 
@@ -98,27 +104,29 @@ def analyze_pivot_data(text):
     return len_dist_mean_sorted
 
 
-def graph_pivot_data(text_a, text_b):
+def graph_pivot_data(text_a):
     init_tools()
 
     p = figure(
-        title=f"Likelihood of recurse loop iteration with len X | {TEST_SIZE} random_binary elements",
+        title=f"Likelihood of recursion with len X | Input length == {TEST_SIZE} | Pattern == random",
         x_axis_label="v.len() in function recurse (log)",
         x_axis_type="log",
         y_axis_label="Average times called",
         tools="",
+        plot_width=1000,
+        plot_height=600,
     )
 
     add_tools_to_plot(p)
 
     len_dist_mean_sorted_a = analyze_pivot_data(text_a)
-    len_dist_mean_sorted_b = analyze_pivot_data(text_b)
 
     draw_dist_plot(
-        p, len_dist_mean_sorted_a, 20, "rust_std_unstable", color="green"
-    )
-    draw_dist_plot(
-        p, len_dist_mean_sorted_b, 40, "rust_new_unstable", color="orange"
+        p,
+        len_dist_mean_sorted_a,
+        32,
+        "rust_std_unstable",
+        color=Colorblind[8][5],
     )
 
     p.toolbar.active_drag = BoxZoomTool()
@@ -130,7 +138,7 @@ if __name__ == "__main__":
     with open(sys.argv[1], "r") as file:
         text_a = file.read()
 
-    with open(sys.argv[2], "r") as file:
-        text_b = file.read()
+    # with open(sys.argv[2], "r") as file:
+    #     text_b = file.read()
 
-    graph_pivot_data(text_a, text_b)
+    graph_pivot_data(text_a)

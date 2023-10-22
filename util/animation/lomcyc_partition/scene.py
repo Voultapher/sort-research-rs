@@ -1,6 +1,8 @@
 from manim import *
 
-from bokeh.palettes import magma, Colorblind
+from bokeh import palettes
+
+import colour
 
 INPUT = [
     935,
@@ -162,12 +164,44 @@ class SceneInfo:
         return SceneInfo.width(scene) / len(INPUT)
 
 
-def partition_animation(scene, rect_anim_fn):
-    palette = magma(100)
+def build_bar_palette():
+    """Builds a gradient color palette with 1000 entries"""
+    prime_color_hex = palettes.Colorblind[8][3]
 
+    prime_color_oklab = colour.convert(prime_color_hex, "hexadecimal", "oklab")
+    prime_color_oklab *= 1.2
+
+    def darken_color(color, mod):
+        """Perceptual darken the color within the oklab color space."""
+        return color * mod
+
+    return [
+        colour.convert(
+            darken_color(prime_color_oklab, lmod / 1000.0),
+            "oklab",
+            "hexadecimal",
+        )
+        for lmod in range(1000)
+    ]
+
+
+BAR_PALETTE = build_bar_palette()
+
+
+def compress_mod_range(val, start_point):
+    """Compress range 0-1 to start_point-1"""
+    assert start_point >= 0.0 and start_point <= 1.0
+
+    old_range = 1.0
+    new_range = 1.0 - start_point
+    return ((val * new_range) / old_range) + start_point
+
+
+def partition_animation(scene, rect_anim_fn):
     def rect_ctor(input_val, i):
         input_val_range_0_1 = input_val / 1000.0
-        fill_color = palette[round(input_val_range_0_1 * 99.0)]
+        color_idx = round(compress_mod_range(input_val_range_0_1, 0.1) * 999.0)
+        fill_color = BAR_PALETTE[color_idx]
         bar_height = input_val_range_0_1 * SceneInfo.height(scene)
 
         rect = Rectangle(
@@ -212,7 +246,8 @@ def partition_animation(scene, rect_anim_fn):
 
 
 def highlight_color(val_is_lt):
-    return Colorblind[8][1] if val_is_lt else Colorblind[8][4]
+    palette = palettes.Colorblind[8]
+    return palette[4] if val_is_lt else palette[6]
 
 
 def lomuto_partition_anim(scene, rect_vals):

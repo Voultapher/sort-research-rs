@@ -74,6 +74,20 @@ def extract_groups(bench_result):
         if pattern in pattern_skip:
             continue
 
+        if test_len <= 32:
+            continue
+
+        if pattern == "saws_short":
+            continue
+
+        # if sort_name not in (
+        #     "lomuto_branchy",
+        #     "lomuto_branchless",
+        #     "lomuto_branchless_cyclic",
+        #     "lomuto_branchless_cyclic_opt",
+        # ):
+        #     continue
+
         bench_time_ns = value["criterion_estimates_v1"]["median"][
             "point_estimate"
         ]
