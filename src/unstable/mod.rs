@@ -1,4 +1,12 @@
-pub mod rust_ipnsort;
+pub mod rust_ipnsort_hoare_block;
+pub mod rust_ipnsort_hoare_branchy;
+pub mod rust_ipnsort_hoare_crumsort;
+pub mod rust_ipnsort_lomuto_branchless;
+pub mod rust_ipnsort_lomuto_branchless_cyclic;
+pub mod rust_ipnsort_lomuto_branchless_cyclic_opt;
+pub mod rust_ipnsort_lomuto_branchy;
+pub mod rust_ipnsort_lomuto_nanosort;
+
 pub mod rust_std;
 
 #[cfg(feature = "rust_dmsort")]

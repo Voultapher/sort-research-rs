@@ -136,7 +136,17 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     // --- Unstable sorts ---
 
-    bench_inst!(unstable::rust_ipnsort);
+    // bench_inst!(unstable::rust_ipnsort);
+
+    bench_inst!(unstable::rust_ipnsort_hoare_branchy);
+    bench_inst!(unstable::rust_ipnsort_hoare_block);
+    bench_inst!(unstable::rust_ipnsort_hoare_crumsort);
+
+    bench_inst!(unstable::rust_ipnsort_lomuto_branchy);
+    bench_inst!(unstable::rust_ipnsort_lomuto_branchless);
+    bench_inst!(unstable::rust_ipnsort_lomuto_branchless_cyclic);
+    bench_inst!(unstable::rust_ipnsort_lomuto_branchless_cyclic_opt);
+    bench_inst!(unstable::rust_ipnsort_lomuto_nanosort);
 
     bench_inst!(unstable::rust_std);
 

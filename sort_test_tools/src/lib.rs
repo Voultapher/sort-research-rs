@@ -12,6 +12,18 @@ pub trait Sort {
         F: FnMut(&T, &T) -> std::cmp::Ordering;
 }
 
+pub trait Partition {
+    fn name() -> String;
+
+    fn partition<T>(arr: &mut [T], pivot: &T) -> usize
+    where
+        T: Ord;
+
+    fn partition_by<T, F>(arr: &mut [T], pivot: &T, is_less: &mut F) -> usize
+    where
+        F: FnMut(&T, &T) -> bool;
+}
+
 pub mod ffi_types;
 pub mod patterns;
 pub mod tests;
