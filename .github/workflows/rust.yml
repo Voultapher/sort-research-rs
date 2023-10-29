@@ -1,0 +1,72 @@
+name: Test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt
+    - name: Build
+      run: |
+        cd ipnsort
+        cargo build --verbose
+    - name: Run tests
+      run: |
+        cd ipnsort
+        cargo test --verbose
+    - name: Check rustfmt
+      run: |
+        cd ipnsort
+        cargo fmt --check
+
+  miri:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: miri, rust-src
+    - name: Install cargo-nextest
+      run: |
+        curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    - name: Run tests x86_64-unknown-linux-gnu (little-endian)
+      run: |
+        cd ipnsort
+        cargo miri nextest run --verbose --target x86_64-unknown-linux-gnu -j4
+    - name: Run tests mips64-unknown-linux-gnuabi64 (big-endian)
+      run: |
+        cd ipnsort
+        cargo miri test --verbose --target mips64-unknown-linux-gnuabi64 random_z1
+
+  asan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+    - name: Run tests 
+      run: |
+        cd ipnsort
+        bash -c "for i in {0..100}; do RUSTFLAGS=-Zsanitizer=address cargo test --no-default-features --release; done"
+    - name: Run tests with large test sizes
+      run: |
+        cd ipnsort
+        bash -c "for i in {0..2}; do RUSTFLAGS=-Zsanitizer=address cargo test --release; done"
