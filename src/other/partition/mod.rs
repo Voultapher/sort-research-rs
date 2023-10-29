@@ -4,17 +4,7 @@ use std::alloc;
 use std::cell::RefCell;
 use std::ptr::NonNull;
 
-pub trait Partition {
-    fn name() -> String;
-
-    fn partition<T: Ord>(arr: &mut [T], pivot: &T) -> usize;
-
-    fn partition_by<T, F: FnMut(&T, &T) -> bool>(
-        arr: &mut [T],
-        pivot: &T,
-        is_less: &mut F,
-    ) -> usize;
-}
+use sort_test_tools::Partition;
 
 macro_rules! partition_impl {
     ($name:expr) => {

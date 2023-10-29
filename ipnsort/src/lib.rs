@@ -50,11 +50,12 @@ mod smallsort;
 ///
 /// [pdqsort]: https://github.com/orlp/pdqsort
 #[inline(always)]
-pub fn sort<T>(arr: &mut [T])
+pub fn sort<T, PF>(arr: &mut [T], _pf: PF)
 where
     T: Ord,
+    PF: sort_test_tools::Partition,
 {
-    unstable_sort(arr, |a, b| a.lt(b));
+    unstable_sort::<T, PF>(arr, |a, b| a.lt(b));
 }
 
 /// Sorts the slice with a comparator function, but might not preserve the order of equal
@@ -104,20 +105,21 @@ where
 ///
 /// [pdqsort]: https://github.com/orlp/pdqsort
 #[inline(always)]
-pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
+pub fn sort_by<T, F, PF>(arr: &mut [T], mut compare: F, _pf: PF)
 where
     F: FnMut(&T, &T) -> Ordering,
+    PF: sort_test_tools::Partition,
 {
-    unstable_sort(arr, |a, b| compare(a, b) == Ordering::Less);
+    unstable_sort::<T, PF>(arr, |a, b| compare(a, b) == Ordering::Less);
 }
 
 // --- IMPL ---
 
 /// Sorts `v` using pattern-defeating quicksort, which is *O*(*n* \* log(*n*)) worst-case.
 #[inline(always)]
-fn unstable_sort<T, F>(v: &mut [T], mut is_less: F)
+fn unstable_sort<T, PF>(v: &mut [T], mut is_less: impl FnMut(&T, &T) -> bool)
 where
-    F: FnMut(&T, &T) -> bool,
+    PF: sort_test_tools::Partition,
 {
     // Sorting has no meaningful behavior on zero-sized types.
     if T::IS_ZST {
@@ -149,18 +151,18 @@ where
         // compile-times.
         crate::smallsort::insertion_sort_shift_left(v, 1, &mut is_less);
     } else {
-        quicksort(v, is_less);
+        quicksort::<T, PF>(v, &mut is_less);
     }
 }
 
 #[inline(never)]
-fn quicksort<T, F>(v: &mut [T], mut is_less: F)
+fn quicksort<T, PF>(v: &mut [T], is_less: &mut impl FnMut(&T, &T) -> bool)
 where
-    F: FnMut(&T, &T) -> bool,
+    PF: sort_test_tools::Partition,
 {
     let len = v.len();
 
-    let (streak_end, was_reversed) = find_streak(v, &mut is_less);
+    let (streak_end, was_reversed) = find_streak(v, is_less);
     if streak_end == len {
         if was_reversed {
             v.reverse();
@@ -175,7 +177,7 @@ where
     // The binary OR by one is used to eliminate the zero-check in the logarithm.
     let limit = 2 * (len | 1).ilog2();
 
-    crate::quicksort::quicksort(v, &mut is_less, None, limit);
+    crate::quicksort::quicksort::<T, PF>(v, is_less, None, limit);
 }
 
 /// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first

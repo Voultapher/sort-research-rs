@@ -7,7 +7,8 @@ use std::time;
 
 use criterion::{black_box, Criterion};
 
-use sort_comp::other::partition::{self, Partition};
+use sort_comp::other::partition;
+use sort_test_tools::Partition;
 
 use crate::modules::util::{cpu_max_freq_hz, pin_thread_to_core, should_run_benchmark};
 

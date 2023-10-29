@@ -1,4 +1,11 @@
-pub mod rust_ipnsort;
+pub mod rust_ipnsort_hoare_block;
+pub mod rust_ipnsort_hoare_branchy;
+pub mod rust_ipnsort_hoare_crumsort;
+pub mod rust_ipnsort_lomuto_branchless;
+pub mod rust_ipnsort_lomuto_branchless_cyclic;
+pub mod rust_ipnsort_lomuto_branchless_cyclic_opt;
+pub mod rust_ipnsort_lomuto_branchy;
+
 pub mod rust_std;
 
 #[cfg(feature = "rust_dmsort")]
@@ -25,10 +32,6 @@ pub mod cpp_blockquicksort;
 // Call gerbens quicksort sort via FFI.
 #[cfg(feature = "cpp_gerbens_qsort")]
 pub mod cpp_gerbens_qsort;
-
-// Call qsort sort via FFI.
-#[cfg(feature = "c_std_sys")]
-pub mod c_std_sys;
 
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
