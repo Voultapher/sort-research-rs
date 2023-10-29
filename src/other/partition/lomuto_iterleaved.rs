@@ -9,6 +9,8 @@ fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
 {
+    // left-to-right and right-to-left branchless lomuto interleaved into one another.
+
     // TODO T: Freeze
 
     let len = v.len();

@@ -157,10 +157,7 @@ fn cyclic_permutation_swap_loop<T>(
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     const MIN_BLOCK_PARTITION_LEN: usize = 4096;
     const BLOCK: usize = 256;
 

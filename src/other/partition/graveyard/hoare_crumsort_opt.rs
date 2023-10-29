@@ -110,11 +110,8 @@ where
     }
 }
 
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    // T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
+// This function is *NOT* safe-to-use for non `Freeze` types.
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     // TODO explain.
     if v.len() < 256 {
         fulcrum_partition_impl::<T, F, 16>(v, pivot, is_less)

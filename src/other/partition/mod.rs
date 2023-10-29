@@ -7,13 +7,13 @@ use std::ptr::NonNull;
 pub trait Partition {
     fn name() -> String;
 
-    fn partition<T>(arr: &mut [T], pivot: &T) -> usize
-    where
-        T: Ord;
+    fn partition<T: Ord>(arr: &mut [T], pivot: &T) -> usize;
 
-    fn partition_by<T, F>(arr: &mut [T], pivot: &T, is_less: &mut F) -> usize
-    where
-        F: FnMut(&T, &T) -> bool;
+    fn partition_by<T, F: FnMut(&T, &T) -> bool>(
+        arr: &mut [T],
+        pivot: &T,
+        is_less: &mut F,
+    ) -> usize;
 }
 
 macro_rules! partition_impl {
@@ -94,18 +94,13 @@ pub fn get_or_alloc_tls_scratch(layout: alloc::Layout) -> NonNull<u8> {
 
 pub mod hoare_block;
 pub mod hoare_block_butterfly;
-pub mod hoare_block_opt;
-pub mod hoare_block_ptr;
 pub mod hoare_branchy;
 pub mod hoare_branchy_cyclic;
 pub mod hoare_crumsort;
-pub mod hoare_crumsort_opt;
 pub mod hoare_crumsort_rs;
 pub mod hybrid_bitset_partition;
 pub mod hybrid_block_partition;
 pub mod lomuto_branchless;
-pub mod lomuto_branchless_2way;
-pub mod lomuto_branchless_4way;
 pub mod lomuto_branchless_cyclic;
 pub mod lomuto_branchless_cyclic_opt;
 pub mod lomuto_branchy;

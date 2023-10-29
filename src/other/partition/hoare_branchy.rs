@@ -3,44 +3,46 @@ use std::ptr;
 partition_impl!("hoare_branchy");
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
-    // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
-    // `r == v.len()` and we checked that `l < r` at every indexing operation.
-    //
-    // From here we know that `r` must be at least `r == l` which was shown to be valid from the
-    // first one.
-    unsafe {
-        let arr_ptr = v.as_mut_ptr();
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
+    let len = v.len();
 
-        let mut l = arr_ptr;
-        let mut r = arr_ptr.add(v.len());
+    if len == 0 {
+        return 0;
+    }
+
+    // SAFETY: The left-to-right scanning loop performs a bounds check, where we know that `left >=
+    // v_base && left < right && right <= v_base.add(len)`. The right-to-left scanning loop performs
+    // a bounds check ensuring that `right` is in-bounds. We checked that `len` is more than zero,
+    // which means that unconditional `right = right.sub(1)` is safe to do. The exit check makes
+    // sure that `left` and `right` never alias, making `ptr::swap_nonoverlapping` safe.
+    unsafe {
+        let v_base = v.as_mut_ptr();
+
+        let mut left = v_base;
+        let mut right = v_base.add(len);
 
         loop {
             // Find the first element greater than the pivot.
-            while l < r && is_less(&*l, pivot) {
-                l = l.add(1);
+            while left < right && is_less(&*left, pivot) {
+                left = left.add(1);
             }
 
             // Find the last element equal to the pivot.
-            while l < r && !is_less(&*r.sub(1), pivot) {
-                r = r.sub(1);
+            loop {
+                right = right.sub(1);
+                if left >= right || is_less(&*right, pivot) {
+                    break;
+                }
             }
-            r = r.sub(1);
 
-            // Are we done?
-            if l >= r {
+            if left >= right {
                 break;
             }
 
-            // Swap the found pair of out-of-order elements.
-            ptr::swap_nonoverlapping(l, r, 1);
-            l = l.add(1);
+            ptr::swap_nonoverlapping(left, right, 1);
+            left = left.add(1);
         }
 
-        l.sub_ptr(arr_ptr)
+        left.sub_ptr(v_base)
     }
 }

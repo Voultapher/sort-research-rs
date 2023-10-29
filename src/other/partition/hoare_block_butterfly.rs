@@ -606,10 +606,7 @@ where
 /// unspecified. All original elements will remain in `v` and any possible modifications via
 /// interior mutability will be observable. Same is true if `is_less` panics.
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     // This partition implementation combines various ideas to strike a good balance optimizing for
     // all the following:
     //

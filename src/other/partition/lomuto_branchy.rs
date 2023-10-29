@@ -2,26 +2,26 @@ use core::ptr;
 
 partition_impl!("lomuto_branchless");
 
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     let len = v.len();
-    let arr_ptr = v.as_mut_ptr();
+    let v_base = v.as_mut_ptr();
 
-    // SAFETY: TODO
+    // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
+    // alias because of type system rules. `left` is guaranteed somewhere between `v_base` and
+    // `right` making it also in-bounds and the call to `sub_ptr` at the end safe.
     unsafe {
-        let mut left_ptr = arr_ptr;
+        let mut left = v_base;
 
         for i in 0..len {
-            let right_ptr = arr_ptr.add(i);
+            let right = v_base.add(i);
+            let right_is_lt = is_less(&*right, pivot);
 
-            if is_less(&*right_ptr, pivot) {
-                ptr::swap(left_ptr, right_ptr);
-                left_ptr = left_ptr.add(1);
+            if right_is_lt {
+                ptr::swap(left, right);
+                left = left.add(1);
             }
         }
 
-        left_ptr.sub_ptr(arr_ptr)
+        left.sub_ptr(v_base)
     }
 }

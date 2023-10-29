@@ -17,10 +17,13 @@ impl<T> Drop for GapGuard<T> {
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
+    let len = v.len();
+
+    if len == 0 {
+        return 0;
+    }
+
     // Optimized for large types that are expensive to move. Not optimized for integers. Optimized
     // for small code-gen, assuming that is_less is an expensive operation that generates
     // substantial amounts of code or a call. And that copying elements will likely be a call to
@@ -28,64 +31,67 @@ where
     // `ptr::swap_nonoverlapping` because `memcpy` can use wide SIMD based on runtime feature
     // detection. Benchmarks support this analysis.
 
-    let mut gap_guard_opt: Option<GapGuard<T>> = None;
+    let mut gap_opt: Option<GapGuard<T>> = None;
 
-    // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
-    // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
-    // `r == v.len()` and we checked that `l < r` at every indexing operation.
-    //
-    // From here we know that `r` must be at least `r == l` which was shown to be valid from the
-    // first one.
+    // SAFETY: The left-to-right scanning loop performs a bounds check, where we know that `left >=
+    // v_base && left < right && right <= v_base.add(len)`. The right-to-left scanning loop performs
+    // a bounds check ensuring that `right` is in-bounds. We checked that `len` is more than zero,
+    // which means that unconditional `right = right.sub(1)` is safe to do. The exit check makes
+    // sure that `left` and `right` never alias, making `ptr::copy_nonoverlapping` safe. The
+    // drop-guard `gap` ensures that should `is_less` panic we always overwrite the duplicate in the
+    // input. `gap.pos` stores the previous value of `right` and starts at `right` and so it too is
+    // in-bounds. We never pass the saved `gap.value` to `is_less` while it is inside the `GapGuard`
+    // thus any changes via interior mutability will be observed.
     unsafe {
-        let arr_ptr = v.as_mut_ptr();
+        let v_base = v.as_mut_ptr();
 
-        let mut l_ptr = arr_ptr;
-        let mut r_ptr = arr_ptr.add(v.len());
+        let mut left = v_base;
+        let mut right = v_base.add(len);
 
         loop {
             // Find the first element greater than the pivot.
-            while l_ptr < r_ptr && is_less(&*l_ptr, pivot) {
-                l_ptr = l_ptr.add(1);
+            while left < right && is_less(&*left, pivot) {
+                left = left.add(1);
             }
 
             // Find the last element equal to the pivot.
-            while l_ptr < r_ptr && !is_less(&*r_ptr.sub(1), pivot) {
-                r_ptr = r_ptr.sub(1);
+            loop {
+                right = right.sub(1);
+                if left >= right || is_less(&*right, pivot) {
+                    break;
+                }
             }
-            r_ptr = r_ptr.sub(1);
 
-            // Are we done?
-            if l_ptr >= r_ptr {
-                assert!(l_ptr != r_ptr);
+            if left >= right {
                 break;
             }
 
             // Swap the found pair of out-of-order elements via cyclic permutation.
-            let is_first_swap_pair = gap_guard_opt.is_none();
+            let is_first_swap_pair = gap_opt.is_none();
 
             if is_first_swap_pair {
-                gap_guard_opt = Some(GapGuard {
-                    pos: r_ptr,
-                    value: ManuallyDrop::new(ptr::read(l_ptr)),
+                gap_opt = Some(GapGuard {
+                    pos: right,
+                    value: ManuallyDrop::new(ptr::read(left)),
                 });
             }
 
-            let gap_guard = gap_guard_opt.as_mut().unwrap_unchecked();
+            let gap = gap_opt.as_mut().unwrap_unchecked();
 
             // Single place where we instantiate ptr::copy_nonoverlapping in the partition.
             if !is_first_swap_pair {
-                ptr::copy_nonoverlapping(l_ptr, gap_guard.pos, 1);
+                ptr::copy_nonoverlapping(left, gap.pos, 1);
             }
-            gap_guard.pos = r_ptr;
-            ptr::copy_nonoverlapping(r_ptr, l_ptr, 1);
+            gap.pos = right;
+            ptr::copy_nonoverlapping(right, left, 1);
 
-            l_ptr = l_ptr.add(1);
+            left = left.add(1);
         }
 
-        l_ptr.sub_ptr(arr_ptr)
+        left.sub_ptr(v_base)
 
-        // `gap_guard_opt` goes out of scope and overwrites the last right wrong-side element with
-        // the first left wrong-side element that was initially overwritten by the first right
-        // wrong-side element.
+        // `gap_opt` goes out of scope and overwrites the last wrong-side element on the right side
+        // with the first wrong-side element of the left side that was initially overwritten by the
+        // first wrong-side element on the right side.
     }
 }

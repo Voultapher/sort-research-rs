@@ -75,13 +75,11 @@ where
     }
 }
 
-// Inspired by Igor van den Hoven and his work in quadsort/crumsort.
-// TODO document.
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // TODO explain ideas. and panic safety. cleanup.
+// This function is *NOT* safe-to-use for non `Freeze` types.
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
+    // Novel partition implementation by Igor van den Hoven as part of his work in quadsort and
+    // crumsort.
+
     let len = v.len();
 
     const ROTATION_ELEMS: usize = 32;

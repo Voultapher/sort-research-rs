@@ -15,10 +15,7 @@ partition_impl!("hoare_block");
 ///
 /// [pdf]: https://drops.dagstuhl.de/opus/volltexte/2016/6389/pdf/LIPIcs-ESA-2016-38.pdf
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     // Number of elements in a typical block.
     const BLOCK: usize = 128;
 

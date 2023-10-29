@@ -106,10 +106,7 @@ unsafe fn swap_between_blocks<T>(
 }
 
 #[cfg_attr(feature = "no_inline_sub_functions", inline(never))]
-fn partition<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-where
-    F: FnMut(&T, &T) -> bool,
-{
+fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     // TODO explain more. Both AVX and NEON SIMD were analyzed for `u64`, the inner pivot comparison
     // loop should spend a bit less than a cycle per element doing the comparison and 1.5-2.5 cycles
     // if no SIMD is available. TODO cycles per swapped elements.

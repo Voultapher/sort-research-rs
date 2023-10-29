@@ -185,6 +185,12 @@ fn partition_hoare_branchy_cyclic<T, F>(v: &mut [T], pivot: &T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
+    let len = v.len();
+
+    if len == 0 {
+        return 0;
+    }
+
     // Optimized for large types that are expensive to move. Not optimized for integers. Optimized
     // for small code-gen, assuming that is_less is an expensive operation that generates
     // substantial amounts of code or a call. And that copying elements will likely be a call to
@@ -192,19 +198,22 @@ where
     // `ptr::swap_nonoverlapping` because `memcpy` can use wide SIMD based on runtime feature
     // detection. Benchmarks support this analysis.
 
-    let mut gap_guard_opt: Option<GapGuard<T>> = None;
+    let mut gap_opt: Option<GapGuard<T>> = None;
 
-    // SAFETY: The unsafety below involves indexing an array. For the first one: We already do
-    // the bounds checking here with `l < r`. For the second one: We initially have `l == 0` and
-    // `r == v.len()` and we checked that `l < r` at every indexing operation.
-    //
-    // From here we know that `r` must be at least `r == l` which was shown to be valid from the
-    // first one.
+    // SAFETY: The left-to-right scanning loop performs a bounds check, where we know that `left >=
+    // v_base && left < right && right <= v_base.add(len)`. The right-to-left scanning loop performs
+    // a bounds check ensuring that `right` is in-bounds. We checked that `len` is more than zero,
+    // which means that unconditional `right = right.sub(1)` is safe to do. The exit check makes
+    // sure that `left` and `right` never alias, making `ptr::copy_nonoverlapping` safe. The
+    // drop-guard `gap` ensures that should `is_less` panic we always overwrite the duplicate in the
+    // input. `gap.pos` stores the previous value of `right` and starts at `right` and so it too is
+    // in-bounds. We never pass the saved `gap.value` to `is_less` while it is inside the `GapGuard`
+    // thus any changes via interior mutability will be observed.
     unsafe {
         let v_base = v.as_mut_ptr();
 
         let mut left = v_base;
-        let mut right = v_base.add(v.len());
+        let mut right = v_base.add(len);
 
         loop {
             // Find the first element greater than the pivot.
@@ -213,33 +222,34 @@ where
             }
 
             // Find the last element equal to the pivot.
-            while left < right && !is_less(&*right.sub(1), pivot) {
+            loop {
                 right = right.sub(1);
+                if left >= right || is_less(&*right, pivot) {
+                    break;
+                }
             }
-            right = right.sub(1);
 
-            // Are we done?
             if left >= right {
                 break;
             }
 
             // Swap the found pair of out-of-order elements via cyclic permutation.
-            let is_first_swap_pair = gap_guard_opt.is_none();
+            let is_first_swap_pair = gap_opt.is_none();
 
             if is_first_swap_pair {
-                gap_guard_opt = Some(GapGuard {
+                gap_opt = Some(GapGuard {
                     pos: right,
                     value: ManuallyDrop::new(ptr::read(left)),
                 });
             }
 
-            let gap_guard = gap_guard_opt.as_mut().unwrap_unchecked();
+            let gap = gap_opt.as_mut().unwrap_unchecked();
 
             // Single place where we instantiate ptr::copy_nonoverlapping in the partition.
             if !is_first_swap_pair {
-                ptr::copy_nonoverlapping(left, gap_guard.pos, 1);
+                ptr::copy_nonoverlapping(left, gap.pos, 1);
             }
-            gap_guard.pos = right;
+            gap.pos = right;
             ptr::copy_nonoverlapping(right, left, 1);
 
             left = left.add(1);
@@ -247,9 +257,8 @@ where
 
         left.sub_ptr(v_base)
 
-        // `gap_guard_opt` goes out of scope and overwrites the last right wrong-side element with
-        // the first left wrong-side element that was initially overwritten by the first right
-        // wrong-side element.
+        // `gap_opt` goes out of scope and overwrites the last wrong-side element on the right side
+        // with the first wrong-side element of the left side that was initially overwritten by the first  wrong-side element on the right side element.
     }
 }
 
@@ -257,50 +266,81 @@ fn partition_lomuto_branchless_cyclic<T, F>(v: &mut [T], pivot: &T, is_less: &mu
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // A Kind of branchless Lomuto partition paired with a cyclic permutation. To the author's
-    // knowledge this is a novel idea, developed by Lukas Bergdoll. Refined code-gen by Orson Peters
-    // to avoid a cmov.
-
-    // Manually unrolled to ensure consistent performance across various targets.
-    const UNROLL_LEN: usize = 2;
+    // Novel partition implementation by Lukas Bergdoll and Orson Peters. Branchless Lomuto
+    // partition paired with a cyclic permutation. TODO link writeup.
 
     let len = v.len();
+    let v_base = v.as_mut_ptr();
+
     if len == 0 {
         return 0;
     }
 
+    // Manually unrolled as micro-optimization as only x86 gets auto-unrolling but not Arm.
+    let unroll_len = if const { mem::size_of::<T>() <= 16 } {
+        2
+    } else {
+        1
+    };
+
+    // SAFETY: We checked that `len` is more than zero, which means that reading `v_base` is safe to
+    // do. From there we have a bounded loop where `v_base.add(i)` is guaranteed in-bounds. `v` and
+    // `pivot` can't alias because of type system rules. The drop-guard `gap` ensures that should
+    // `is_less` panic we always overwrite the duplicate in the input. `gap.pos` stores the previous
+    // value of `right` and starts at `v_base` and so it too is in-bounds. Given `UNROLL_LEN == 2`
+    // after the main loop we either have A) the last element in `v` that has not yet been processed
+    // because `len % 2 != 0`, or B) all elements have been processed except the gap value that was
+    // saved at the beginning with `ptr::read(v_base)`. In the case A) the loop will iterate twice,
+    // first performing loop_body to take care of the last element that didn't fit into the unroll.
+    // After that the behavior is the same as for B) where we use the saved value as `right` to
+    // overwrite the duplicate. If this very last call to `is_less` panics the saved value will be
+    // copied back including all possible changes via interior mutability. If `is_less` does not
+    // panic and the code continues we overwrite the duplicate and do `right = right.add(1)`, this
+    // is safe to do with `&mut *gap.value` because `T` is the same as `[T; 1]` and generating a
+    // pointer one past the allocation is safe.
     unsafe {
-        let v_base = v.as_mut_ptr();
+        let mut lt_count = 0;
+        let mut right = v_base.add(1);
 
         let mut gap = GapGuard {
             pos: v_base,
             value: ManuallyDrop::new(ptr::read(v_base)),
         };
 
-        let end = v_base.add(len);
-        let mut lt_count = 0;
-        while gap.pos.wrapping_add(UNROLL_LEN) < end {
-            for _ in 0..UNROLL_LEN {
-                let v_lt = v_base.add(lt_count);
-                let next_gap_pos = gap.pos.add(1);
-                let is_next_lt = is_less(&*next_gap_pos, pivot);
+        macro_rules! loop_body {
+            () => {{
+                let right_is_lt = is_less(&*right, pivot);
+                let left = v_base.add(lt_count);
 
-                ptr::copy(v_lt, gap.pos, 1);
-                ptr::copy_nonoverlapping(next_gap_pos, v_lt, 1);
+                ptr::copy(left, gap.pos, 1);
+                ptr::copy_nonoverlapping(right, left, 1);
 
-                gap.pos = next_gap_pos;
-                lt_count += is_next_lt as usize;
+                gap.pos = right;
+                lt_count += right_is_lt as usize;
+
+                right = right.add(1);
+                _ = right;
+            }};
+        }
+
+        let unroll_end = v_base.add(len - (unroll_len - 1));
+        while right < unroll_end {
+            for _ in 0..unroll_len {
+                loop_body!();
             }
         }
 
-        let mut scan = gap.pos;
-        drop(gap);
+        let end = v_base.add(len);
+        loop {
+            let is_done = right == end;
+            right = if is_done { &mut *gap.value } else { right };
 
-        while scan < end {
-            let is_lomuto_less = is_less(&*scan, pivot);
-            ptr::swap(v_base.add(lt_count), scan);
-            scan = scan.add(1);
-            lt_count += is_lomuto_less as usize;
+            loop_body!();
+
+            if is_done {
+                mem::forget(gap);
+                break;
+            }
         }
 
         lt_count

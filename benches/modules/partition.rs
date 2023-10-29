@@ -297,18 +297,13 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     }
 
     bench_inst!(hoare_block_butterfly);
-    bench_inst!(hoare_block_opt);
-    bench_inst!(hoare_block_ptr);
     bench_inst!(hoare_block);
     bench_inst!(hoare_branchy_cyclic);
     bench_inst!(hoare_branchy);
-    bench_inst!(hoare_crumsort_opt);
     bench_inst!(hoare_crumsort_rs);
     bench_inst!(hoare_crumsort);
     bench_inst!(hybrid_bitset_partition);
     bench_inst!(hybrid_block_partition);
-    bench_inst!(lomuto_branchless_2way);
-    bench_inst!(lomuto_branchless_4way);
     bench_inst!(lomuto_branchless_cyclic_opt);
     bench_inst!(lomuto_branchless_cyclic);
     bench_inst!(lomuto_branchless);
