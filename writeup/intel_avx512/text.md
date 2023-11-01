@@ -330,7 +330,7 @@ int compare_ints(const void* a_ptr, const void* b_ptr)
 }
 ```
 
-This can avoid the issue with branch miss-prediction, however another issue remains. C abstracts over user-defined logic with function pointers. In contrast to C++ and Rust closures these can't be inlined without profile-guided optimizations (PGO). crumsort until recently required a custom define which disables a custom comparison globally via a define `#define cmp(a, b) (*(a) > *(b))` before the header only implementation is parsed. This is what is required for best performance, and what all benchmarks here used. However this makes crumsort more akin to the manually vectorized implementations in terms of supported types. User defined types that don't fit in a `long long` will require source level modifications. And for best performance with such interface a unique version of crumsort would have to be compiled for every type, via the build system. Fundamentally this is a C issue and only a crumsort issue, because it is implemented in C and mirrors the `qsort` interface.
+This can avoid the issue with branch miss-prediction, however another issue remains. C abstracts over user-defined logic with function pointers. In contrast to C++ and Rust closures these can't be inlined without profile-guided optimizations (PGO). crumsort until recently required a custom define which disables a custom comparison globally via a define `#define cmp(a, b) (*(a) > *(b))` before the header only implementation is parsed. This is what is required for best performance, and what all benchmarks here used. However this makes crumsort more akin to the manually vectorized implementations in terms of supported types. User defined types that don't fit in a `long long` will require source level modifications. And for best performance with such interface a unique version of crumsort would have to be compiled for every type, via the build system. Fundamentally this is a C issue and not only a crumsort issue, only affecting it because it is implemented in C and mirrors the `qsort` interface.
 
 Comparing the results of crumsort to crumsort using the branchless comparison function (c_crumsort_generic) on the Skylake Linux machine gives:
 
@@ -346,7 +346,7 @@ Observations:
 
 ### Hot benchmarks
 
-Running a sort implementation several million times in a loop, as is the standard for tools like google benchmark and criterion, with new unique inputs of the same size and pattern is not representative of real world application performance. To simulate a program that calls sort occasionally with varying sizes, and a cold CPU prediction state, the benchmarks are also run in a mode where between each sort call, the CPU prediction state is trashed [[6](https://github.com/Voultapher/sort-research-rs/blob/b7bcd199e861d6f8b265164242f3c34d5c36c75f/benches/trash_prediction.rs#L7)]. These benchmarks are marked `cold-*`. And they for the basis for the above scaling graphs. Benchmarks using the default hot loop logic are marked `hot-*`. **hot benchmark numbers should be interpreted as best case performance under laboratory conditions.**
+Running a sort implementation several million times in a loop, as is the standard for tools like google benchmark and criterion, with new unique inputs of the same size and pattern is not representative of real world application performance. To simulate a program that calls sort occasionally with varying sizes, and a cold CPU prediction state, the benchmarks are also run in a mode where between each sort call, the CPU prediction state is trashed [[6](https://github.com/Voultapher/sort-research-rs/blob/b7bcd199e861d6f8b265164242f3c34d5c36c75f/benches/trash_prediction.rs#L7)]. These benchmarks are marked `cold-*`. And they form the basis for the above scaling graphs. Benchmarks using the default hot loop logic are marked `hot-*`. **hot benchmark numbers should be interpreted as best case performance under laboratory conditions.**
 
 #### u64-scaling
 
@@ -382,7 +382,11 @@ The shown cold and hot benchmarks, model the two extremes of the likely range of
 
 #### Further hot results
 
+Windows:
+
 <img src="assets/hot-i32-scaling-random-windows.png" width=810 />
+
+Linux:
 
 <img src="assets/hot-i32-scaling-random-linux.png" width=810 />
 
