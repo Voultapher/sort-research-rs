@@ -67,7 +67,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_s95", |len| patterns::random_sorted(len, 95.0)),
         ("ascending", patterns::ascending),
         ("descending", patterns::descending),
-        ("saws_short", |len| patterns::saw_mixed_range(len, 20..70)),
     ];
 
     // Custom patterns designed to find worst case performance.
