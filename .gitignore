@@ -8,3 +8,5 @@
 /venv
 # benchmark output json
 /*.json
+
+**/__pycache__/
