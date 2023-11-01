@@ -15,7 +15,7 @@ from bokeh.models import FactorRange, LabelSet
 from natsort import natsorted
 
 from cpu_info import get_cpu_info
-from util import parse_result, extract_groups, build_color_palette
+from util import parse_result, extract_groups, build_implementation_meta_info
 
 CPU_INFO = None
 
@@ -58,6 +58,9 @@ def find_time_scale(max_time_ns):
     if max_time_ns < 1_000_000_000:
         return 1_000_000, "ms"
 
+    if max_time_ns < 1_000_000_000_000:
+        return 1_000_000_000, "s"
+
     raise Exception("time scale not supported")
 
 
@@ -68,7 +71,7 @@ def format_time(time_val):
     return f"{time_val:.1f}"
 
 
-COLOR_PALETTE = build_color_palette()
+IMPL_META_INFO = build_implementation_meta_info()
 
 
 def plot_single_size(ty, prediction_state, test_len, values):
@@ -85,7 +88,8 @@ def plot_single_size(ty, prediction_state, test_len, values):
         ):
             y.append((pattern, sort_name))
             bench_times.append(bench_times_ns / time_div)
-            colors.append(COLOR_PALETTE[sort_name])
+            color, _shape = IMPL_META_INFO[sort_name]
+            colors.append(color)
 
     bench_times_text = [format_time(x) for x in bench_times]
 
@@ -107,7 +111,7 @@ def plot_single_size(ty, prediction_state, test_len, values):
         title=plot_name,
         tools="",
         plot_width=800,
-        plot_height=1000,
+        plot_height=900,
     )
 
     add_tools_to_plot(plot)
@@ -140,7 +144,7 @@ def plot_single_size(ty, prediction_state, test_len, values):
     return plot_name, plot
 
 
-def plot_sizes(name, groups):
+def plot_sizes(groups):
     # Assumes all entries were tested for the same patterns.
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
@@ -154,7 +158,7 @@ def plot_sizes(name, groups):
                 # show(plot)
 
                 html = file_html(plot, CDN, plot_name)
-                with open(f"{name}-{plot_name}.html", "w+") as outfile:
+                with open(f"{plot_name}.html", "w+") as outfile:
                     outfile.write(html)
 
                 # raise Exception()
@@ -167,4 +171,4 @@ if __name__ == "__main__":
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
     CPU_INFO = get_cpu_info(name)
-    plot_sizes(name, groups)
+    plot_sizes(groups)

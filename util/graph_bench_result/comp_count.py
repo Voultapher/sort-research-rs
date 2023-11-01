@@ -215,10 +215,9 @@ def plot_comparisons(groups, stable_name):
 
 
 def plot_comparison_evolution_single(sort_names, groups, sort_name):
-
     plot = figure(
         title=f"{sort_name}-comp-evolution",
-        x_axis_label="Input Size (log)",
+        x_axis_label="Input length (log)",
         x_axis_type="log",
         y_axis_label="Comparisons performed / (N - 1) | Lower is better",
         y_range=(0, 30),  # Chosen to make comparing sorts easier.

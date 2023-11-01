@@ -8,7 +8,8 @@ PLOTS = ["scaling", "single_size", "direct_versus"]
 if __name__ == "__main__":
     this_dir = os.path.dirname(os.path.abspath(__file__))
     current_dir = os.path.abspath(os.getcwd())
-    analysis_dir = os.path.join(current_dir, "analysis")
+    name = os.path.basename(sys.argv[1]).partition(".")[0]
+    analysis_dir = os.path.join(current_dir, f"analysis_{name}")
 
     if os.path.exists(analysis_dir):
         shutil.rmtree(analysis_dir)

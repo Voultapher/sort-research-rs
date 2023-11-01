@@ -1,6 +1,6 @@
 from manim import *
 
-from bokeh.palettes import magma
+from bokeh.palettes import magma, Colorblind
 
 INPUT = [
     935,
@@ -212,7 +212,7 @@ def partition_animation(scene, rect_anim_fn):
 
 
 def highlight_color(val_is_lt):
-    return "#77b255" if val_is_lt else "#db2e43"
+    return Colorblind[8][3] if val_is_lt else Colorblind[8][4]
 
 
 def lomuto_partition_anim(scene, rect_vals):
@@ -413,7 +413,7 @@ def hoare_partition_anim(scene, rect_vals):
 
             left += 1
 
-        scene.wait(duration=0.35)
+        scene.wait(duration=0.5)
 
         while True:
             right -= 1
@@ -434,7 +434,7 @@ def hoare_partition_anim(scene, rect_vals):
         if left >= right:
             break
 
-        scene.wait(duration=0.35)
+        scene.wait(duration=0.5)
         swap_horizontal(scene, rect_vals, left, right)
 
         left += 1

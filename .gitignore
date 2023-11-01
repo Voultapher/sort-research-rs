@@ -3,7 +3,7 @@
 .vscode
 
 # generated analysis html
-/analysis
+/analysis_*
 # python environment
 /venv
 # benchmark output json

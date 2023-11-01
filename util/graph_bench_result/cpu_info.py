@@ -6,12 +6,20 @@ def detail_get_cpu_info(name):
 
     if "zen3" in name_lower:
         cpu_boost_ghz = 4.9
-        cpu_arch = "Zen3"
+        cpu_arch = "Zen 3"
         os_name = "Linux"
     elif "firestorm" in name_lower:
         cpu_boost_ghz = 3.2
         cpu_arch = "Firestorm"
         os_name = "MacOS"
+    elif "icestorm" in name_lower:
+        cpu_boost_ghz = 2.0
+        cpu_arch = "Icestorm"
+        os_name = "MacOS"
+    elif "a53" in name_lower:
+        cpu_boost_ghz = 1.9
+        cpu_arch = "Cortex-A53"
+        os_name = "Linux"
     elif "haswell" in name_lower:
         cpu_boost_ghz = 3.0
         cpu_arch = "Haswell"

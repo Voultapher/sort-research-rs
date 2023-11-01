@@ -4,6 +4,7 @@ Produce graphs that show the scaling nature of sort implementations.
 
 import sys
 import os
+import math
 
 
 from bokeh import models
@@ -12,13 +13,18 @@ from bokeh.resources import CDN
 from bokeh.embed import file_html
 
 from cpu_info import get_cpu_info
-from util import parse_result, extract_groups, build_color_palette, type_size
+from util import (
+    parse_result,
+    extract_groups,
+    build_implementation_meta_info,
+    type_size,
+)
 
 CPU_INFO = None
 
 # Needs to be shared instance :/
 TOOLS = None
-COLOR_PALETTE = build_color_palette()
+IMPL_META_INFO = build_implementation_meta_info()
 
 
 def init_tools():
@@ -77,7 +83,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
     plot_name = f"{prediction_state}-{ty}-scaling-{pattern}"
     plot = figure(
         title=plot_name,
-        x_axis_label="Input Size (log)",
+        x_axis_label="Input length (log)",
         x_axis_type="log",
         y_axis_label=f"Million elements per second | Higher is better | {CPU_INFO}",
         plot_width=1000,
@@ -90,7 +96,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
 
     sort_names = sorted(list(list(values.values())[0].values())[0].keys())
 
-    max_y_val = 0
+    y_max = 0
     for sort_name in sort_names:
         is_new_sort = sort_name.endswith("_new")
 
@@ -100,9 +106,9 @@ def plot_scaling(ty, prediction_state, pattern, values):
         line_dash = "dashed" if is_new_sort else "solid"
 
         x, y = extract_line(ty, sort_name, pattern, values)
-        color = COLOR_PALETTE[effective_sort_name]
+        color, symbol = IMPL_META_INFO[effective_sort_name]
 
-        max_y_val = max(max_y_val, max(y))
+        y_max = max(y_max, max(y))
 
         data = {"x": x, "y": y, "name": [sort_name] * len(x)}
         source = ColumnDataSource(data=data)
@@ -115,28 +121,43 @@ def plot_scaling(ty, prediction_state, pattern, values):
             legend_label=sort_name,
         )
 
-        plot.square(
+        getattr(plot, symbol)(
             source=source,
-            size=5,
+            size=6,
             fill_color=None,
             line_color=color,
+            legend_label=sort_name,
         )
 
-    if max_y_val < 400:
-        step_size = 10 if max_y_val <= 200 else 20
-        top_line = 500
-        plot.yaxis.ticker = list(range(0, top_line, step_size))
+    y_step_size = max(round(y_max / 15.0, 0), 1.0)
+    y_range = math.ceil((y_max * 1.05) / y_step_size) * y_step_size
+
+    # There has to be a better way to do this.
+    y_ticker = []
+    y_ticker_cur = -y_range
+    while y_ticker_cur <= y_range:
+        y_ticker.append(y_ticker_cur)
+        y_ticker_cur += y_step_size
+
+    plot.yaxis.ticker = y_ticker
+
+    plot.y_range = models.Range1d(start=0, end=y_range)
 
     return plot_name, plot
 
 
-def plot_patterns(name, groups):
-    patterns = sorted(
-        list(list(list(groups.values())[0].values())[0].values())[0].keys()
-    )
-
+def plot_patterns(groups):
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
+            patterns_all = [
+                [pattern for pattern in val3.keys()]
+                for _test_len, val3 in val2.items()
+            ]
+            patterns = patterns_all[0]
+            assert all(
+                p == patterns for p in patterns_all
+            ), f"Expected all patterns for one type-prediction-state combination to be the same, but got: {patterns_all}"
+
             for pattern in patterns:
                 init_tools()
 
@@ -145,7 +166,7 @@ def plot_patterns(name, groups):
                 )
 
                 html = file_html(plot, CDN, plot_name)
-                with open(f"{name}-{plot_name}.html", "w+") as outfile:
+                with open(f"{plot_name}.html", "w+") as outfile:
                     outfile.write(html)
 
 
@@ -156,4 +177,4 @@ if __name__ == "__main__":
 
     name = os.path.basename(sys.argv[1]).partition(".")[0]
     CPU_INFO = get_cpu_info(name)
-    plot_patterns(name, groups)
+    plot_patterns(groups)
