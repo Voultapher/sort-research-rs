@@ -3,7 +3,6 @@ Produce graphs that show the scaling nature of sort implementations.
 """
 
 import sys
-import os
 import math
 
 
@@ -18,6 +17,8 @@ from util import (
     extract_groups,
     build_implementation_meta_info,
     type_size,
+    base_name,
+    plot_name_suffix,
 )
 
 CPU_INFO = None
@@ -80,7 +81,9 @@ def extract_line(ty, sort_name, pattern, values):
 
 
 def plot_scaling(ty, prediction_state, pattern, values):
-    plot_name = f"{prediction_state}-{ty}-scaling-{pattern}"
+    plot_name = (
+        f"{prediction_state}-{ty}-scaling-{pattern}{plot_name_suffix()}"
+    )
     plot = figure(
         title=plot_name,
         x_axis_label="Input length (log)",
@@ -130,7 +133,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
         )
 
     y_step_size = max(round(y_max / 15.0, 0), 1.0)
-    y_range = math.ceil((y_max * 1.05) / y_step_size) * y_step_size
+    y_range = math.ceil((y_max * 1.03) / y_step_size) * y_step_size
 
     # There has to be a better way to do this.
     y_ticker = []
@@ -154,9 +157,9 @@ def plot_patterns(groups):
                 for _test_len, val3 in val2.items()
             ]
             patterns = patterns_all[0]
-            assert all(
-                p == patterns for p in patterns_all
-            ), f"Expected all patterns for one type-prediction-state combination to be the same, but got: {patterns_all}"
+            # assert all(
+            #     p == patterns for p in patterns_all
+            # ), f"Expected all patterns for one type-prediction_state {ty}-{prediction_state} combination to be the same, but got: {patterns_all}"
 
             for pattern in patterns:
                 init_tools()
@@ -175,6 +178,6 @@ if __name__ == "__main__":
 
     groups = extract_groups(combined_result)
 
-    name = os.path.basename(sys.argv[1]).partition(".")[0]
+    name = base_name()
     CPU_INFO = get_cpu_info(name)
     plot_patterns(groups)

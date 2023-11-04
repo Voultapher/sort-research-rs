@@ -1,4 +1,6 @@
 import json
+import os
+import sys
 
 from collections import defaultdict
 
@@ -8,6 +10,22 @@ from bokeh.palettes import Colorblind
 def parse_result(path):
     with open(path, "r") as file:
         return json.load(file)
+
+
+def parse_skip(key):
+    skip = os.environ.get(key)
+    if skip is None:
+        return []
+
+    return skip.replace(" ", "").split(",")
+
+
+def base_name():
+    return os.path.basename(sys.argv[1]).partition(".")[0]
+
+
+def plot_name_suffix():
+    return os.environ.get("PLOT_NAME_SUFFIX", "")
 
 
 def extract_groups(bench_result):
@@ -24,6 +42,12 @@ def extract_groups(bench_result):
         )
     )
 
+    sort_name_skip = parse_skip("SORT_NAME_SKIP")
+    pred_state_skip = parse_skip("PRED_STATE_SKIP")
+    type_skip = parse_skip("TYPE_SKIP")
+    test_len_skip = parse_skip("TEST_LEN_SKIP")
+    pattern_skip = parse_skip("PATTERN_SKIP")
+
     for benchmark_full, value in bench_result["benchmarks"].items():
         sort_name, _, benchmark = benchmark_full.partition("-")
 
@@ -32,9 +56,22 @@ def extract_groups(bench_result):
         pred_state = entry_parts[0]
         ty = entry_parts[1]
         pattern = entry_parts[2]
-        test_len = int(entry_parts[3])
+        test_len_str = entry_parts[3]
+        test_len = int(test_len_str)
 
-        if sort_name == "c_fluxsort_stable" and ty not in ("u64", "i32"):
+        if sort_name in sort_name_skip:
+            continue
+
+        if pred_state in pred_state_skip:
+            continue
+
+        if ty in type_skip:
+            continue
+
+        if test_len_str in test_len_skip:
+            continue
+
+        if pattern in pattern_skip:
             continue
 
         bench_time_ns = value["criterion_estimates_v1"]["median"][

@@ -3,7 +3,6 @@ Produce graphs that show the relative speedup and slowdown between two implement
 """
 
 import sys
-import os
 import itertools
 import statistics
 import math
@@ -18,7 +17,12 @@ from bokeh.palettes import Colorblind
 from natsort import natsorted
 
 from cpu_info import get_cpu_info
-from util import parse_result, extract_groups, build_pattern_meta_info
+from util import (
+    parse_result,
+    extract_groups,
+    build_pattern_meta_info,
+    base_name,
+)
 
 CPU_INFO = None
 PATTERN_META_INFO = build_pattern_meta_info()
@@ -161,7 +165,7 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
     # Anything above 5x is too much.
 
     y_step_size = max(round(y_max / 10.0, 1), 0.1)
-    y_range = math.ceil(y_max / y_step_size) * y_step_size
+    y_range = math.ceil((y_max * 1.01) / y_step_size) * y_step_size
 
     # There has to be a better way to do this.
     y_ticker = []
@@ -218,6 +222,6 @@ if __name__ == "__main__":
         if sort_name_a == sort_name_b:
             continue
 
-        name = os.path.basename(sys.argv[1]).partition(".")[0]
+        name = base_name()
         CPU_INFO = get_cpu_info(name)
         plot_types(sort_name_a, sort_name_b, groups)

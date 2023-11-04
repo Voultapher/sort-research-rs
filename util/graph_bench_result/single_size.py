@@ -3,7 +3,6 @@ Produce bar graph that compares N implementations for a single size.
 """
 
 import sys
-import os
 
 
 from bokeh import models
@@ -15,7 +14,12 @@ from bokeh.models import FactorRange, LabelSet
 from natsort import natsorted
 
 from cpu_info import get_cpu_info
-from util import parse_result, extract_groups, build_implementation_meta_info
+from util import (
+    parse_result,
+    extract_groups,
+    build_implementation_meta_info,
+    base_name,
+)
 
 CPU_INFO = None
 
@@ -169,6 +173,6 @@ if __name__ == "__main__":
 
     groups = extract_groups(combined_result)
 
-    name = os.path.basename(sys.argv[1]).partition(".")[0]
+    name = base_name()
     CPU_INFO = get_cpu_info(name)
     plot_sizes(groups)

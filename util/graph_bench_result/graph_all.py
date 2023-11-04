@@ -5,6 +5,8 @@ import shutil
 
 PLOTS = ["scaling", "single_size", "direct_versus"]
 
+from util import parse_skip
+
 if __name__ == "__main__":
     this_dir = os.path.dirname(os.path.abspath(__file__))
     current_dir = os.path.abspath(os.getcwd())
@@ -16,6 +18,8 @@ if __name__ == "__main__":
 
     os.mkdir(analysis_dir)
 
+    plot_skip = parse_skip("PLOT_SKIP")
+
     for path in sys.argv[1:]:
         if not os.path.exists(path):
             print(f"{path} not found, skipping.")
@@ -24,6 +28,9 @@ if __name__ == "__main__":
         path_abs = os.path.abspath(path)
 
         for plot in PLOTS:
+            if plot in plot_skip:
+                continue
+
             cwd = os.path.join(analysis_dir, plot)
             if not os.path.exists(cwd):
                 os.mkdir(cwd)
