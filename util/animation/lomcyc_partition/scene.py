@@ -212,7 +212,7 @@ def partition_animation(scene, rect_anim_fn):
 
 
 def highlight_color(val_is_lt):
-    return Colorblind[8][3] if val_is_lt else Colorblind[8][4]
+    return Colorblind[8][1] if val_is_lt else Colorblind[8][4]
 
 
 def lomuto_partition_anim(scene, rect_vals):
@@ -424,7 +424,7 @@ def hoare_partition_anim(scene, rect_vals):
             val_is_lt = comp_results[right]
             scene.play(
                 CustomIndicate(rect_vals[right], highlight_color(val_is_lt)),
-                run_time=0.5,
+                run_time=0.7,
             )
             scene.wait(duration=0.25)
 
