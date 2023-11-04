@@ -67,7 +67,6 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
                 ptr::copy(gap.pos, new_left_dest, 1);
 
                 right = right.add(1);
-                _ = right;
             }};
         }
 

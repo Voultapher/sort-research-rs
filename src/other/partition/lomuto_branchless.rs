@@ -54,7 +54,6 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
                 lt_count += right_is_lt as usize;
 
                 right = right.add(1);
-                _ = right;
             }};
         }
 

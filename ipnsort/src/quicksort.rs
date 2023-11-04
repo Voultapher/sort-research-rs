@@ -319,7 +319,6 @@ where
                 lt_count += right_is_lt as usize;
 
                 right = right.add(1);
-                _ = right;
             }};
         }
 
