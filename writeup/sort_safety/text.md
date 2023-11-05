@@ -80,7 +80,7 @@ If the sort operation is understood as a series of swaps, C, D, E and F can all 
 
 ### Exception safety
 
-C++ and Rust are both languages with scope based destructors (RAII), and stack unwinding. Together they prove a powerful abstraction for manual memory management. At the same time, they can make implementing generic code more complex. Every single point in the sort implementation that calls the user-provided comparison function, must assume that the call may return via an exception in C++ or panic in Rust.
+Exception safety encompasses the various guarantees of correctness that can be provided in the presence of exception. In the concrete case of sort implementations that accept user-provided comparison functions, exception safety expresses the possible behavior when the comparison function can throw an exception.
 
 C++:
 
@@ -106,7 +106,18 @@ data.sort_by(|a, b| {
 });
 ```
 
-In practice a lack of exception safety manifests itself in the variants C and or D described in the section about Ord safety. In C++, types are considered either trivially copyable by the type system or not. For example `uint64_t` is and `std::string` isn't. In essence the question asked is, does copying the bits of the type suffice to have a meaningful new value, or must a user-defined copy or move operation be called. Some of the tested C++ implementations use this property to specialize their implementations and the logic changes accordingly. Assuming the user is using types that follow C++ best practices, this helps avoid direct UB, for example the tested `std::sort` implementations leave `std::string` values in a moved from state, which is safe to destroy, avoiding a potential double-free. This analysis does not consider this enough to mark an implementation as exception safe. The general theme is one of analyzing behavior in the presence of user mistakes, and types that don't follow C++ best practices are a common mistake in C++. In addition there are situation where users have no alternative but to interact with thirdparty libraries and or C code with limited or broken RAII semantics. Even assuming a world filled exclusively with C++ types following best practices, where duplicating integers will not directly lead to UB, it can still easily break adjacent assumptions made about a sort operation only re-arranging elements and not duplicating them, as shown [here](https://github.com/google/crumsort-rs/issues/1). The tested for exception safety fits neither the concept of basic nor strong exception safety. Leaving the input in some unspecified but safe to destroy state as required by basic exception safety, can be surprising and lead to adjacent UB. Returning the input to the original state as required by strong exception safety fails to account for mutation during the comparison that must be observed as shown [here](https://github.com/emilk/drop-merge-sort/issues/23).
+The weakest guarantee is that an exception does not directly lead to undefined behavior. The strongest guarantee is "transactional exception safety", that guarantees that in the case an operation fails, then the state of the program is reverted to the one before the failed operation was attempted. This strongest guarantee is typically both too strong and too performance intensive, so very rarely observed in practice.
+
+For the purpose of this benchmark, the guarantee we are interested in will be denoted "intuitive exception safety". It encompasses the natural behavior a user that is not especially aware of the internal of sort algorithms may expect when a sort routine is interrupted. As the observable side-effect of a sort routine is to reorder elements of the input, intuitive exception safety expresses the guarantee that in the face of an exception, elements from the input may only be partially reordered, as if the sort process had been interrupted. In particular, this excludes modifying elements of the input, for instance duplicating some of them, removing some of them, or, in the case of C++, leaving some elements in the "moved out" state.
+
+We choose intuitive exception safety as the desired property for sort algorithms, because failure to uphold this property can indirectly cause UB in user code by violating invariants enforced in the rest of the code.
+
+As examples, consider the following two situations:
+
+1. The user is sorting a vector of move-only types like `std::unique_ptr`. If the user's code guarantees that, by construction, the pointers in that vector are not null, then it is permissible in user code to rely on this invariant and omit null checks. However, this is fraught in the presence of a sort implementation that doesn't verify the intuitive exception safety property: the input may unexpectedly contain null pointers after the comparison function throws.
+2. The user is sorting a vector of natural numbers that serve as indices in a graph-like structures. If the user's code guarantees that, by construction, the indices in that vector are never repeated, then it is permissible in user code torely on this invariant and delete the node associated with each index without checking if it was previously deleted. However, this is fraught in the presence of a sort implementation that doesn't verify the intuitive exception safety property: for trivially-copyable types, the input may unexpectedly contain duplicated indices after the comparison function throws.
+
+These issues are not theoretical: even assuming a world filled exclusively with C++ types following best practices, where duplicating integers will not directly lead to UB, it can still easily break adjacent assumptions made about a sort operation only re-arranging elements and not duplicating them, as shown [here](https://github.com/google/crumsort-rs/issues/1).
 
 ### Observation safety
 
@@ -201,7 +212,7 @@ Properties:
 - **Functional**: Does the implementation successfully pass the test suite of different input patterns and supported types?
 - **Generic**: Does the implementation support arbitrary user-defined types?
 - **Ord safety**: What happens if the user-defined type or comparison function does not implement a strict weak ordering. E.g. in C++ your comparison function does `[](const auto& a, const auto& b) { return a.x <= b.x; }`? O == unspecified order but original elements, E == exception/panic and unspecified order but original elements, U == Undefined Behavior usually out-of-bounds read and write, D unspecified order with duplicates. Only O and E are safe.
-- **Exception safety**: What happens, if the user provided comparison function throws an exception/panic? ✅ means it retains the original input set in an unspecified order, 🚫 means it may have duplicated elements in the input.
+- **Exception safety**: What happens, if the user provided comparison function throws an exception/panic? ✅ means it retains the original input set in an unspecified order, upholding the intuitiv exception safety property outlined above 🚫 means it may have duplicated or moved-out elements in the input.
 - **Observable comp**: If the type has interior mutability, will every modification caused by calling the user-defined comparison function with const/shared references be visible in the input, after the sort function returns 1: normally 2: panic. If exception safety is not given, it is practically impossible to achieve 2. here.
 - **Miri**: Does the test-suite pass if run under [Miri](https://github.com/rust-lang/Miri)? S: using the Stacked Borrows aliasing model. T: using the Tree Borrows aliasing model.
 
