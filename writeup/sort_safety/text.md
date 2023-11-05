@@ -106,7 +106,7 @@ data.sort_by(|a, b| {
 });
 ```
 
-In practice a lack of exception safety manifests itself in the variants C and or D described in the section about Ord safety. In C++ types are considered either trivially copyable by the type system or not. For example `uint64_t` is, and `std::string` isn't. In essence the question asked is, does copying the bits of the type suffice to have a meaningful new value, or must a user-defined copy or move operation be called. Some of the tested C++ implementations use this property to specialize their implementations and the logic changes accordingly. Assuming the user is using types that follow C++ best practices, this helps avoid direct UB, for example `std::string` leaves behind a value in a moved from state, which is safe to destroy, avoiding a potential double-free. This analysis does not consider this enough to mark an implementation as exception safe. The general theme is one of analyzing behavior in the presence of user mistakes, and types that don't follow C++ best practices are a not too uncommon mistake in C++. In addition there are situation where users have no alternative but to interact with thirdparty libraries and or C code with limited or broken RAII semantics. Even assuming a world filled exclusively with C++ types following best practices, while duplicating integers will not directly lead to UB, it can easily break adjacent assumptions made about a sort operation only re-arranging elements and not duplicating them, as shown [here](https://github.com/google/crumsort-rs/issues/1).
+In practice a lack of exception safety manifests itself in the variants C and or D described in the section about Ord safety. In C++, types are considered either trivially copyable by the type system or not. For example `uint64_t` is and `std::string` isn't. In essence the question asked is, does copying the bits of the type suffice to have a meaningful new value, or must a user-defined copy or move operation be called. Some of the tested C++ implementations use this property to specialize their implementations and the logic changes accordingly. Assuming the user is using types that follow C++ best practices, this helps avoid direct UB, for example the tested `std::sort` implementations leave `std::string` values in a moved from state, which is safe to destroy, avoiding a potential double-free. This analysis does not consider this enough to mark an implementation as exception safe. The general theme is one of analyzing behavior in the presence of user mistakes, and types that don't follow C++ best practices are a common mistake in C++. In addition there are situation where users have no alternative but to interact with thirdparty libraries and or C code with limited or broken RAII semantics. Even assuming a world filled exclusively with C++ types following best practices, where duplicating integers will not directly lead to UB, it can still easily break adjacent assumptions made about a sort operation only re-arranging elements and not duplicating them, as shown [here](https://github.com/google/crumsort-rs/issues/1). The tested for exception safety fits neither the concept of basic nor strong exception safety. Leaving the input in some unspecified but safe to destroy state as required by basic exception safety, can be surprising and lead to adjacent UB. Returning the input to the original state as required by strong exception safety fails to account for mutation during the comparison that must be observed as shown [here](https://github.com/emilk/drop-merge-sort/issues/23).
 
 ### Observation safety
 
@@ -200,7 +200,7 @@ Properties:
 
 - **Functional**: Does the implementation successfully pass the test suite of different input patterns and supported types?
 - **Generic**: Does the implementation support arbitrary user-defined types?
-- **Ord safety**: What happens if the user-defined type or comparison function does not implement a strict weak ordering. E.g. in C++ your comparison function does `[](const auto& a, const auto& b) { return a.x <= b.x; }`? O == unspecified order but original elements, E == exception/panic and unspecified order but original elements, L == infinite loop, C == crash, e.g. heap-buffer-overflow (UB), D unspecified order with duplicates. Only O and E are safe.
+- **Ord safety**: What happens if the user-defined type or comparison function does not implement a strict weak ordering. E.g. in C++ your comparison function does `[](const auto& a, const auto& b) { return a.x <= b.x; }`? O == unspecified order but original elements, E == exception/panic and unspecified order but original elements, U == Undefined Behavior usually out-of-bounds read and write, D unspecified order with duplicates. Only O and E are safe.
 - **Exception safety**: What happens, if the user provided comparison function throws an exception/panic? ✅ means it retains the original input set in an unspecified order, 🚫 means it may have duplicated elements in the input.
 - **Observable comp**: If the type has interior mutability, will every modification caused by calling the user-defined comparison function with const/shared references be visible in the input, after the sort function returns 1: normally 2: panic. If exception safety is not given, it is practically impossible to achieve 2. here.
 - **Miri**: Does the test-suite pass if run under [Miri](https://github.com/rust-lang/Miri)? S: using the Stacked Borrows aliasing model. T: using the Tree Borrows aliasing model.
@@ -210,23 +210,23 @@ Properties:
 | rust_std_stable              | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
 | rust_wpwoodjr_stable         | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: ✅        | S: 🚫 T: ✅     |
 | rust_glidesort_stable        | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
-| cpp_std_gnu_stable           | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_std_gnu_stable           | ✅         | ✅      | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_std_libcxx_stable        | ✅         | ✅      | O ✅       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_std_msvc_stable          | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_std_msvc_stable          | ✅         | ✅      | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_powersort_stable         | ✅         | ⚠️ (1)  | O ✅       | 🚫               | 1: ✅ 2: 🚫        | -               |
 | cpp_powersort_4way_stable    | ✅         | ⚠️ (2)  | O ✅       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| c_fluxsort_stable            | ✅         | ⚠️ (3)  | C 🚫       | 🚫 (6)           | 1: 🚫 2: 🚫 (8)    | -               |
+| c_fluxsort_stable            | ✅         | ⚠️ (3)  | U 🚫       | 🚫 (6)           | 1: 🚫 2: 🚫 (8)    | -               |
 | rust_std_unstable            | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
 | rust_dmsort_unstable         | ✅         | ✅      | O ✅       | ✅               | 1: ✅ 2: 🚫        | S: 🚫 T: ⚠️ (9) |
 | rust_ipnsort_unstable        | ✅         | ✅      | O or E ✅  | ✅               | 1: ✅ 2: ✅        | S: ✅ T: ✅     |
 | rust_crumsort_rs_unstable    | ✅         | ⚠️ (4)  | D 🚫       | 🚫 (7)           | 1: -  2: -         | S: ⚠️ T: ⚠️ (9) |
-| cpp_std_gnu_unstable         | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_std_libcxx_unstable      | ✅         | ✅      | L or C 🚫  | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_std_msvc_unstable        | ✅         | ✅      | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_pdqsort_unstable         | ✅         | ✅      | L or C 🚫  | 🚫               | 1: ✅ 2: 🚫        | -               |
-| cpp_ips4o_unstable           | ✅         | ⚠️ (5)  | C 🚫       | 🚫               | 1: 🚫 2: 🚫        | -               |
-| cpp_blockquicksort_unstable  | ✅         | ⚠️ (5)  | C 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
-| c_crumsort_unstable          | ✅         | ⚠️ (3)  | C 🚫       | 🚫 (6)           | 1: 🚫 2: 🚫 (8)    | -               |
+| cpp_std_gnu_unstable         | ✅         | ✅      | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_std_libcxx_unstable      | ✅         | ✅      | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_std_msvc_unstable        | ✅         | ✅      | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_pdqsort_unstable         | ✅         | ✅      | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| cpp_ips4o_unstable           | ✅         | ⚠️ (5)  | U 🚫       | 🚫               | 1: 🚫 2: 🚫        | -               |
+| cpp_blockquicksort_unstable  | ✅         | ⚠️ (5)  | U 🚫       | 🚫               | 1: ✅ 2: 🚫        | -               |
+| c_crumsort_unstable          | ✅         | ⚠️ (3)  | U 🚫       | 🚫 (6)           | 1: 🚫 2: 🚫 (8)    | -               |
 
 Footnotes:
 
