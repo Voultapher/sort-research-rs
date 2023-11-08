@@ -129,9 +129,9 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
 
     if let Some(max_freq_hz) = cpu_max_freq_hz() {
         let median_elem_per_cycle = median_elem_per_ns / (max_freq_hz / 1_000_000_000.0);
-        println!("{bench_name: <50} {median_elem_per_cycle:.2} elem/cycle");
+        println!("{bench_name: <50} {median_elem_per_cycle:.4} elem/cycle");
     } else {
-        println!("{bench_name: <50} {median_elem_per_ns:.2} elem/ns");
+        println!("{bench_name: <50} {median_elem_per_ns:.3} elem/ns");
     }
 }
 
