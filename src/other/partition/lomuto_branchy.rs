@@ -1,6 +1,6 @@
 use core::ptr;
 
-partition_impl!("lomuto_branchless");
+partition_impl!("lomuto_branchy");
 
 fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
     let len = v.len();
