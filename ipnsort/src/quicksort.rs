@@ -258,7 +258,42 @@ where
         left.sub_ptr(v_base)
 
         // `gap_opt` goes out of scope and overwrites the last wrong-side element on the right side
-        // with the first wrong-side element of the left side that was initially overwritten by the first  wrong-side element on the right side element.
+        // with the first wrong-side element of the left side that was initially overwritten by the
+        // first wrong-side element on the right side element.
+    }
+}
+
+/// This construct works around a couple of issues with auto unrolling as well as manual unrolling.
+/// Auto unrolling as tested with rustc 1.75 is somewhat run-time and binary-size inefficient,
+/// because it performs additional math to calculate the loop end, which we can avoid by
+/// precomputing the loop end. Also auto unrolling only happens on x86 but not on Arm where doing so
+/// for the Firestorm micro-architecture yields a 5+% performance improvement. Manual unrolling via
+/// repeated code has a large negative impact on debug compile-times, and unrolling via `for _ in
+/// 0..UNROLL_LEN` has a 10-20% perf penalty when compiling with `opt-level=s` which is deemed
+/// unacceptable for such a crucial component of the sort implementation.
+trait UnrollHelper: Sized {
+    const UNROLL_LEN: usize;
+
+    unsafe fn unrolled_loop_body<F: FnMut()>(loop_body: F);
+}
+
+impl<T> UnrollHelper for T {
+    default const UNROLL_LEN: usize = 1;
+
+    default unsafe fn unrolled_loop_body<F: FnMut()>(mut loop_body: F) {
+        loop_body();
+    }
+}
+
+impl<T> UnrollHelper for T
+where
+    (): crate::IsTrue<{ mem::size_of::<T>() <= 16 }>,
+{
+    const UNROLL_LEN: usize = 2;
+
+    unsafe fn unrolled_loop_body<F: FnMut()>(mut loop_body: F) {
+        loop_body();
+        loop_body();
     }
 }
 
@@ -275,13 +310,6 @@ where
     if len == 0 {
         return 0;
     }
-
-    // Manually unrolled as micro-optimization as only x86 gets auto-unrolling but not Arm.
-    let unroll_len = if const { mem::size_of::<T>() <= 16 } {
-        2
-    } else {
-        1
-    };
 
     // SAFETY: We checked that `len` is more than zero, which means that reading `v_base` is safe to
     // do. From there we have a bounded loop where `v_base.add(i)` is guaranteed in-bounds. `v` and
@@ -322,11 +350,9 @@ where
             }};
         }
 
-        let unroll_end = v_base.add(len - (unroll_len - 1));
+        let unroll_end = v_base.add(len - (T::UNROLL_LEN - 1));
         while right < unroll_end {
-            for _ in 0..unroll_len {
-                loop_body!();
-            }
+            T::unrolled_loop_body(|| loop_body!());
         }
 
         let end = v_base.add(len);
