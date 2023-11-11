@@ -140,12 +140,12 @@ where
     // a drop guard.
     let pivot = &mut pivot[0];
 
-    let lt_count = T::partition(v_without_pivot, pivot, is_less);
+    let num_lt = T::partition(v_without_pivot, pivot, is_less);
 
     // Place the pivot between the two partitions.
-    v.swap(0, lt_count);
+    v.swap(0, num_lt);
 
-    lt_count
+    num_lt
 }
 
 trait PartitionImpl: Sized {
@@ -263,6 +263,16 @@ where
     }
 }
 
+struct PartitionState<T> {
+    // The current element that is being looked at, scans left to right through slice.
+    right: *mut T,
+    // Counts the number of elements that compared less-than, also works around:
+    // https://github.com/rust-lang/rust/issues/117128
+    num_lt: usize,
+    // Gap guard that tracks the temporary duplicate in the input.
+    gap: GapGuard<T>,
+}
+
 /// This construct works around a couple of issues with auto unrolling as well as manual unrolling.
 /// Auto unrolling as tested with rustc 1.75 is somewhat run-time and binary-size inefficient,
 /// because it performs additional math to calculate the loop end, which we can avoid by
@@ -274,14 +284,21 @@ where
 trait UnrollHelper: Sized {
     const UNROLL_LEN: usize;
 
-    unsafe fn unrolled_loop_body<F: FnMut()>(loop_body: F);
+    unsafe fn unrolled_loop_body<F: FnMut(&mut PartitionState<Self>)>(
+        loop_body: F,
+        state: &mut PartitionState<Self>,
+    );
 }
 
 impl<T> UnrollHelper for T {
     default const UNROLL_LEN: usize = 1;
 
-    default unsafe fn unrolled_loop_body<F: FnMut()>(mut loop_body: F) {
-        loop_body();
+    #[inline(always)]
+    default unsafe fn unrolled_loop_body<F: FnMut(&mut PartitionState<T>)>(
+        mut loop_body: F,
+        state: &mut PartitionState<T>,
+    ) {
+        loop_body(state);
     }
 }
 
@@ -291,9 +308,13 @@ where
 {
     const UNROLL_LEN: usize = 2;
 
-    unsafe fn unrolled_loop_body<F: FnMut()>(mut loop_body: F) {
-        loop_body();
-        loop_body();
+    #[inline(always)]
+    unsafe fn unrolled_loop_body<F: FnMut(&mut PartitionState<T>)>(
+        mut loop_body: F,
+        state: &mut PartitionState<T>,
+    ) {
+        loop_body(state);
+        loop_body(state);
     }
 }
 
@@ -327,47 +348,51 @@ where
     // is safe to do with `&mut *gap.value` because `T` is the same as `[T; 1]` and generating a
     // pointer one past the allocation is safe.
     unsafe {
-        let mut lt_count = 0;
-        let mut right = v_base.add(1);
+        let mut loop_body = |state: &mut PartitionState<T>| {
+            let right_is_lt = is_less(&*state.right, pivot);
+            let left = v_base.add(state.num_lt);
 
-        let mut gap = GapGuard {
-            pos: v_base,
-            value: ManuallyDrop::new(ptr::read(v_base)),
+            ptr::copy(left, state.gap.pos, 1);
+            ptr::copy_nonoverlapping(state.right, left, 1);
+
+            state.gap.pos = state.right;
+            state.num_lt += right_is_lt as usize;
+
+            state.right = state.right.add(1);
         };
 
-        macro_rules! loop_body {
-            () => {{
-                let right_is_lt = is_less(&*right, pivot);
-                let left = v_base.add(lt_count);
+        let mut state = PartitionState {
+            num_lt: 0,
+            right: v_base.add(1),
 
-                ptr::copy(left, gap.pos, 1);
-                ptr::copy_nonoverlapping(right, left, 1);
-
-                gap.pos = right;
-                lt_count += right_is_lt as usize;
-
-                right = right.add(1);
-            }};
-        }
+            gap: GapGuard {
+                pos: v_base,
+                value: ManuallyDrop::new(ptr::read(v_base)),
+            },
+        };
 
         let unroll_end = v_base.add(len - (T::UNROLL_LEN - 1));
-        while right < unroll_end {
-            T::unrolled_loop_body(|| loop_body!());
+        while state.right < unroll_end {
+            T::unrolled_loop_body(&mut loop_body, &mut state);
         }
 
         let end = v_base.add(len);
         loop {
-            let is_done = right == end;
-            right = if is_done { &mut *gap.value } else { right };
+            let is_done = state.right == end;
+            state.right = if is_done {
+                &mut *state.gap.value
+            } else {
+                state.right
+            };
 
-            loop_body!();
+            loop_body(&mut state);
 
             if is_done {
-                mem::forget(gap);
+                mem::forget(state.gap);
                 break;
             }
         }
 
-        lt_count
+        state.num_lt
     }
 }
