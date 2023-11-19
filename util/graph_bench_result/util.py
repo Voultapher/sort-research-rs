@@ -98,46 +98,85 @@ def type_size(type_name):
     raise Exception(f"Unknown type: {type_name}")
 
 
-def build_color_palette():
+def build_implementation_meta_info():
+    """
+    Returns a dict with color and symbol information pinned to a specific
+    implementation.
+
+    This is used to visually identify the different implementations.
+    """
+
     # Use color blind palette to increase accessibility.
     palette = list(Colorblind[8])
 
     # Make colors more consistent by pinning them to a specific sort
     # regardless of the set of tested sorts.
     # This avoids color swapping between different graphs.
-    pinned_colors = {
+    meta_info = {
         # Stable
-        "c_fluxsort_stable": palette[0],
-        "cpp_std_sys_stable": palette[1],
-        "cpp_std_gnu_stable": palette[1],
-        "cpp_std_msvc_stable": palette[1],
-        "rust_std_stable": palette[2],
-        "rust_glidesort_stable": palette[3],
-        "cpp_std_libcxx_stable": palette[4],
-        "rust_ipn_stable": palette[5],
-        "cpp_powersort_stable": palette[6],
-        "cpp_powersort_4way_stable": palette[7],
-        "rust_wpwoodjr_stable": palette[7],
-        "rust_tinymergesort_stable": palette[7],
+        "c_fluxsort_stable": (palette[0], "square"),
+        "cpp_std_sys_stable": (palette[1], "square"),
+        "cpp_std_gnu_stable": (palette[1], "square"),
+        "cpp_std_msvc_stable": (palette[1], "square"),
+        "rust_std_stable": (palette[2], "square"),
+        "rust_glidesort_stable": (palette[3], "square"),
+        "cpp_std_libcxx_stable": (palette[4], "square"),
+        "rust_ipn_stable": (palette[5], "square"),
+        "cpp_powersort_stable": (palette[6], "square"),
+        "cpp_powersort_4way_stable": (palette[7], "square"),
+        "rust_wpwoodjr_stable": (palette[7], "square"),
+        "rust_tinymergesort_stable": (palette[7], "square"),
         # Unstable
-        "c_crumsort_unstable": palette[0],
-        "cpp_std_sys_unstable": palette[1],
-        "cpp_std_gnu_unstable": palette[1],
-        "cpp_std_msvc_unstable": palette[1],
-        "rust_std_unstable": palette[2],
-        "cpp_pdqsort_unstable": palette[3],
-        "cpp_std_libcxx_unstable": palette[4],
-        "rust_ipn_unstable": palette[5],
-        "rust_ipnsort_unstable": palette[5],
-        "cpp_ips4o_unstable": palette[6],
-        "cpp_blockquicksort": palette[7],
-        "rust_tinyheapsort_unstable": palette[7],
+        "c_crumsort_unstable": (palette[0], "square"),
+        "cpp_std_sys_unstable": (palette[1], "square"),
+        "cpp_std_gnu_unstable": (palette[1], "square"),
+        "cpp_std_msvc_unstable": (palette[1], "square"),
+        "rust_std_unstable": (palette[2], "square"),
+        "cpp_pdqsort_unstable": (palette[3], "square"),
+        "cpp_std_libcxx_unstable": (palette[4], "square"),
+        "rust_ipn_unstable": (palette[5], "square"),
+        "rust_ipnsort_unstable": (palette[5], "square"),
+        "cpp_ips4o_unstable": (palette[6], "square"),
+        "cpp_blockquicksort": (palette[7], "square"),
+        "rust_tinyheapsort_unstable": (palette[7], "square"),
         # There are more sorts but they don't really fit the graph or colors at
         # the same time
-        "rust_radsort_radix": palette[4],
-        "cpp_vqsort": palette[6],
-        "cpp_intel_avx512": palette[7],
-        "singeli_singelisort": palette[3],
+        "rust_radsort_radix": (palette[4], "square"),
+        "cpp_vqsort": (palette[6], "square"),
+        "cpp_intel_avx512": (palette[7], "square"),
+        "singeli_singelisort": (palette[3], "square"),
+        # For partition bench
+        "hoare_branchy": (palette[1], "diamond"),
+        "hoare_block": (palette[4], "plus"),
+        "hoare_crumsort": (palette[3], "square_pin"),
+        "lomuto_branchy": (palette[0], "square"),
+        "lomuto_branchless": (palette[5], "circle"),
+        "lomuto_branchless_cyclic": (palette[6], "square_cross"),
+        "lomuto_branchless_cyclic_opt": (palette[7], "triangle"),
     }
 
-    return pinned_colors
+    return meta_info
+
+
+def build_pattern_meta_info():
+    """
+    Returns a dict with color and symbol information pinned to a specific
+    pattern.
+
+    This is used to visually identify the different patterns.
+    """
+
+    # Use color blind palette to increase accessibility.
+    palette = list(Colorblind[8])
+
+    meta_info = {
+        "ascending": (palette[0], "diamond"),
+        "descending": (palette[1], "square"),
+        "random_d20": (palette[3], "square_pin"),
+        "random_p5": (palette[4], "square_cross"),
+        "random_s95": (palette[5], "circle"),
+        "random_z1": (palette[6], "square_cross"),
+        "random": (palette[7], "triangle"),
+    }
+
+    return meta_info
