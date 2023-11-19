@@ -90,9 +90,16 @@ def plot_single_size(ty, prediction_state, test_len, values):
         for sort_name, bench_times_ns in sorted(
             val.items(), key=lambda x: x[1], reverse=True
         ):
+            is_new_sort = sort_name.endswith("_new")
+
+            effective_sort_name = (
+                sort_name.partition("_new")[0] if is_new_sort else sort_name
+            )
+            # TODO change coloring with effective_sort_name
+
             y.append((pattern, sort_name))
             bench_times.append(bench_times_ns / time_div)
-            color, _shape = IMPL_META_INFO[sort_name]
+            color, _shape = IMPL_META_INFO[effective_sort_name]
             colors.append(color)
 
     bench_times_text = [format_time(x) for x in bench_times]
