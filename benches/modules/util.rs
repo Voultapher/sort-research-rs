@@ -67,7 +67,7 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     transform: &fn(Vec<i32>) -> Vec<T>,
     pattern_name: &str,
     pattern_provider: impl Fn(usize) -> Vec<i32>,
-    mut bench_name: &str,
+    bench_name: &str,
     test_fn: impl Fn(&mut [T]),
 ) {
     // Pin the benchmark to the same core to improve repeatability. Doing it this way allows
@@ -85,17 +85,21 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
 
     let name_overwrite = NAME_OVERWRITE.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
 
+    let mut bech_name_with_overwrite = bench_name;
     if let Some(name) = name_overwrite {
         let split_pos = name.find(':').unwrap();
         let match_name = &name[..split_pos];
         if bench_name == match_name {
-            bench_name = &name[(split_pos + 1)..];
+            bech_name_with_overwrite = &name[(split_pos + 1)..];
         }
     }
 
     let bench_name_hot = format!("{bench_name}-hot-{transform_name}-{pattern_name}-{test_len}");
+    let bench_name_hot_with_overwrite =
+        format!("{bech_name_with_overwrite}-hot-{transform_name}-{pattern_name}-{test_len}");
+
     if should_run_benchmark(&bench_name_hot) {
-        c.bench_function(&bench_name_hot, |b| {
+        c.bench_function(&bench_name_hot_with_overwrite, |b| {
             b.iter_batched_ref(
                 || transform(pattern_provider(test_len)),
                 |test_data| {
@@ -111,8 +115,11 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
     {
         let bench_name_cold =
             format!("{bench_name}-cold-{transform_name}-{pattern_name}-{test_len}");
+        let bench_name_cold_with_overwrite =
+            format!("{bech_name_with_overwrite}-cold-{transform_name}-{pattern_name}-{test_len}");
+
         if should_run_benchmark(&bench_name_cold) {
-            c.bench_function(&bench_name_cold, |b| {
+            c.bench_function(&bench_name_cold_with_overwrite, |b| {
                 b.iter_batched_ref(
                     || {
                         let mut test_ints = pattern_provider(test_len);

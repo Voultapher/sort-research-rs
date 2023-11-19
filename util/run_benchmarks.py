@@ -2,6 +2,8 @@ import subprocess
 import sys
 import os
 import shutil
+import argparse
+import json
 
 from graph_bench_result.cpu_info import get_cpu_info
 
@@ -22,7 +24,7 @@ def check_for_correct_dir():
         sys.exit(1)
 
 
-def run_benchmarks(test_name):
+def run_benchmarks(test_name, bench_name_overwrite):
     # Clean target/criterion a messy one can cause issues when exporting with critcmp.
     # We made sure we are in the current dir earlier.
     cur_dir = os.path.abspath(os.getcwd())
@@ -58,6 +60,7 @@ def run_benchmarks(test_name):
             test_name,
         ],
         check=True,
+        env=os.environ,
     )
 
     critcmp_result = subprocess.run(
@@ -71,25 +74,112 @@ def run_benchmarks(test_name):
         result_file.write(bench_results)
 
     print(f"\nWrote results to {out_file_name}")
+    return out_file_name
+
+
+def run_benchmarks_variant(test_name, variant):
+    variant_name = variant["name"]
+    setup_cmd = variant["setup_cmd"]
+    bench_name_overwrite = variant["BENCH_NAME_OVERWRITE"]
+
+    if bench_name_overwrite != "":
+        os.environ["BENCH_NAME_OVERWRITE"] = bench_name_overwrite
+
+    if setup_cmd != "":
+        print(f"Running setup_cmd: {setup_cmd}")
+        subprocess.run(setup_cmd, shell=True, check=True)
+
+    full_test_name = test_name
+    if variant_name != "":
+        full_test_name = f"{test_name}_{variant_name}"
+
+    print(f"Running test: {full_test_name}")
+
+    return run_benchmarks(full_test_name, bench_name_overwrite)
+
+
+def combine_out_files(test_name, out_file_names):
+    out_name = f"{test_name}.json"
+
+    if len(out_file_names) == 1 and out_name == out_file_names[0]:
+        return
+
+    combined_result = json.loads(
+        open(out_file_names[0], "r", encoding="utf-8").read()
+    )
+
+    for out_file_name in out_file_names[1:]:
+        parsed_result = json.loads(
+            open(out_file_name, "r", encoding="utf-8").read()
+        )
+        combined_result["benchmarks"] |= parsed_result["benchmarks"]
+
+    with open(out_name, "w+", encoding="utf-8") as out_file:
+        out_file.write(json.dumps(combined_result, indent=2))
+        out_file.flush()
+
+    print(f"Wrote combined results to {out_name}")
+
+    for out_file_name in out_file_names:
+        os.remove(out_file_name)
 
 
 if __name__ == "__main__":
     check_for_critcmp()
     check_for_correct_dir()
 
-    if len(sys.argv) < 2:
-        print(
-            "Please specify a name including the cpu arch as command line parameter, eg. my_test_zen3"
-        )
-        sys.exit(1)
+    variants_help = """"List of variants of the code that should be tested.
+E.g. `--variants path/to/variants.json`
+JSON format:
+{
+    "test_name": "my_test_zen3",
+    "variants": [
+        {
+            "name": "a",
+            "setup_cmd": "",
+            "BENCH_NAME_OVERWRITE": ""
+        },
+        {
+            "name": "b",
+            "setup_cmd": "git checkout xxx",
+            "BENCH_NAME_OVERWRITE": "rust_ipnsort_unstable:rust_ipnsort_new_unstable"
+        }
+    ]
+}
+"""
 
-    test_name = sys.argv[1]
-    try:
-        _ = get_cpu_info(test_name)
-    except Exception:
-        print(
-            "Unknown cpu arch, please adapt util/graph_bench_result/cpu_info.py"
-        )
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Tool for running and collecting benchmark results"
+    )
+    parser.add_argument("--variants", dest="variants_file", help=variants_help)
+    parser.add_argument(
+        "test_name",
+        nargs="?",
+        help="Test name including CPU arch name, e.g. my_test_zen3",
+    )
+    args = parser.parse_args()
 
-    run_benchmarks(test_name)
+    default_variants = {
+        "test_name": args.test_name,
+        "variants": [
+            {"name": "", "setup_cmd": "", "BENCH_NAME_OVERWRITE": ""}
+        ],
+    }
+    variants = (
+        json.loads(open(args.variants_file, "r", encoding="utf-8").read())
+        if args.variants_file
+        else default_variants
+    )
+
+    variant_names = [v["name"] for v in variants["variants"]]
+    assert len(variants) == len(
+        set(variant_names)
+    ), f"You need to specify unique variant names, got: {variant_names}"
+
+    test_name = variants["test_name"]
+    out_file_names = []
+    for variant in variants["variants"]:
+        out_file_names.append(run_benchmarks_variant(test_name, variant))
+
+    if len(out_file_names) > 1:
+        combine_out_files(test_name, out_file_names)
