@@ -466,35 +466,54 @@ Observations:
 
 ## Branchless Lomuto with cyclic permutation optimized
 
-In the course of a conversation regarding lomuto_branchless_cyclic, Orson Peters discovered a way to further optimize the code, getting rid of the last cmov style pointer select. The result is:
+In the course of a conversation regarding lomuto_branchless_cyclic, Orson Peters discovered a way to further optimize the code, removing the need for cmov style pointer selects. The result is:
 
 ### Description
 
-The partition implementation performs a cyclic permutation, beginning by creating a temporary copy of the first element. After which the following logic is repeated for all remaining elements in the input. The value one before the current element is overwritten by the current known end of elements that compared as less than the pivot. Which itself is subsequently overwritten by the current element being compared to the pivot. A counter, counting the number of elements that compared as less than the pivot is incremented if the current element compares as less than the pivot. After all elements have been processed this way, the closing part of the cyclic permutation is performed. Performing the same overwriting logic as in the loop, but with the previously created temporary copy of the first value, as the current element that is being compared to the pivot. The special case of inputs with length zero, are handled with a dedicated check at the start. At the end, the counter holds the value of the partition point, and the input is partitioned by the predicate.
+The partition implementation performs a cyclic permutation, beginning by creating a temporary copy `tmp` of the first element, after which the same logic is repeated for all remaining elements in the input. `left` starts at zero and `right` starts at one.
+
+At the start of each iteration we have the following invariants:
+
+- The elements `0..left` are known to be less than the pivot `<`.
+- The elements `left..right-1` are known to be greater than or equal to the pivot `>=`.
+- The element `right-1` is irrelevant, and is conceptually our gap.
+- The elements `right..len` are unknown `?`.
+
+Each loop iteration performs the following steps, so as to maintain the established invariants:
+
+State invariant: `< | >= | gap | unknown | ?`
+1. The value at `v[left]` is moved into the gap at `v[right - 1]`.
+State invariant: `< | gap | >= | unknown | ?`
+2. The unknown element at `v[right]` is moved into the gap created by step 1, making `v[right]` the gap.
+State invariant: `< | unknown | >= | gap | ?`
+3. `left` is incremented if the unknown element now at `v[left]` is less than the pivot. The effect of this is to either grow the `<` section by one element at the end, or the `>=` section by one element at the beginning.
+State invariant: `< | >= | gap | ?`
+4. Increment `right` so that `right - 1` is the gap again.
+State invariant: `< | >= | gap | unknown | ?`
+
+At the start the regions `<` and `>=` are zero sized.
 
 Pseudo code:
 
 ```py
-if len(v) == 0:
-    return 0
+def partition(v, pivot):
+    if len(v) == 0:
+        return 0
 
-gap_pos = 0
-gap_value = v[gap_pos]
-left = 0
+    left = 0
+    tmp = v[left]
+    right = 1
 
-for right in range(1, len(v)):
-    v[gap_pos] = v[left]
-    v[left] = v[right]
+    while right < len(v):
+        v[right - 1] = v[left]
+        v[left] = v[right]
+        left += v[left] < pivot
+        right += 1
 
-    left += v[right] < pivot
-    gap_pos = right
-
-v[gap_pos] = v[left]
-v[left] = gap_value
-
-left += v[left] < pivot
-
-return left
+    v[right - 1] = v[left]
+    v[left] = tmp
+    left += v[left] < pivot
+    return left
 ```
 
 ### Rust implementation
