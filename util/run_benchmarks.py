@@ -64,8 +64,13 @@ def run_benchmarks(test_name, bench_name_overwrite):
     )
 
     critcmp_result = subprocess.run(
-        ["critcmp", "--export", test_name], check=True, capture_output=True
+        ["critcmp", "--export", test_name], capture_output=True
     )
+
+    if critcmp_result.returncode != 0:
+        critcmp_result_stderr = critcmp_result.stderr.decode("utf-8")
+        sys.stderr.write(f"\n[Error] Failed to export results with critcmp: {critcmp_result_stderr}")
+        sys.exit(critcmp_result.returncode)
 
     bench_results = critcmp_result.stdout.decode("utf-8")
 
@@ -172,9 +177,14 @@ JSON format:
     )
 
     variant_names = [v["name"] for v in variants["variants"]]
-    assert len(variants) == len(
+    assert len(variants["variants"]) == len(
         set(variant_names)
     ), f"You need to specify unique variant names, got: {variant_names}"
+
+    if len(variants["variants"]) > 1:
+        print("Testing variant setup commands")
+        for variant in variants["variants"]:
+            subprocess.run(variant["setup_cmd"], shell=True, check=True)
 
     test_name = variants["test_name"]
     out_file_names = []
