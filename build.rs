@@ -104,7 +104,7 @@ fn build_and_link_cpp_vqsort() {
         Some(|builder: &mut cc::Build| {
             // Make an exception for march=native here because AVX2 will not work without it.
             builder.flag("-march=native");
-            builder.compiler(CLANG_PATH); // gcc yields terrible code here.
+            builder.compiler(CLANG_PATH); // gcc yields significantly worse code-gen here.
 
             None
         }),
@@ -121,7 +121,7 @@ fn build_and_link_cpp_intel_avx512() {
         Some(|builder: &mut cc::Build| {
             // Make an exception for march=native here because AVX512 will not work without it.
             builder.flag("-march=native");
-            builder.compiler(CLANG_PATH); // gcc yields terrible code here.
+            builder.compiler(CLANG_PATH); // gcc yields significantly worse code-gen here.
 
             None
         }),
@@ -163,7 +163,7 @@ fn build_and_link_cpp_gerbens_qsort() {
     build_and_link_cpp_sort(
         "cpp_gerbens_qsort",
         Some(|builder: &mut cc::Build| {
-            builder.compiler(CLANG_PATH); // gcc yields terrible code here.
+            builder.compiler(CLANG_PATH); // gcc yields significantly worse code-gen here.
 
             None
         }),
@@ -172,6 +172,21 @@ fn build_and_link_cpp_gerbens_qsort() {
 
 #[cfg(not(feature = "cpp_gerbens_qsort"))]
 fn build_and_link_cpp_gerbens_qsort() {}
+
+#[cfg(feature = "cpp_nanosort")]
+fn build_and_link_cpp_nanosort() {
+    build_and_link_cpp_sort(
+        "cpp_nanosort",
+        Some(|builder: &mut cc::Build| {
+            builder.compiler(CLANG_PATH); // gcc yields significantly worse code-gen here.
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_nanosort"))]
+fn build_and_link_cpp_nanosort() {}
 
 #[cfg(feature = "c_std_sys")]
 fn build_and_link_c_std_sys() {
@@ -283,6 +298,7 @@ fn main() {
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
     build_and_link_cpp_gerbens_qsort();
+    build_and_link_cpp_nanosort();
     build_and_link_c_std_sys();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();

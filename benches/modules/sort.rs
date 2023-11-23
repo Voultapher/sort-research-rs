@@ -161,6 +161,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "cpp_gerbens_qsort")]
     bench_inst!(unstable::cpp_gerbens_qsort);
 
+    #[cfg(feature = "cpp_nanosort")]
+    bench_inst!(unstable::cpp_nanosort);
+
     #[cfg(feature = "c_std_sys")]
     bench_inst!(unstable::c_std_sys);
 
