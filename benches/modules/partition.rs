@@ -309,6 +309,7 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     bench_inst!(lomuto_branchless);
     bench_inst!(lomuto_branchy);
     bench_inst!(lomuto_iterleaved);
+    bench_inst!(lomuto_nanosort);
     bench_inst!(small_partition);
     bench_inst!(stable_2side_fill);
     bench_inst!(sum_is_less);
