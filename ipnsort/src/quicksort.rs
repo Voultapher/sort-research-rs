@@ -176,7 +176,8 @@ where
     where
         F: FnMut(&T, &T) -> bool,
     {
-        partition_lomuto_branchless_cyclic(v, pivot, is_less)
+        // partition_lomuto_branchless_cyclic(v, pivot, is_less)
+        partition_orson(v, pivot, is_less)
     }
 }
 
@@ -395,4 +396,49 @@ where
 
         state.num_lt
     }
+}
+
+fn partition_orson<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
+where
+    F: FnMut(&T, &T) -> bool,
+{
+    // Novel partition implementation by Lukas Bergdoll and Orson Peters. Branchless Lomuto
+    // partition paired with a cyclic permutation. TODO link writeup.
+
+    let len = v.len();
+    let v_base = v.as_mut_ptr();
+
+    if len == 0 {
+        return 0;
+    }
+
+    // SAFETY: TODO
+    unsafe {
+        let mut tmp = ManuallyDrop::new(ptr::read(v_base));
+        let mut left = v_base.add(1);
+        let mut right = v_base.add(len);
+
+        for _ in 1..len {
+            right = right.sub(1);
+            let tmp_is_lt = is_less(&*tmp, pivot);
+            let dst = if tmp_is_lt { left } else { right };
+            ptr::swap(&mut *tmp, dst);
+            left = left.add(tmp_is_lt as usize);
+            right = right.add(tmp_is_lt as usize);
+        }
+
+        left.sub_ptr(v_base)
+    }
+
+    // tmp = v[0]
+    // left = 1
+    // right  = n
+
+    // for _ in range(n-1):
+    //     right -= 1
+    //     is_less = tmp < pivot
+    //     dst = select(is_less, left, right)
+    //     swap(tmp, v[dst])
+    //     left += is_less
+    //     right += is_less
 }
