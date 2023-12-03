@@ -7,7 +7,7 @@ Date: TODO (DD-MM-YYYY)
 
 This is an introduction to the concepts of branchless programming and of a novel generic partition implementation, motivated with a gradual refinement of a basic [Lomuto partition](https://en.wikipedia.org/wiki/Quicksort#Lomuto_partition_scheme) implementation.
 
-TL;DR: The widespread belief that Hoare based partition implementations are faster than Lomuto based ones, does not hold true under closer inspection. Improvements to generic unstable sort implementations over the last decade have by and far used Hoare based implementations, with [BlockQuickSort](https://arxiv.org/abs/1604.06697) introducing a mostly branchless version of it. Branchless Lomuto partition implementations have existed for some while. The novel aspect of the shown implementation is a combination of branchless Lomuto with a cyclic permutation to swap elements. The result is a runtime and binary-size efficient implementation, that generalizes well over various tested types and CPU micro-architectures.
+TL;DR: The widespread belief that Hoare based partition implementations are faster than Lomuto based ones, does not hold true under closer inspection. Improvements to generic unstable sort implementations over the last decade have by and far used Hoare based implementations, with [BlockQuicksort](https://arxiv.org/abs/1604.06697) introducing a mostly branchless version of it. While branchless Lomuto based implementations have been known for some time now, the implementation choices and details play a significant role. The novel aspect of the shown implementation is a combination of branchless Lomuto with a cyclic permutation to swap elements. The result is a runtime and binary-size efficient implementation, that generalizes well over various tested types and CPU micro-architectures.
 
 ---
 
@@ -50,8 +50,9 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     let v_base = v.as_mut_ptr();
 
     // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
-    // alias because of type system rules. `left` is guaranteed somewhere between `v_base` and
-    // `right` making it also in-bounds and the call to `sub_ptr` at the end safe.
+    // alias because of type system rules. The left side element `left` can only be incremented once
+    // per iteration, so it is <= `right` which makes it in-bounds as a transitive property. From
+    // this also follows that the call to `sub_ptr` at the end is safe.
     unsafe {
         let mut left = v_base;
 
@@ -149,12 +150,9 @@ Observations:
 A branchless implementation of the Lomuto partition scheme:
 
 ```rust
-/// Swap two values in array pointed to by a and b if b is less than a.
+/// Swap two values pointed to by `x` and `y` if `should_swap` is true.
 #[inline(always)]
 pub unsafe fn branchless_swap<T>(x: *mut T, y: *mut T, should_swap: bool) {
-    // SAFETY: the caller must guarantee that `x` and `y` are valid for writes and properly aligned,
-    // and part of the same allocation.
-
     // This is a branchless version of swap if.
     // The equivalent code with a branch would be:
     //
@@ -162,14 +160,18 @@ pub unsafe fn branchless_swap<T>(x: *mut T, y: *mut T, should_swap: bool) {
     //     ptr::swap(x, y);
     // }
 
-    // The goal is to generate cmov instructions here.
-    let x_swap = if should_swap { y } else { x };
-    let y_swap = if should_swap { x } else { y };
+    // SAFETY: the caller must guarantee that `x` and `y` are valid for writes
+    // and properly aligned.
+    unsafe {
+        // The goal is to generate cmov instructions here.
+        let x_swap = if should_swap { y } else { x };
+        let y_swap = if should_swap { x } else { y };
 
-    let y_swap_copy = ManuallyDrop::new(ptr::read(y_swap));
+        let y_swap_copy = ManuallyDrop::new(ptr::read(y_swap));
 
-    ptr::copy(x_swap, x, 1);
-    ptr::copy_nonoverlapping(&*y_swap_copy, y, 1);
+        ptr::copy(x_swap, x, 1);
+        ptr::copy_nonoverlapping(&*y_swap_copy, y, 1);
+    }
 }
 
 fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize {
@@ -177,8 +179,9 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     let v_base = v.as_mut_ptr();
 
     // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
-    // alias because of type system rules. `left` is guaranteed somewhere between `v_base` and
-    // `right` making it also in-bounds and the call to `sub_ptr` at the end safe.
+    // alias because of type system rules. The left side element `left` can only be incremented once
+    // per iteration, so it is <= `right` which makes it in-bounds as a transitive property. From
+    // this also follows that the call to `sub_ptr` at the end is safe.
     unsafe {
         let mut left = v_base;
 
@@ -218,14 +221,15 @@ The core partition loop generates this machine-code with rustc 1.73 for `T == u6
         ; Stores a copy of the value pointed to by `left` into `r8`.
         mov     r8, rcx
         ; Conditionally stores a copy of the value pointed to by `right` into
-        ; `r8`, or does nothing.
+        ; `r8`, or does nothing, based on the value of the EFLAGS register.
         cmovb   r8, rdi
         ; Stores a copy of the value pointed to by `right` into `r9`.
         mov     r9, rdi
         ; Conditionally stores a copy of the value pointed to by `left` into
-        ; `r9`, or does nothing.
+        ; `r9`, or does nothing, based on the value of the EFLAGS register.
         cmovb   r9, rcx
-        ; Conditionally stores a 0 or 1 into the `dl` register.
+        ; Conditionally stores a 0 or 1 into the `dl` register, based on the
+        ; value of the EFLAGS register.
         setb    dl
         ; Loads the value pointed to by `y_swap` in the register `r9` into `r9`.
         mov     r9, qword ptr [r9]
@@ -235,22 +239,23 @@ The core partition loop generates this machine-code with rustc 1.73 for `T == u6
         mov     qword ptr [rcx], r8
         ; Stores a copy of the value in `r9` into `right`.
         mov     qword ptr [rdi], r9
-        ; Computes the new value of `left`. dl/dx/edx/rdx alias 8/16/32/64 bit
-        ; regions of the same underlying register. The only information used is
-        ; a single bit, the comparison result. In essence setb together with
-        ; new = old + 8 * 0/1 perform the conditional increment.
+        ; Computes the new value of `left`. The registers dl/dx/edx/rdx alias
+        ; 8/16/32/64 bit regions of the same underlying register. The only
+        ; information used is a single bit, the comparison result. In essence
+        ; setb together with lea (load effective address) perform the
+        ; conditional increment. new = old + (8 * 0/1)
         lea     rcx, [rcx + 8*rdx]
         ; Sets `right` to the next value in `v`.
         add     rdi, 8
         ; Decrements the inverted loop counter by 1.
         dec     rsi
-        ; Checks if the decrement reached zero, if not continues the loop.
+        ; Checks if the decrement has reached zero, if not, the loop continues.
         jne     .LBB0_2
 ```
 
 ### Performance simulation
 
-One way to analyze and understand the performance of a small piece of code is to simulate it. There are tools like [uiCA](https://uica.uops.info/) and [llvm-mca](https://www.llvm.org/docs/CommandGuide/llvm-mca.html) that specialize in doing so. The result is the estimated number of cycles to execute one loop iteration on average when running the loop many times in a row. Modern CPUs are [superscalar](https://en.wikipedia.org/wiki/Superscalar_processor), [out-of-order](https://en.wikipedia.org/wiki/Out-of-order_execution) and [speculative](https://en.wikipedia.org/wiki/Speculative_execution). This means under the right circumstances they can execute multiple instructions in parallel each cycle, re-order the sequence in which the instructions are executed and speculatively execute instructions while dependencies are still missing. Despite being branchless, the above loop throughput will also depend on data cache latency and other factors. That said one can compare different implementations and their generated machine-code with such tools.
+One way to analyze and understand the performance of a small piece of code is to simulate it. There are tools like [uiCA](https://uica.uops.info/) and [llvm-mca](https://www.llvm.org/docs/CommandGuide/llvm-mca.html) that specialize in doing so. The result is the estimated number of cycles to execute one loop iteration on average, when running the loop many times in a row. Modern CPUs are [superscalar](https://en.wikipedia.org/wiki/Superscalar_processor), [out-of-order](https://en.wikipedia.org/wiki/Out-of-order_execution) and [speculative](https://en.wikipedia.org/wiki/Speculative_execution). This means under the right circumstances they can execute multiple instructions in parallel each cycle, re-order the sequence in which the instructions are executed and speculatively execute instructions while dependencies are still missing. What these tools typically do not account for is the effects of memory latency. For example in this context `qword ptr [rdi]` loads the value `right`, and depending on a variety of factors the CPU might or might not be able to hide the latency it takes to load this value. The ability of the out-of-order engine to hide latency also depends on the quantity of latency it is trying to hide. Memory access latency on Zen 3 can go from 4 cycles for L1d to millions of cycles if the memory page has been swapped to disk by the operating system. Despite their limitations, these tools can help gain more insights into small blocks of code, by providing information on inter-instruction dependencies. The following tool output is limited to the predicted block throughput.
 
 | Tool     | Skylake | Sunny Cove |
 |----------|---------|------------|
@@ -259,14 +264,14 @@ One way to analyze and understand the performance of a small piece of code is to
 
 ### Performance measurement
 
-The benchmarked branchless versions are not exactly the same as the ones analyzed here. The benchmarked versions perform manual loop unrolling because LLVM 16 as used by rustc auto-unrolls the partition loop on x86 but not on Arm. In addition they also workaround [sub-optimal code-gen](https://github.com/rust-lang/rust/issues/117128) for branchless pointer increments. The tested versions are found [here](https://github.com/Voultapher/sort-research-rs/tree/lomcyc-partition-bench/src/other/partition).
+The benchmarked branchless versions are not exactly the same as the ones analyzed here. The benchmarked versions perform manual loop unrolling because LLVM 16 as used by the tested rustc auto-unrolls the partition loop on x86 but not on Arm. In addition they also workaround [sub-optimal code-gen](https://github.com/rust-lang/rust/issues/117128) for branchless pointer increments. The tested versions are found [here](https://github.com/Voultapher/sort-research-rs/tree/lomcyc-partition-bench/src/other/partition).
 
 <img src="assets/zen3_buildup/lomuto_branchless.png" width=960 />
 
 Observations:
 
 - Even though the loop body of lomuto_branchless consists of significantly more instructions than lomuto_branchy, lomuto_branchless is 2-3x more efficient for this kind of input pattern over the total runtime of the sort implementation. It achieves this mainly by avoiding costly CPU re-steers caused by mispredicted branches. The partition makes up only one part of the total ipnsort runtime. Sub-partitions with `len <= 32` are handled by a dedicated [small-sort](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/ipnsort/src/smallsort.rs#L414). The speedup for the partition in isolation is ~3.7-3.9x.
-- lomuto_branchless reaches peek measured throughput at input length 200. There are two opposing factors at play. The total amount of work that needs to be performed grows by `O(N x log(N))` where `N` is the input length, and CPU caches, which have an inverse effect on throughput. The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the instruction caches and branch-prediction caches with unrelated values. The more similar work is performed the better the relevant caches will help in completing the work as fast as possible. The equilibrium point for these two factors will depend on the kind of work performed as well as micro-architectural details. "Hot" benchmarks are also possible but arguably [of little value](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#hot-benchmarks).
+- lomuto_branchless reaches peek measured throughput at input length 200. There are two opposing factors at play. The total amount of work that needs to be performed grows by `O(N x log(N))` where `N` is the input length. As well as the CPU caches, which have an inverse effect on throughput. The more similar work is performed the better the relevant caches will help in completing the work as fast as possible. The equilibrium point for these two factors will depend on the kind of work performed as well as micro-architectural details. The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the first level instruction cache and branch-prediction caches with unrelated values. This measures a scenario where prior parts of a hypothetical larger program already loaded or generated the data that will be sorted into the suitable data caches. In this scenario the first level instruction cache and branch predictor caches are trained on other work than the sort implementation. "Hot" benchmarks are also possible but arguably [of little value](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#hot-benchmarks), as they measure a scenario where a program does nothing but sort inputs, which is unlikely to be a realistic use case.
 
 ### Efficiency of branchless code
 
@@ -274,7 +279,7 @@ If a CPU fetches an instruction from memory, decodes said instruction, executes 
 
 > Where will a yet un-decoded instruction jump to?
 
-This crucial question at the start of a CPU pipeline is the core of branch prediction. The most common answer is nowhere, because the instruction isn't a jump. But it could also be nowhere, because it is a conditional branch and the condition is not met. Most contemporary designs choose a form of [predictive execution](https://en.wikipedia.org/wiki/Speculative_execution#Predictive_execution). Where the CPU performs an educated guess and uses that as basis for speculative execution, discarding work that turns out to be based on an incorrect guess and redoing the work with the now known correct jump target. Branch misprediction is kind of [pipeline control hazard](https://en.wikipedia.org/wiki/Hazard_(computer_architecture)#Control_hazards_(branch_hazards_or_instruction_hazards)). The prediction is usually history and correlation based. lomuto_branchy hits the worst case for the branch direction predictor, where the likelihood of taking the `if right_is_lt` branch is ~50%, rendering educated guesses based on previous history by the branch predictor useless. The only thing worse for the Zen 3 branch predictor would be so many branches at play that it can't answer the question without creating a large pipeline bubble by missing both the L1 and L2 branch target buffer ([BTB](http://www-ee.eng.hawaii.edu/~tep/EE461/Notes/ILP/buffer.html)), and then still answering the question wrong 50% of the time. The details and tradeoffs of branch prediction depend on the micro-architectural details. Many modern branch predictors treat jumps with static target locations, like the jump to the start of a loop, and jumps with dynamic target locations, as for example `generated by a `match`, mostly the same way. The benefits of stalling the CPU pipeline until an instruction is known to be a jump and what the static target address of it is, are often [not worth it](https://stackoverflow.com/a/51848422).
+This crucial question at the start of a CPU pipeline is the core of branch prediction. The most common answer is nowhere, because the instruction isn't a jump. But it could also be nowhere, because it is a conditional branch and the condition is not met. Most contemporary designs choose a form of [predictive execution](https://en.wikipedia.org/wiki/Speculative_execution#Predictive_execution). Where the CPU performs an educated guess and uses that as basis for speculative execution, discarding work that turns out to be based on an incorrect guess and redoing the work with the now known correct jump target. Branch misprediction is a kind of [pipeline control hazard](https://en.wikipedia.org/wiki/Hazard_(computer_architecture)#Control_hazards_(branch_hazards_or_instruction_hazards)). The prediction is usually history and correlation based. lomuto_branchy hits the worst case for the branch direction predictor, where the likelihood of taking the `if right_is_lt` branch is ~50%, rendering educated guesses based on previous history by the branch predictor useless. The only thing worse for the Zen 3 branch predictor would be so many branches at play that it can't answer the question without creating a large pipeline bubble by missing both the L1 and L2 branch target buffer ([BTB](http://www-ee.eng.hawaii.edu/~tep/EE461/Notes/ILP/buffer.html)), and then still answering the question wrong 50% of the time. The details and tradeoffs of branch prediction depend on the micro-architectural details. Many modern branch predictors treat jumps with static target locations, like the jump to the start of a loop, and jumps with dynamic target locations, as for example generated by a `match`, mostly the same way. The benefits of stalling the CPU pipeline until an instruction is known to be a jump and what the static target address of it is, are often [not worth it](https://stackoverflow.com/a/51848422).
 
 A theoretical micro-architecture could combine predictive execution and [eager execution](https://en.wikipedia.org/wiki/Speculative_execution#Eager_execution) capabilities. Employing prediction for the loop jump, and eager execution for the difficult to predict jump in the loop body of lomuto_branchy. Such a design could possibly execute the instructions for lomuto_branchy more efficiently than lomuto_branchless.
 
@@ -343,7 +348,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
 }
 ```
 
-A [cyclic permutation](https://en.wikipedia.org/wiki/Cyclic_permutation) is a way to swap two sets of elements, amortizing the use of a temporary. The idea to use a cyclic permutation instead of a swap in a partition implementation was popularized by BlockQuickSort in a branchless context, but the idea goes all the way back to Tony Hoare the inventor of quicksort in his 1962 paper [Quicksort](https://academic.oup.com/comjnl/article/5/1/10/395338). A visualized example:
+A [cyclic permutation](https://en.wikipedia.org/wiki/Cyclic_permutation) is a way to swap two sets of elements, amortizing the use of a temporary. The idea to use a cyclic permutation instead of a swap in a partition implementation was popularized by BlockQuicksort in a branchless context, but the idea goes all the way back to Tony Hoare the inventor of quicksort in his 1962 paper [Quicksort](https://academic.oup.com/comjnl/article/5/1/10/395338). A visualized example:
 
 ```
 // Example cyclic permutation to swap A,B,C,D with W,X,Y,Z
@@ -442,7 +447,7 @@ The core partition loop generates this machine-code with rustc 1.73 for `T == u6
         add     rdx, 8
         ; Decrements the inverted loop counter by 1.
         dec     rsi
-        ; Checks if the decrement reached zero, if not continues the loop.
+        ; Checks if the decrement has reached zero, if not, the loop continues.
         jne     .LBB1_3
 ```
 
@@ -462,59 +467,11 @@ llvm-mca claims the loop iteration will take ~6 cycles, which is much higher tha
 Observations:
 
 - Up to input length 100 the two branchless implementations perform relatively similar to each other, after which lomuto_branchless_cyclic shows better throughput. This is mainly caused by performing the same task in fewer instructions, as backed by the performance simulation.
-- The median relative symmetric speedup for lomuto_branchless_cyclic vs lomuto_branchless is 1.13x for the `random` pattern across the tested range of input lengths. This is calculated by taking each measured input length and producing a relative symmetric speedup, where 1.5x means a is 1.5x faster than b, and -1.5x means b is 1.5x faster than a. This approach avoids biasing one direction over the other, and symmetric effects can cancel each other out.
+- The median relative symmetric speedup for lomuto_branchless_cyclic vs lomuto_branchless is 1.13x for the `random` pattern across the tested range of input lengths. This is calculated by taking each measured input length and producing a relative symmetric speedup, where 1.5x means that A is 1.5x faster than B, and -1.5x means B is 1.5x faster than A. This approach avoids biasing one direction over the other, and symmetric effects can cancel each other out.
 
 ## Branchless Lomuto with cyclic permutation optimized
 
-In the course of a conversation regarding lomuto_branchless_cyclic, Orson Peters discovered a way to further optimize the code, removing the need for cmov style pointer selects. The result is:
-
-### Description
-
-The partition implementation performs a cyclic permutation, beginning by creating a temporary copy `tmp` of the first element, after which the same logic is repeated for all remaining elements in the input. `left` starts at zero and `right` starts at one.
-
-At the start of each iteration we have the following invariants:
-
-- The elements `0..left` are known to be less than the pivot `<`.
-- The elements `left..right-1` are known to be greater than or equal to the pivot `>=`.
-- The element `right-1` is irrelevant, and is conceptually our gap.
-- The elements `right..len` are unknown `?`.
-
-Each loop iteration performs the following steps, so as to maintain the established invariants:
-
-State invariant: `< | >= | gap | unknown | ?`
-1. The value at `v[left]` is moved into the gap at `v[right - 1]`.
-State invariant: `< | gap | >= | unknown | ?`
-2. The unknown element at `v[right]` is moved into the gap created by step 1, making `v[right]` the gap.
-State invariant: `< | unknown | >= | gap | ?`
-3. `left` is incremented if the unknown element now at `v[left]` is less than the pivot. The effect of this is to either grow the `<` section by one element at the end, or the `>=` section by one element at the beginning.
-State invariant: `< | >= | gap | ?`
-4. Increment `right` so that `right - 1` is the gap again.
-State invariant: `< | >= | gap | unknown | ?`
-
-At the start the regions `<` and `>=` are zero sized.
-
-Pseudo code:
-
-```py
-def partition(v, pivot):
-    if len(v) == 0:
-        return 0
-
-    left = 0
-    tmp = v[left]
-    right = 1
-
-    while right < len(v):
-        v[right - 1] = v[left]
-        v[left] = v[right]
-        left += v[left] < pivot
-        right += 1
-
-    v[right - 1] = v[left]
-    v[left] = tmp
-    left += v[left] < pivot
-    return left
-```
+In the course of a conversation regarding lomuto_branchless_cyclic, [Orson Peters](orlp.net) discovered a way to further optimize the code, removing the need for cmov style pointer selects. A detailed description of the algorithmic side of things can be found in his [blog post](https://orlp.net/blog/branchless-lomuto-partitioning/).
 
 ### Rust implementation
 
@@ -602,7 +559,7 @@ The core partition loop generates this machine-code with rustc 1.73 for `T == u6
         lea     rcx, [rcx + 8*r9]
         ; Decrements the inverted loop counter by 1.
         dec     rsi
-        ; Checks if the decrement reached zero, if not continues the loop.
+        ; Checks if the decrement has reached zero, if not, the loop continues.
         jne     .LBB1_7
 ```
 
@@ -628,8 +585,9 @@ Observations:
 
 A broader picture can be obtained by comparing the analyzed implementations with state-of-the-art branchless implementations:
 
-- [`hoare_block`](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/src/other/partition/hoare_block.rs) is the BlockQuickSort based implementation found in the rustc standard library implementation of `slice::sort_unstable` as of rustc version 1.74. It performs two phases, one where it fills, usually one of two, blocks with the comparison results for values on the left or right side. Storing the results of comparisons without swapping any values, can be done in a branchless loop. It then performs a cyclic permutation to swap values between the blocks. This avoids branch misprediction as consequence of the user-data dependent comparison function, but adds a significantly amount of control logic. Which negatively impacts the binary-size and compile-time. In addition it handles block leftovers at the end with a branchy Hoare partition, which is particularly bad for the runtime when partitioning small sub-slices.
-- [`hoare_crumsort`](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/src/other/partition/hoare_crumsort.rs) is a Rust port of the BlockQuickSort derived implementation found in [crumsort](https://github.com/scandum/crumsort). It combines the block creation and swapping phases into one phase, performing cyclic permutation with a block of elements in-flight. The crumsort partition implementation scheme is neither [exception safe](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#exception-safety) nor [observation safe](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#observation-safety), given that is has a variable amount of duplicates in-flight it is unknown what the performance impact would be of adjusting the implementation to conform to the required safety properties explained [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
+- [`hoare_block`](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/src/other/partition/hoare_block.rs) is the BlockQuicksort based implementation found in the rustc standard library implementation of `slice::sort_unstable` as of rustc version 1.74. It performs two phases, one where it fills, usually one of two, blocks with the comparison results for values on the left or right side. Storing the results of comparisons without swapping any values, which can be done in a branchless loop. It then performs a cyclic permutation to swap values between the blocks. This avoids branch misprediction as consequence of the user-data dependent comparison result, but adds a significantly amount of control logic. Which negatively impacts the binary-size and compile-time.
+- [`hoare_crumsort`](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/src/other/partition/hoare_crumsort.rs) is a Rust port of the BlockQuicksort derived implementation found in [crumsort](https://github.com/scandum/crumsort). It combines the block creation and swapping phases into one phase, performing a cyclic permutation with a block of elements in-flight. The crumsort partition implementation scheme is neither [exception safe](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#exception-safety) nor [observation safe](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#observation-safety). Given that is has a variable number of duplicates in-flight it is unknown what the performance impact would be of adjusting the implementation to conform to the required safety properties explained [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
+- [`hoare_branchy`](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/src/other/partition/hoare_branchy.rs) is a basic branchy implementation of the Hoare partition scheme.
 
 <img src="assets/zen3_buildup/all.png" width=960 />
 
@@ -637,7 +595,7 @@ Observations:
 
 - hoare_branchy and lomuto_branchy have pretty much the same performance.
 - Both hoare_block and hoare_crumsort have to handle partial blocks at the end of the partition function, which adds significant amounts of code and with that, complexity, binary-size and opportunities for branch misprediction. The recursive nature of quicksort has it call the partition function a few times for large sub-slices and many times for small sub-slices, see the graph below. This manifests in comparatively lower throughput for smaller input lengths.
-- Starting between input length 1e5 and 1e6, hoare_crumsort overtakes lomuto_branchless_cyclic_opt in terms of throughput for the random pattern. This is likely caused by the reduced write pressure on the memory sub-system. hoare_crumsort performs only a single write per element, while lomuto_branchless_cyclic_opt does two.
+- Starting between input length 1e5 and 1e6, hoare_crumsort overtakes lomuto_branchless_cyclic_opt in terms of throughput for the random pattern. This is likely caused by the reduced write pressure on the memory sub-system. hoare_crumsort performs only a single write per element, while lomuto_branchless_cyclic_opt does two. This coincides with input lengths that no longer fit into the L2 data cache.
 - Tested in isolation hoare_block and hoare_crumsort are faster for large inputs than the tested branchless lomuto implementations. Disregarding other types, binary-size, compile-times and usage safety an optimal approach would use hoare_crumsort for large sub-slices and lomuto_branchless_cyclic_opt for smaller sub-slices.
 - At input length 1e7, the fastest partition implementation improves total sort throughput by ~4.09x compared to the slowest one.
 
@@ -658,8 +616,8 @@ The following graph shows the median runtime for the sort operation for inputs o
 
 - `random`, random numbers generated by the [rand crate](https://github.com/rust-random/rand) `StdRng::gen`
 - `random_d20`, uniform random numbers in the range `0..=20`
-- `random_p5`, 95% 0 and 5% random mixed in, not uniform
-- `random_s95`, 95% sorted followed by 5% unsorted, simulates append -> sort
+- `random_p5`, 95% 0 and 5% random values mixed in, not uniform
+- `random_s95`, 95% sorted followed by 5% unsorted, simulates append + sort
 - `random_z1`, [Zipfian distribution](https://en.wikipedia.org/wiki/Zipf%27s_law) with characterizing exponent s == 1.0
 
 <img src="assets/zen3_patterns/single-size-10k.png" width=800 />
@@ -667,12 +625,14 @@ The following graph shows the median runtime for the sort operation for inputs o
 Observations:
 
 - The random pattern is a view into the same data that has previously been shown in the scaling graphs.
-- random_d20 spends practically all time in the partition implementation and none in the small-sort. This leads to an overall shorter runtime. By virtue of picking a good median pivot, the partitions are relatively balanced leading to poor branch prediction in the branchy code.
+- random_d20 spends practically all time in the partition implementation and none in the small-sort. With `K == 20` which is significantly smaller than `N`, ipnsort performs significantly less work, compared to the random pattern. This leads to an overall shorter runtime. By virtue of picking a good median pivot, the partitions are relatively balanced, leading to poor branch prediction accuracy in the branchy code. The comparatively larger amount of time spent in the partition also exacerbates the difference between the partition implementations. lomuto_branchless_cyclic_opt is ~1.14x times faster than lomuto_branchless_cyclic, whereas for the random pattern it is only ~1.06x times faster.
 - The random_p5 pattern has the shortest runtime across the board. The 5% random values are distributed across the full `i32` range, which makes the zero statistically a very likely first pivot pick. The followup pivot pick in the right side recursion has high chance of only sampling zeros, which triggers equal partitioning of the zero values. Effectively filtering out 95% of the input and only having to perform full depth recursion for the remaining 2.5% on each side.
-- random_p5 and random_s95 perform as consequence of pivot selection, what is often referred to as a "skewed partition" where the majority of values are less-than or equal-or-greater-than the pivot. On average this means the branch direction predictor has to predict a branch inside the partition loop that is true or false ~97% of the time. This makes the branchy implementation competitive with the branchless ones in such scenarios, even outperforming lomuto_branchless.
-- Zipfian distributions are sometime referred to as 80/20 distributions. Such distributions are significantly more common in real world data than fully random distributions. random_z1 shows a similar ranking among the tested implementations. The fastest implementation is ~3.45x than the slowest. Compared to ~3.16x for random. Which can be explained by the relatively higher percentage of runtime spent in the partition implementation and similarly poor branch prediction accuracy.
+- random_p5 and random_s95 perform as consequence of pivot selection, what is often referred to as a "skewed partition" where the majority of values are less-than or equal-or-greater-than the pivot. On average this means the branch direction predictor has to predict a branch inside the partition loop that is consistently true or false ~97% of the time. This makes the branchy implementation competitive with the branchless ones in such scenarios, even outperforming lomuto_branchless and hoare_block.
+- Zipfian distributions are sometime referred to as 80/20 distributions. Such distributions are significantly more common in real world data than fully random distributions. random_z1 shows a similar ranking among the tested implementations as the random pattern. The fastest implementation is ~3.45x faster than the slowest, compared to ~3.16x for random. This can be explained by the relatively higher percentage of runtime spent in the partition implementation and similarly poor branch prediction accuracy.
 
 The following graph compares two implementations against each other. This allows comparing multiple patterns at once while also visualizing their scaling behavior.
+
+### lomuto_branchless_cyclic_opt vs lomuto_branchless
 
 <img src="assets/zen3_patterns/lomuto_branchless_cyclic_opt-vs-lomuto_branchless.png" width=960 />
 
@@ -680,6 +640,8 @@ Observations:
 
 - The random pattern shows the smallest relative speedup. This can be explained by the fact that ipnsort like other pdqsort derived implementations can filter out common values by performing an equal instead of a less-than partition. This is effective both for low cardinality patterns like random_d20 as well as filtering out common values as in random_p5 and random_z1. For these patterns ipnsort spends relatively less time in the small-sort and more in the partition, which explains the increased impact.
 - The author is not sure how to explain the outsized impact on random_s95, which replicates on other micro-architectures.
+
+### lomuto_branchless_cyclic_opt vs hoare_block
 
 <img src="assets/zen3_patterns/lomuto_branchless_cyclic_opt-vs-hoare_block.png" width=960 />
 
@@ -689,7 +651,7 @@ Observations:
 
 ## Results for other types
 
-A generic implementation has to handle user-defined types of various shapes paired with user-defined comparison functions. While there is an unlimited amount of possible combinations, it is possible to pick certain types that demonstrate possible properties and their effects. In the benchmarks the input length range is limited to 1e5 for practical resource reasons, except for `u64` and `i32`.
+A generic implementation has to handle user-defined types of various shapes, paired with user-defined comparison functions. While there is an unlimited amount of possible combinations, it is possible to pick certain types that demonstrate possible properties and their effects. In the benchmarks the input length range is limited to 1e5 for practical resource reasons, except for `u64` and `i32`.
 
 ### i32
 
@@ -704,7 +666,7 @@ Observations:
 
 ### string
 
-Heap allocated string that resembles `String`. All values for the benchmarks are derived from `i32` values. The strings all have the same length and are compared lexicographically, which in this case due to zero padding is the same as comparing the `val.saturating_abs()`. The string results are highly dependent on the allocation distribution, the benchmarks measure a relatively unrealistic scenario where the strings are allocated one after the other with minimal other work in-between.
+Heap allocated string that resembles the rustc standard library `String`. All values for the benchmarks are derived from `i32` values. The strings all have the same length and are compared lexicographically, which in this case due to zero padding is the same as comparing the `val.saturating_abs()`. The string results are highly dependent on the allocation distribution, the benchmarks measure a relatively unrealistic scenario where the strings are allocated one after the other with minimal other work in-between.
 
 ```rust
 #[repr(C)]
@@ -766,10 +728,10 @@ impl PartialOrd for FFIOneKibiByte {
 
 Observations:
 
-- The results for the 1k type show a completely different characteristics compared to the other tested types.
+- The results for the 1k type show completely different characteristics compared to the other tested types.
 - hoare_branchy and hoare_block have the best performance, because they perform a minimal amount of element copies.
 - hoare_crumsort combines block generation and block swapping into the same loop, using the input itself as temporary storage for the cyclic permutation. This involves copying the value comparatively often, and subsequently it is at the bottom of the performance ranking.
-- lomuto_branchless_cyclic performs better than lomuto_branchless_cyclic_opt despite them being very similar and it usually being the other way around. They both perform one `ptr::copy_nonoverlapping` which translates to a call to `memcpy` for `FFIOneKibiByte`, and each performs one `ptr::copy` each loop iteration, which translates to a call to `memmove`. With lomuto_branchless_cyclic the chance that `ptr::copy` will copy the same value on-top of itself are relatively high as seen in the visualization. `memmove` can early return if the source and destination address are the same.
+- lomuto_branchless_cyclic performs better than lomuto_branchless_cyclic_opt despite them being very similar and the speedup usually being the other way around. They both perform one `ptr::copy_nonoverlapping` which translates to a call to `memcpy` for `FFIOneKibiByte`, and each performs one `ptr::copy` each loop iteration, which translates to a call to `memmove`. With lomuto_branchless_cyclic the chance that `ptr::copy` will copy the same value on-top of itself are relatively high as seen in the visualization. `memmove` can early return if the source and destination address are the same.
 
 #### Type introspection in ipnsort
 
@@ -824,12 +786,12 @@ impl PartialOrd for F128 {
 Observations:
 
 - As with all tested types except `i32` and `u64`, the comparatively larger impact of the increased amount of comparisons required as the input length grows, means there is no pronounced throughput peak.
-- lomuto_branchless_cyclic and lomuto_branchless_cyclic_opt have the same throughput, likely limited by the 13.5 cycle 64-bit floating-point division latency on Zen 3.
+- lomuto_branchless_cyclic and lomuto_branchless_cyclic_opt have more or less the same throughput, likely limited by the 13.5 cycle 64-bit floating-point division latency on Zen 3.
 - A large gap exists between lomuto_branchless and the other branchless implementations.
 
 ## Results on other micro-architectures
 
-it is one thing to write high-performance code for one specific micro-architecture or even one specific super-computer, as is commonly done in the high-performance computing (HPC) world. And a different one to write high-performance code that generalizes well across different micro-architectures, from small embedded chips all the way up to server chips. It puts a strict limit on the assumption one should make about the hardware, the availability of ISA extensions such as AVX and the effects of optimizations.
+It is one thing to write high-performance code for one specific micro-architecture or even one specific super-computer, as is commonly done in the high-performance computing (HPC) world. And a different one to write high-performance code that generalizes well across different micro-architectures, from small embedded chips all the way up to server chips. It puts a strict limit on the assumption one should make about the hardware, the availability of ISA extensions such as AVX and the effects of optimizations.
 
 ### Haswell
 
@@ -882,7 +844,7 @@ CPU boost enabled.
 Observations:
 
 - The equilibrium point between the effects of cold caches and less work, happens at a significantly smaller input length compare to Zen 3.
-- Assuming the same instructions per cycle (IPC) and mapping of instructions to cycles, Zen 3 should be ~1.53x faster than Firestorm by virtue of clock frequency. Yet the micro-architecture released in the same year as Zen 3, goes from exceeding it to closely trailing it in terms of absolute throughput when the effects of branch misprediction are minimized. Comparing lomuto_branchless_cyclic_opt throughput on Zen 3 with Firestorm and normalizing clock speed, reveals ~1.45x higher elements per cycle at input length 900 and ~1.39x at 1e7. In contrast lomuto_branchy goes from ~1.23x down to ~1.15x, demonstrating the outsized effect of branch prediction accuracy on wider micro-architectures. Benchmarking the partition implementation lomuto_branchy in isolation yields a consistent ~1.13x improvement in elements per cycle.
+- Assuming the same instructions per cycle (IPC) and mapping of instructions to cycles, Zen 3 should be ~1.53x faster than Firestorm by virtue of clock frequency. Yet the micro-architecture released in the same year as Zen 3, goes from exceeding it to closely trailing it in terms of absolute throughput when the effects of branch misprediction are minimized. Comparing lomuto_branchless_cyclic_opt throughput on Zen 3 with Firestorm and normalizing clock speed, reveals ~1.45x higher elements per cycle at input length 900 and ~1.39x at 1e7. In contrast lomuto_branchy goes from ~1.23x down to ~1.15x, demonstrating the increased effect of branch prediction accuracy on wider micro-architectures. Benchmarking the partition implementation lomuto_branchy in isolation yields a consistent ~1.13x improvement in elements per cycle compared to Zen 3.
 - No noticeable additional reduction in throughput is measured when inputs go past the 16MB L3 cache, as seen on Zen 3 and Haswell.
 - At input length 1e7, the fastest partition implementation improves total sort throughput by ~5.06x compared to the slowest one, which is the largest measure gap across the tested micro-architectures.
 
@@ -893,11 +855,11 @@ Observations:
 Observations:
 
 - Compared to Zen 3, Firestorm shows larger relative improvements across all tested patterns.
-- Compared to Zen 3, no tested pattern and size combination has hoare_block outperform lomuto_branchless_cyclic_opt on Firestorm. This caused in part by differences in code-gen.
+- Compared to Zen 3, no tested pattern and size combination has hoare_block outperform lomuto_branchless_cyclic_opt on Firestorm. This is caused in part by differences in code-gen.
 
 ### Icestorm
 
-The E-core micro-architecture called Icestorm found in the A14, released 2020, and M1 family of chips, is extremely capable when [compared](https://images.anandtech.com/doci/17102/SPECint2017.png) to contemporary designs with similar power envelopes like the ARM Cortex-A55. This can be in part attributed to different design goals, where ARM is conservative with chip area, Apple is lavish, allowing for a wide out-of-order (OoO) design.
+The E-core micro-architecture called Icestorm found in the A14, and M1 family of chips, along side the Firestorm P-core micro-architecture, is extremely capable when [compared](https://images.anandtech.com/doci/17102/SPECint2017.png) to contemporary designs with similar power envelopes like the ARM Cortex-A55. This can be in part attributed to different design goals, where ARM is conservative with chip area, Apple is lavish, allowing for a wide out-of-order (OoO) design.
 
 ```
 Darwin Kernel Version 22.6.0
@@ -936,7 +898,7 @@ If this inspires you to look into making software more efficient, here are some 
 - Viewing benchmarks through the lens of a scientific experiment can help you avoid a well known list of mistakes that make the results misleading.
 - Building custom tools for the domain you are looking into can help you gain a novel perspective.
 - There is no shortcut for reading and understanding generated machine-code. Approximations like number of instructions can be helpful but also misleading. Learning to understand machine-code unlocks many doors.
-- Avoid relying on a single measurement tool. As shown here, tools like llvm-mca can be quite unreliable, as can be uiCA, in both directions. Runtime benchmarks can give you repeatable improvements and regressions for exactly the same machine code. For example the sort-research-rs benchmarks don't control for code alignment and heap layout.
+- Avoid relying on a single measurement tool. As shown here, tools like llvm-mca can be quite unreliable, as can be uiCA, in both directions. And runtime benchmarks can give you repeatable improvements and regressions for exactly the same machine code. For example the sort-research-rs benchmarks do not control for code alignment and heap layout.
 - Dismissing results that disagree with your current understanding will keep you ignorant.
 - Analyzing components in isolation with tools like godbolt can sometimes be misleading. code-gen can look different in a real program with more surrounding context. It can help to occasionally analyze generated machine-code with tools like [iaito](https://github.com/radareorg/iaito/) in a real setting.
 

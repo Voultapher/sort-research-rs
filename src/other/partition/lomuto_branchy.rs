@@ -7,8 +7,9 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     let v_base = v.as_mut_ptr();
 
     // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
-    // alias because of type system rules. `left` is guaranteed somewhere between `v_base` and
-    // `right` making it also in-bounds and the call to `sub_ptr` at the end safe.
+    // alias because of type system rules. The left side element `left` can only be incremented once
+    // per iteration, so it is <= `right` which makes it in-bounds as a transitive property. From
+    // this also follows that the call to `sub_ptr` at the end is safe.
     unsafe {
         let mut left = v_base;
 
