@@ -1,7 +1,7 @@
 # 10~17x faster than what? A performance analysis of Intel's x86-simd-sort (AVX-512)
 
 Author: Lukas Bergdoll @Voultapher  
-Date: 10-06-2023 (DD-MM-YYYY)
+Date: 2023-06-10 (YYYY-MM-DD)
 
 This is a performance analysis of the recently popularized [[1](https://www.phoronix.com/news/Intel-AVX-512-Quicksort-Numpy)] Intel AVX-512 sort implementation.
 

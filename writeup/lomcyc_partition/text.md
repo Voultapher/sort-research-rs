@@ -1,7 +1,7 @@
 # Fast, small, robust: pick three. Introducing a novel branchless partition implementation.
 
 Author: Lukas Bergdoll @Voultapher  
-Date: 04-12-2023 (DD-MM-YYYY)
+Date: 2023-12-04 (YYYY-MM-DD)
 
 This is an introduction to the concepts of branchless programming and of a novel generic partition implementation, motivated with a gradual refinement of a basic [Lomuto partition](https://en.wikipedia.org/wiki/Quicksort#Lomuto_partition_scheme) implementation.
 

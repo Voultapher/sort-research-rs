@@ -1,7 +1,7 @@
 # A performance analysis of glidesort and ipn_stable
 
 Author: Lukas Bergdoll @Voultapher  
-Date: 11.02.2023 (DD-MM-YYYY)
+Date: 2023-02-11 (YYYY-MM-DD)
 
 This is a limited performance analysis of the recently released novel sort implementation glidesort [[1](https://github.com/orlp/glidesort)].
 

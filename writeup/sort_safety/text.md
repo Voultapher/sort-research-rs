@@ -1,7 +1,7 @@
 # Safety vs Performance. A case study of C, C++ and Rust sort implementations.
 
 Author: Lukas Bergdoll @Voultapher  
-Date: 05-10-2023 (DD-MM-YYYY)
+Date: 2023-10-05 (YYYY-MM-DD)
 
 This is an analysis of sort implementations and their ability, or lack thereof, to avoid undefined behavior (UB) under various usage scenarios, and whether this affects their performance.
 
