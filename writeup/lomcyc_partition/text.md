@@ -469,7 +469,7 @@ Observations:
 
 ## Branchless Lomuto with cyclic permutation optimized
 
-In the course of a conversation regarding lomuto_branchless_cyclic, [Orson Peters](orlp.net) discovered a way to further optimize the code, removing the need for cmov style pointer selects. A detailed description of the algorithmic side of things can be found in his [blog post](https://orlp.net/blog/branchless-lomuto-partitioning/).
+In the course of a conversation regarding lomuto_branchless_cyclic, [Orson Peters](https://orlp.net/) discovered a way to further optimize the code, removing the need for cmov style pointer selects. A detailed description of the algorithmic side of things can be found in his [blog post](https://orlp.net/blog/branchless-lomuto-partitioning/).
 
 ### Rust implementation
 
