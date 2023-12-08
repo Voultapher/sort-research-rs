@@ -1028,6 +1028,62 @@ pub fn panic_observable_is_less_cell_i32<S: Sort>() {
     panic_observable_is_less_impl::<S, Cell<i32>>(|val| Cell::new(val), |val| val.get());
 }
 
+fn deterministic_impl<S: Sort, T: Ord + Clone + Debug>(
+    type_into_fn: impl Fn(i32) -> T + Copy,
+    type_from_fn: impl Fn(&T) -> i32,
+) {
+    let _seed = get_or_init_random_seed::<S>();
+
+    // A property similar to stability is deterministic output order. If the entire value is used as
+    // the comparison key a lack of determinism has no effect. But if only a part of the value is
+    // used as comparison key, a lack of determinism can manifest itself in the order of values
+    // considered equal by the comparison predicate.
+    //
+    // This test only tests that results are deterministic across runs, it does not test determinism
+    // on different platforms and with different toolchains.
+
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let mut test_input = pattern_fn(test_len)
+            .into_iter()
+            .map(|val| type_into_fn(val))
+            .collect::<Vec<_>>();
+
+        let mut test_input_clone = test_input.clone();
+
+        let comparison_fn = |a: &T, b: &T| {
+            let a_i32 = type_from_fn(a);
+            let b_i32 = type_from_fn(b);
+
+            let a_i32_key_space_reduced = a_i32 % 10_000;
+            let b_i32_key_space_reduced = b_i32 % 10_000;
+
+            a_i32_key_space_reduced.cmp(&b_i32_key_space_reduced)
+        };
+
+        <S as Sort>::sort_by(&mut test_input, comparison_fn);
+        <S as Sort>::sort_by(&mut test_input_clone, comparison_fn);
+
+        assert_eq!(test_input, test_input_clone);
+    };
+
+    test_impl_custom(test_fn);
+}
+
+pub fn deterministic_i32<S: Sort>() {
+    deterministic_impl::<S, i32>(|val| val, |val| *val);
+}
+
+pub fn deterministic_ffi_string<S: Sort>() {
+    deterministic_impl::<S, FFIString>(
+        |val| FFIString::new(format!("{:010}", val.saturating_abs())),
+        |val| val.as_str().unwrap().parse::<i32>().unwrap(),
+    );
+}
+
+pub fn deterministic_cell_i32<S: Sort>() {
+    deterministic_impl::<S, Cell<i32>>(|val| Cell::new(val), |val| val.get());
+}
+
 fn violate_ord_retain_original_set_impl<S: Sort, T: Ord>(
     type_into_fn: impl Fn(i32) -> T + Copy,
     type_from_fn: impl Fn(&T) -> i32,
@@ -1355,6 +1411,9 @@ macro_rules! instantiate_sort_tests {
             [miri_yes, sort_vs_sort_by],
             [miri_yes, stability],
             [miri_no, stability_with_patterns],
+            [miri_yes, deterministic_i32],
+            [miri_no, deterministic_ffi_string],
+            [miri_no, deterministic_cell_i32],
             [miri_yes, violate_ord_retain_original_set_i32],
             [miri_no, violate_ord_retain_original_set_ffi_string],
             [miri_no, violate_ord_retain_original_set_cell_i32]
