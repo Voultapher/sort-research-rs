@@ -270,7 +270,7 @@ struct PartitionState<T> {
     // https://github.com/rust-lang/rust/issues/117128
     num_lt: usize,
     // Gap guard that tracks the temporary duplicate in the input.
-    gap: GapGuard<T>,
+    gap: GapGuardRaw<T>,
 }
 
 /// This construct works around a couple of issues with auto unrolling as well as manual unrolling.
@@ -361,13 +361,20 @@ where
             state.right = state.right.add(1);
         };
 
+        // Ideally we could just use GapGuard in PartitionState, but the reference that is
+        // materialized with `&mut state` when calling `loop_body` would create a mutable reference
+        // to the parent struct that contains the gap value, invalidating the reference pointer
+        // created from a reference to the gap value in the cleanup loop. This is only an issue
+        // under Stacked Borrows, Tree Borrows accepts the intuitive code using GapGuard as valid.
+        let mut gap_value = ManuallyDrop::new(ptr::read(v_base));
+
         let mut state = PartitionState {
             num_lt: 0,
             right: v_base.add(1),
 
-            gap: GapGuard {
+            gap: GapGuardRaw {
                 pos: v_base,
-                value: ManuallyDrop::new(ptr::read(v_base)),
+                value: &mut *gap_value,
             },
         };
 
@@ -376,11 +383,13 @@ where
             T::unrolled_loop_body(&mut loop_body, &mut state);
         }
 
+        // Single instantiate `loop_body` for both the unroll cleanup and cyclic permutation
+        // cleanup. Optimizes binary-size and compile-time.
         let end = v_base.add(len);
         loop {
             let is_done = state.right == end;
             state.right = if is_done {
-                &mut *state.gap.value
+                state.gap.value
             } else {
                 state.right
             };
@@ -394,5 +403,20 @@ where
         }
 
         state.num_lt
+    }
+}
+
+/// Ideally this wouldn't be needed and we could just use the regular GapGuard.
+/// See comment in [`partition_lomuto_branchless_cyclic`].
+struct GapGuardRaw<T> {
+    pos: *mut T,
+    value: *mut T,
+}
+
+impl<T> Drop for GapGuardRaw<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::copy_nonoverlapping(self.value, self.pos, 1);
+        }
     }
 }
