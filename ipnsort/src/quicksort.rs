@@ -13,9 +13,9 @@ use crate::{GapGuard, IsTrue};
 /// this function will immediately switch to heapsort.
 pub(crate) fn quicksort<'a, T, F>(
     mut v: &'a mut [T],
-    is_less: &mut F,
     mut ancestor_pivot: Option<&'a T>,
     mut limit: u32,
+    is_less: &mut F,
 ) where
     F: FnMut(&T, &T) -> bool,
 {
@@ -28,7 +28,7 @@ pub(crate) fn quicksort<'a, T, F>(
         }
 
         // If too many bad pivot choices were made, simply fall back to heapsort in order to
-        // guarantee `O(n * log(n))` worst-case.
+        // guarantee `O(N x log(N))` worst-case.
         if limit == 0 {
             // SAFETY: We assume the `small_sort` threshold is at least 1.
             unsafe {
@@ -48,29 +48,29 @@ pub(crate) fn quicksort<'a, T, F>(
         if let Some(p) = ancestor_pivot {
             // SAFETY: We assume choose_pivot yields an in-bounds position.
             if !is_less(p, unsafe { v.get_unchecked(pivot_pos) }) {
-                let mid = partition(v, pivot_pos, &mut |a, b| !is_less(b, a));
+                let num_lt = partition(v, pivot_pos, &mut |a, b| !is_less(b, a));
 
-                // Continue sorting elements greater than the pivot. We know that mid contains the
-                // pivot. So we can continue after mid.
-                v = &mut v[(mid + 1)..];
+                // Continue sorting elements greater than the pivot. We know that `num_lt` contains
+                // the pivot. So we can continue after `num_lt`.
+                v = &mut v[(num_lt + 1)..];
                 ancestor_pivot = None;
                 continue;
             }
         }
 
         // Partition the slice.
-        let mid = partition(v, pivot_pos, is_less);
-        // SAFETY: partition ensures that `mid` will be in-bounds.
-        unsafe { intrinsics::assume(mid < v.len()) };
+        let num_lt = partition(v, pivot_pos, is_less);
+        // SAFETY: partition ensures that `num_lt` will be in-bounds.
+        unsafe { intrinsics::assume(num_lt < v.len()) };
 
         // Split the slice into `left`, `pivot`, and `right`.
-        let (left, right) = v.split_at_mut(mid);
+        let (left, right) = v.split_at_mut(num_lt);
         let (pivot, right) = right.split_at_mut(1);
         let pivot = &pivot[0];
 
         // Recurse into the left side. We have a fixed recursion limit, testing shows no real
         // benefit for recursing into the shorter side.
-        quicksort(left, is_less, ancestor_pivot, limit);
+        quicksort(left, ancestor_pivot, limit, is_less);
 
         // Continue with the right side.
         v = right;

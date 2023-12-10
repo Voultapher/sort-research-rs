@@ -1,3 +1,4 @@
+use core::intrinsics;
 use core::ptr;
 
 /// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
@@ -11,12 +12,9 @@ pub(crate) unsafe fn heapsort<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    if v.len() < 2 {
-        // This helps prove things to the compiler. That we checked earlier.
-        // SAFETY: This function is only called if len >= 2.
-        unsafe {
-            core::hint::unreachable_unchecked();
-        }
+    // SAFETY: See function safety.
+    unsafe {
+        intrinsics::assume(v.len() >= 2);
     }
 
     let len = v.len();
@@ -41,12 +39,9 @@ unsafe fn sift_down<T, F>(v: &mut [T], mut node: usize, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    if node >= v.len() {
-        // This helps prove things to the compiler. That we checked earlier.
-        // SAFETY: This function is only called if node < `v.len()`.
-        unsafe {
-            core::hint::unreachable_unchecked();
-        }
+    // SAFETY: See function safety.
+    unsafe {
+        intrinsics::assume(node < v.len());
     }
 
     let len = v.len();
@@ -75,9 +70,9 @@ where
                 break;
             }
 
-            // Swap `node` with the greater child, move one step down, and continue sifting.
-            // Same as v.swap_unchecked(node, child); which is unstable.
-            ptr::swap(v_base.add(node), v_base.add(child))
+            // Swap `node` with the greater child, move one step down, and continue sifting. This
+            // could be ptr::swap_nonoverlapping but that adds a significant amount of binary-size.
+            ptr::swap(v_base.add(node), v_base.add(child));
         }
 
         node = child;

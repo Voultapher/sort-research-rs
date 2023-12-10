@@ -130,8 +130,8 @@ where
     // without any other analysis. This is perf critical for small inputs, in cold code.
     const MAX_LEN_ALWAYS_INSERTION_SORT: usize = 20;
 
-    // Instrumenting the standard library showed that 90+% of the calls to sort by rustc are either
-    // of size 0 or 1. Make this path extra fast by assuming the branch is likely.
+    // Instrumenting the standard library showed that 90+% of the calls to `slice::sort` by rustc
+    // are either of size 0 or 1.
     if intrinsics::likely(len < 2) {
         return;
     }
@@ -175,7 +175,7 @@ where
     // The binary OR by one is used to eliminate the zero-check in the logarithm.
     let limit = 2 * (len | 1).ilog2();
 
-    crate::quicksort::quicksort(v, &mut is_less, None, limit);
+    crate::quicksort::quicksort(v, None, limit, &mut is_less);
 }
 
 /// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
