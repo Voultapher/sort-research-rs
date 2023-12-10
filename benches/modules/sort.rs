@@ -208,6 +208,8 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     bench_inst!(other::sort_evolution::stable::timsort_evo4);
     #[cfg(feature = "evolution")]
     bench_inst!(other::sort_evolution::unstable::quicksort_evo0);
+    #[cfg(feature = "evolution")]
+    bench_inst!(other::sort_evolution::unstable::quicksort_stack_evo0);
 
     #[cfg(feature = "small_sort")]
     bench_inst!(other::small_sort::sort4_unstable_cmp_swap);
