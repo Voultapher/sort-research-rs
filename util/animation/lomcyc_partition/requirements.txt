@@ -5,10 +5,12 @@ click==8.1.7
 click-default-group==1.2.4
 cloup==0.13.1
 colour==0.1.5
+colour-science==0.4.4
 contourpy==1.1.1
 decorator==5.1.1
 glcontext==2.5.0
 idna==3.4
+imageio==2.33.1
 isosurfaces==0.1.0
 Jinja2==3.1.2
 manim==0.17.3
@@ -43,6 +45,7 @@ srt==3.5.3
 svgelements==1.9.6
 tornado==6.3.3
 tqdm==4.66.1
+typing_extensions==4.9.0
 tzdata==2023.3
 urllib3==2.0.7
 watchdog==2.3.1
