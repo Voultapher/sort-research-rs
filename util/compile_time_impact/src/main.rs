@@ -1,10 +1,10 @@
 #![allow(non_snake_case, non_camel_case_types)]
 
-include!("sort_impl_inject.rs");
-
 #[inline(never)]
 fn instantiate_test_sort<T: Ord>(v: &mut [T]) {{
-    sort(v);
+    // v.sort();
+    // v.sort_unstable();
+    ipnsort::sort(v);
 }}
 
 #[derive(Copy, Clone, Ord, PartialOrd, PartialEq, Eq)]struct U64_0(u64);

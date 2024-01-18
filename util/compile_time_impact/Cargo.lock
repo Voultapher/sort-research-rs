@@ -5,3 +5,10 @@ version = 3
 [[package]]
 name = "compile_time_impact"
 version = "0.1.0"
+dependencies = [
+ "ipnsort",
+]
+
+[[package]]
+name = "ipnsort"
+version = "0.1.0"

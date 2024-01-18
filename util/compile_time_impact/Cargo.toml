@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 # glidesort = { version = "0.1.2", features = ["unstable"], optional = true }
+ipnsort = { path = "../../ipnsort" }
