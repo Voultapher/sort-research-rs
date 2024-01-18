@@ -1,5 +1,5 @@
 //! Instruction-Parallel-Network Unstable Sort, ipnsort by Lukas Bergdoll
-#![allow(incomplete_features)]
+#![allow(incomplete_features, internal_features)]
 #![feature(
     ptr_sub_ptr,
     maybe_uninit_slice,
