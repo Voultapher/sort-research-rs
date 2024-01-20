@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Slice sorting
 //!
 //! This module contains a sorting algorithm based on Orson Peters' pattern-defeating quicksort,
@@ -44,7 +45,11 @@ pub fn sort<T>(arr: &mut [T])
 where
     T: Ord,
 {
-    quicksort(arr, |a, b| a.lt(b));
+    for chunk in arr.chunks_exact_mut(2) {
+        unsafe {
+            ptr::copy_nonoverlapping(&chunk[0], &mut chunk[1], 1);
+        }
+    }
 }
 
 /// Sorts the slice with a comparator function, but might not preserve the order of equal
@@ -98,7 +103,7 @@ pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
 {
-    quicksort(arr, |a, b| compare(a, b) == Ordering::Less);
+    todo!();
 }
 
 /// When dropped, copies from `src` into `dest`.
@@ -921,8 +926,16 @@ where
         return;
     }
 
-    // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
-    let limit = usize::BITS - v.len().leading_zeros();
+    for chunk in v.chunks_exact_mut(2) {
+        unsafe {
+            ptr::copy_nonoverlapping(&chunk[0], &mut chunk[1], 1);
+        }
+    }
 
-    recurse(v, &mut is_less, None, limit);
+    // // let _: u64 = std::hint::black_box(unsafe { *std::hint::black_box(ptr::null()) });
+
+    // // Limit the number of imbalanced partitions to `floor(log2(len)) + 1`.
+    // let limit = usize::BITS - v.len().leading_zeros();
+
+    // recurse(v, &mut is_less, None, limit);
 }

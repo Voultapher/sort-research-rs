@@ -28,7 +28,7 @@ ipnsort = { path = "ipnsort", default-features = false }
 
 [dev-dependencies]
 rand = "0.8"
-criterion = { version = "0.3", features = ["html_reports"] }
+criterion = { version = "0.4", features = ["html_reports"] }
 core_affinity = { version = "0.7" }
 regex = { version = "^1" }
 
@@ -49,6 +49,7 @@ lto = "thin"
 
 [profile.bench]
 lto = "thin"
+debug = true
 
 [[bench]]
 name = "bench"
