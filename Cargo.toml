@@ -25,6 +25,7 @@ crumsort = { version = "0.1", optional = true }
 tiny_sort = { version = "1.0", optional = true }
 sort_test_tools = { path = "sort_test_tools", default-features = false }
 ipnsort = { path = "ipnsort", default-features = false }
+# driftsort = { path = "../driftsort", optional = true }
 
 [dev-dependencies]
 rand = "0.8"
@@ -89,6 +90,7 @@ default = [
     # "rust_radsort",
     # "rust_dmsort",
     # "rust_glidesort",
+    # "rust_driftsort",
     # "rust_crumsort_rs",
     # "rust_tinysort",
 ]
@@ -172,6 +174,9 @@ rust_dmsort = ["dmsort"]
 
 # Enable glidesort by Orson Peters.
 rust_glidesort = ["glidesort"]
+
+# Enable driftsort by Orson Peters and Lukas Bergdoll.
+# rust_driftsort = ["driftsort"]
 
 # Enable Rust port of crumsort. Parallelized by default and not a carbon copy port. There are
 # substantial differences to the original crumsort.

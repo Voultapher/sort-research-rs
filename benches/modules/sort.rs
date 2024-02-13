@@ -131,6 +131,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "rust_glidesort")]
     bench_inst!(stable::rust_glidesort);
 
+    #[cfg(feature = "rust_driftsort")]
+    bench_inst!(stable::rust_driftsort);
+
     #[cfg(feature = "rust_tinysort")]
     bench_inst!(stable::rust_tinysort);
 

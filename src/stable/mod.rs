@@ -6,6 +6,9 @@ pub mod rust_wpwoodjr;
 #[cfg(feature = "rust_glidesort")]
 pub mod rust_glidesort;
 
+#[cfg(feature = "rust_driftsort")]
+pub mod rust_driftsort;
+
 #[cfg(feature = "rust_tinysort")]
 pub mod rust_tinysort;
 

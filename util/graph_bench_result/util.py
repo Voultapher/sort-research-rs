@@ -134,6 +134,7 @@ def build_implementation_meta_info():
         "cpp_std_msvc_stable": (palette[1], "square"),
         "rust_std_stable": (palette[2], "square"),
         "rust_glidesort_stable": (palette[3], "square"),
+        "rust_driftsort_stable": (palette[7], "square"),
         "cpp_std_libcxx_stable": (palette[4], "square"),
         "rust_ipn_stable": (palette[5], "square"),
         "cpp_powersort_stable": (palette[6], "square"),
