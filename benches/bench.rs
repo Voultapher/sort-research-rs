@@ -248,8 +248,6 @@ fn shift_i32_to_u32(val: i32) -> u32 {
 
 #[allow(unused)]
 fn compress_i32(values: &[i32], compression_range: f64) -> impl Iterator<Item = u32> + '_ {
-    // (val & u8::MAX as i32) as u8
-
     let mut min_val = u32::MAX;
     let mut max_val = u32::MIN;
 
@@ -315,8 +313,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         // FFI String
         bench_patterns(c, test_len, "string", |values| {
             values
-                .iter()
-                .map(|val| FFIString::new(format!("{:010}", val.saturating_abs())))
+                .into_iter()
+                .map(|val| FFIString::new(format!("{:010}", shift_i32_to_u32(val))))
                 .collect()
         });
 
