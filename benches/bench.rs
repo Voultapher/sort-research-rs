@@ -54,7 +54,7 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
     transform_name: &str,
     transform: fn(Vec<i32>) -> Vec<T>,
 ) {
-    if test_len > 100_000 && !(transform_name == "i32" || transform_name == "u64") {
+    if test_len > 100_000 && (transform_name == "string" || transform_name == "1k") {
         // These are just too expensive.
         return;
     }
