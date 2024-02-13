@@ -1,11 +1,13 @@
 use core::intrinsics;
 use core::mem::{self, ManuallyDrop, MaybeUninit};
 use core::ptr;
+use core::slice;
 
 use crate::{has_efficient_in_place_swap, Freeze, GapGuard, IsTrue};
 
 // Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
-// LLVM-IR for the sorting-network and median-networks for types that don't qualify.
+// LLVM-IR for the sorting-network for types that don't qualify. This greatly helps with
+// compile-times.
 pub(crate) trait SmallSortImpl: Sized {
     const SMALL_SORT_THRESHOLD: usize;
 
@@ -28,23 +30,61 @@ impl<T> SmallSortImpl for T {
     }
 }
 
-impl<T: Freeze> SmallSortImpl for T {
-    default const SMALL_SORT_THRESHOLD: usize = 20;
+/// SAFETY: If you change this value, you have to adjust [`small_sort_general`] !
+const SMALL_SORT_GENERAL_THRESHOLD: usize = 20;
+
+/// [`small_sort_general`] uses [`sort8_stable`] as primitive and does a kind of ping-pong merge,
+/// where the output of the first two [`sort8_stable`] calls is stored at the end of the scratch
+/// buffer. This simplifies panic handling and avoids additional copies. This affects the required
+/// scratch buffer size.
+///
+/// SAFETY: If you change this value, you have to adjust [`small_sort_general`] !
+const SMALL_SORT_GENERAL_SCRATCH_LEN: usize = SMALL_SORT_GENERAL_THRESHOLD + 16;
+
+/// SAFETY: If you change this value, you have to adjust [`small_sort_network`] !
+const SMALL_SORT_NETWORK_SCRATCH_LEN: usize = 32;
+
+/// Using a stack array, could cause a stack overflow if the type `T` is very large. To be
+/// conservative we limit the usage of small-sorts that require a stack array to types that fit
+/// within this limit.
+const MAX_STACK_ARRAY_SIZE: usize = 4096;
+
+trait QualifiesForStackArrayUsage {}
+
+impl<T> QualifiesForStackArrayUsage for T where
+    (): IsTrue<{ (mem::size_of::<T>() * SMALL_SORT_GENERAL_SCRATCH_LEN) <= MAX_STACK_ARRAY_SIZE }>
+{
+}
+
+impl<T> SmallSortImpl for T
+where
+    T: QualifiesForStackArrayUsage + Freeze,
+{
+    default const SMALL_SORT_THRESHOLD: usize = SMALL_SORT_GENERAL_THRESHOLD;
 
     default fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
         F: FnMut(&T, &T) -> bool,
     {
-        small_sort_general(v, is_less);
+        let mut scratch = MaybeUninit::<[T; SMALL_SORT_GENERAL_SCRATCH_LEN]>::uninit();
+
+        let scratch_slice = unsafe {
+            slice::from_raw_parts_mut(
+                scratch.as_mut_ptr() as *mut MaybeUninit<T>,
+                SMALL_SORT_GENERAL_SCRATCH_LEN,
+            )
+        };
+
+        small_sort_general(v, scratch_slice, is_less);
     }
 }
 
 impl<T> SmallSortImpl for T
 where
-    T: Freeze + Copy,
+    T: QualifiesForStackArrayUsage + Freeze + Copy,
     (): IsTrue<{ has_efficient_in_place_swap::<T>() }>,
 {
-    const SMALL_SORT_THRESHOLD: usize = 32;
+    const SMALL_SORT_THRESHOLD: usize = SMALL_SORT_NETWORK_SCRATCH_LEN;
 
     fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
@@ -372,9 +412,8 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
-    const MAX_BRANCHLESS_SMALL_SORT: usize = i32::SMALL_SORT_THRESHOLD;
 
-    if len < 18 || len > MAX_BRANCHLESS_SMALL_SORT {
+    if len < 18 || len > SMALL_SORT_NETWORK_SCRATCH_LEN {
         intrinsics::abort();
     }
 
@@ -397,14 +436,14 @@ where
     insertion_sort_shift_left(&mut v[0..len_div_2], presorted_len, is_less);
     insertion_sort_shift_left(&mut v[len_div_2..even_len], presorted_len, is_less);
 
-    let mut scratch = MaybeUninit::<[T; MAX_BRANCHLESS_SMALL_SORT]>::uninit();
+    let mut scratch = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
     let scratch_base = scratch.as_mut_ptr() as *mut T;
 
     // SAFETY: We checked that T is Freeze and thus observation safe.
     // Should is_less panic v was not modified in parity_merge and retains it's original input.
     // scratch and v must not alias and scratch has v.len() space.
     unsafe {
-        bi_directional_merge_even(&mut v[..even_len], scratch_base, is_less);
+        bi_directional_merge_even(&v[..even_len], scratch_base, is_less);
         ptr::copy_nonoverlapping(scratch_base, v.as_mut_ptr(), even_len);
     }
 
@@ -440,7 +479,7 @@ where
     }
 }
 
-fn small_sort_general<T, F>(v: &mut [T], is_less: &mut F)
+fn small_sort_general<T, F>(v: &mut [T], scratch: &mut [MaybeUninit<T>], is_less: &mut F)
 where
     T: Freeze,
     F: FnMut(&T, &T) -> bool,
@@ -450,10 +489,7 @@ where
     let len = v.len();
 
     if len >= 2 {
-        const SCRATCH_LEN: usize = String::SMALL_SORT_THRESHOLD + 16;
-        let mut scratch = MaybeUninit::<[T; SCRATCH_LEN]>::uninit();
-
-        if SCRATCH_LEN < (T::SMALL_SORT_THRESHOLD + 16) {
+        if scratch.len() < (T::SMALL_SORT_THRESHOLD + 16) {
             intrinsics::abort();
         }
 
