@@ -98,7 +98,7 @@ uint32_t blockquicksort_unstable_f128_by(F128* data,
 
 // --- 1k ---
 
-void blockquicksort_unstable_1k(FFIOneKiloByte* data, size_t len) {
+void blockquicksort_unstable_1k(FFIOneKibiByte* data, size_t len) {
   blocked_double_pivot_check_mosqrt::sort(
       reinterpret_cast<FFIOneKiloByteCpp*>(data),
       reinterpret_cast<FFIOneKiloByteCpp*>(data) + len,
@@ -106,10 +106,10 @@ void blockquicksort_unstable_1k(FFIOneKiloByte* data, size_t len) {
 }
 
 uint32_t blockquicksort_unstable_1k_by(
-    FFIOneKiloByte* data,
+    FFIOneKibiByte* data,
     size_t len,
-    CompResult (*cmp_fn)(const FFIOneKiloByte&,
-                         const FFIOneKiloByte&,
+    CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                         const FFIOneKibiByte&,
                          uint8_t*),
     uint8_t* ctx) {
   return sort_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len, cmp_fn,

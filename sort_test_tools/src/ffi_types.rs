@@ -104,11 +104,11 @@ impl Drop for FFIString {
 // Very large stack value.
 #[repr(C)]
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct FFIOneKiloByte {
+pub struct FFIOneKibiByte {
     values: [i64; 128],
 }
 
-impl FFIOneKiloByte {
+impl FFIOneKibiByte {
     pub fn new(val: i32) -> Self {
         let mut values = [0i64; 128];
         let mut val_i64 = val as i64;
@@ -125,13 +125,13 @@ impl FFIOneKiloByte {
     }
 }
 
-impl PartialOrd for FFIOneKiloByte {
+impl PartialOrd for FFIOneKibiByte {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.as_i64().partial_cmp(&other.as_i64())
     }
 }
 
-impl Ord for FFIOneKiloByte {
+impl Ord for FFIOneKibiByte {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }

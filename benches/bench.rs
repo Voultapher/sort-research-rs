@@ -4,7 +4,7 @@ use std::env;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 #[allow(unused_imports)]
-use sort_test_tools::ffi_types::{FFIOneKiloByte, FFIString, F128};
+use sort_test_tools::ffi_types::{FFIOneKibiByte, FFIString, F128};
 
 use sort_test_tools::patterns;
 
@@ -322,7 +322,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         // Very large stack value.
         bench_patterns(c, test_len, "1k", |values| {
-            values.iter().map(|val| FFIOneKiloByte::new(*val)).collect()
+            values.iter().map(|val| FFIOneKibiByte::new(*val)).collect()
         });
 
         // 16 byte stack value that is Copy but has a relatively expensive cmp implementation.

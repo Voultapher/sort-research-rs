@@ -155,32 +155,32 @@ uint32_t MAKE_FUNC_NAME(sort_unstable, f128_by)(
 
 // --- 1k ---
 
-void MAKE_FUNC_NAME(sort_stable, 1k)(FFIOneKiloByte* data, size_t len) {
+void MAKE_FUNC_NAME(sort_stable, 1k)(FFIOneKibiByte* data, size_t len) {
   std::stable_sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
                    reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
 }
 
 uint32_t MAKE_FUNC_NAME(sort_stable,
-                        1k_by)(FFIOneKiloByte* data,
+                        1k_by)(FFIOneKibiByte* data,
                                size_t len,
-                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
-                                                    const FFIOneKiloByte&,
+                               CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                    const FFIOneKibiByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
   return sort_stable_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len,
                              cmp_fn, ctx);
 }
 
-void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKiloByte* data, size_t len) {
+void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKibiByte* data, size_t len) {
   std::sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
             reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
 }
 
 uint32_t MAKE_FUNC_NAME(sort_unstable,
-                        1k_by)(FFIOneKiloByte* data,
+                        1k_by)(FFIOneKibiByte* data,
                                size_t len,
-                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
-                                                    const FFIOneKiloByte&,
+                               CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                    const FFIOneKibiByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
   return sort_unstable_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len,

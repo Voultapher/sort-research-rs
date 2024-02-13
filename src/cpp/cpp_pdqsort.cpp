@@ -82,15 +82,15 @@ uint32_t pdqsort_unstable_f128_by(F128* data,
 
 // --- 1k ---
 
-void pdqsort_unstable_1k(FFIOneKiloByte* data, size_t len) {
+void pdqsort_unstable_1k(FFIOneKibiByte* data, size_t len) {
   pdqsort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
           reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
 }
 
-uint32_t pdqsort_unstable_1k_by(FFIOneKiloByte* data,
+uint32_t pdqsort_unstable_1k_by(FFIOneKibiByte* data,
                                 size_t len,
-                                CompResult (*cmp_fn)(const FFIOneKiloByte&,
-                                                     const FFIOneKiloByte&,
+                                CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                     const FFIOneKibiByte&,
                                                      uint8_t*),
                                 uint8_t* ctx) {
   return sort_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len, cmp_fn,

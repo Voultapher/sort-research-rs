@@ -8,7 +8,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use crate::ffi_types::{FFIOneKiloByte, FFIString, F128};
+use crate::ffi_types::{FFIOneKibiByte, FFIString, F128};
 use crate::patterns;
 use crate::Sort;
 
@@ -570,7 +570,7 @@ pub fn random_str<S: Sort>() {
 }
 
 pub fn random_large_val<S: Sort>() {
-    test_impl::<FFIOneKiloByte, S>(|test_len| {
+    test_impl::<FFIOneKibiByte, S>(|test_len| {
         if test_len == TEST_SIZES[TEST_SIZES.len() - 1] {
             // That takes too long skip.
             return vec![];
@@ -578,7 +578,7 @@ pub fn random_large_val<S: Sort>() {
 
         patterns::random(test_len)
             .into_iter()
-            .map(|val| FFIOneKiloByte::new(val))
+            .map(|val| FFIOneKibiByte::new(val))
             .collect::<Vec<_>>()
     });
 }

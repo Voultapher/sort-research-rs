@@ -173,30 +173,30 @@ uint32_t MAKE_FUNC_NAME(sort_unstable, f128_by)(
 
 // --- 1k ---
 
-void MAKE_FUNC_NAME(sort_stable, 1k)(FFIOneKiloByte* data, size_t len) {
+void MAKE_FUNC_NAME(sort_stable, 1k)(FFIOneKibiByte* data, size_t len) {
   printf("Not supported\n");
 }
 
 uint32_t MAKE_FUNC_NAME(sort_stable,
-                        1k_by)(FFIOneKiloByte* data,
+                        1k_by)(FFIOneKibiByte* data,
                                size_t len,
-                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
-                                                    const FFIOneKiloByte&,
+                               CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                    const FFIOneKibiByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
   printf("Not supported\n");
   return 1;
 }
 
-void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKiloByte* data, size_t len) {
+void MAKE_FUNC_NAME(sort_unstable, 1k)(FFIOneKibiByte* data, size_t len) {
   printf("Not supported\n");
 }
 
 uint32_t MAKE_FUNC_NAME(sort_unstable,
-                        1k_by)(FFIOneKiloByte* data,
+                        1k_by)(FFIOneKibiByte* data,
                                size_t len,
-                               CompResult (*cmp_fn)(const FFIOneKiloByte&,
-                                                    const FFIOneKiloByte&,
+                               CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                    const FFIOneKibiByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
   printf("Not supported\n");
