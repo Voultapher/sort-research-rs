@@ -212,6 +212,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0bc8fbe9441c17c9f46f75dfe27fa1ddb6c68a461ccaed0481419219d4f10d3"
 
 [[package]]
+name = "driftsort"
+version = "0.1.0"
+
+[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -575,6 +579,7 @@ dependencies = [
  "criterion",
  "crumsort",
  "dmsort",
+ "driftsort",
  "glidesort",
  "ipnsort",
  "once_cell",

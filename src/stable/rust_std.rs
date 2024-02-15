@@ -1,4 +1,4 @@
-#![allow(unused_unsafe)]
+#![allow(unused_unsafe, unused)]
 
 use std::cmp::Ordering;
 use std::mem::{self, size_of};
@@ -37,7 +37,8 @@ pub fn sort<T>(arr: &mut [T])
 where
     T: Ord,
 {
-    merge_sort(arr, |a, b| a.lt(b));
+    arr.sort();
+    // merge_sort(arr, |a, b| a.lt(b));
 }
 
 /// Sorts the slice with a comparator function.
@@ -90,7 +91,8 @@ pub fn sort_by<T, F>(arr: &mut [T], mut compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
 {
-    merge_sort(arr, |a, b| compare(a, b) == Ordering::Less);
+    arr.sort_by(compare);
+    // merge_sort(arr, |a, b| compare(a, b) == Ordering::Less);
 }
 
 /// This merge sort borrows some (but not all) ideas from TimSort, which is described in detail
