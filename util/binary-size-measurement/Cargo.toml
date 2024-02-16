@@ -1,0 +1,29 @@
+[package]
+name = "binary-size-measurement"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# sort_comp = { path = "../../" }
+ipnsort = { path = "../../ipnsort" }
+
+[profile.release]
+
+[profile.release_lto_thin]
+inherits = "release"
+lto = "thin"
+
+[profile.release_lto_thin_opt_level_s]
+inherits = "release"
+lto = "thin"
+opt-level = "s"
+
+[features]
+default = []
+
+type_u64 = []
+type_string = []
+
+sort_inst = []
