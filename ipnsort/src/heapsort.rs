@@ -17,15 +17,13 @@ where
         intrinsics::assume(v.len() >= 2);
     }
 
-    let len = v.len();
-
     // Build the heap in linear time.
-    for i in (0..len / 2).rev() {
+    for i in (0..v.len() / 2).rev() {
         sift_down(v, i, is_less);
     }
 
     // Pop maximal elements from the heap.
-    for i in (1..len).rev() {
+    for i in (1..v.len()).rev() {
         v.swap(0, i);
         sift_down(&mut v[..i], 0, is_less);
     }

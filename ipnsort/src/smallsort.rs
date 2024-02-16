@@ -20,6 +20,7 @@ pub(crate) trait SmallSortImpl: Sized {
 impl<T> SmallSortImpl for T {
     default const SMALL_SORT_THRESHOLD: usize = 20;
 
+    #[inline(always)]
     default fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
         F: FnMut(&T, &T) -> bool,
@@ -62,6 +63,7 @@ where
 {
     default const SMALL_SORT_THRESHOLD: usize = SMALL_SORT_GENERAL_THRESHOLD;
 
+    #[inline(always)]
     default fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
         F: FnMut(&T, &T) -> bool,
@@ -86,6 +88,7 @@ where
 {
     const SMALL_SORT_THRESHOLD: usize = SMALL_SORT_NETWORK_SCRATCH_LEN;
 
+    #[inline(always)]
     fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
         F: FnMut(&T, &T) -> bool,
