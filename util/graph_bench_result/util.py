@@ -74,8 +74,8 @@ def extract_groups(bench_result):
         if pattern in pattern_skip:
             continue
 
-        if test_len <= 32:
-            continue
+        # if test_len <= 32:
+        #     continue
 
         if pattern == "saws_short":
             continue
@@ -132,8 +132,8 @@ def build_implementation_meta_info():
         "cpp_std_sys_stable": (palette[1], "square"),
         "cpp_std_gnu_stable": (palette[1], "square"),
         "cpp_std_msvc_stable": (palette[1], "square"),
-        "rust_std_stable": (palette[2], "square"),
-        "rust_glidesort_stable": (palette[3], "square"),
+        "rust_std_stable": (palette[4], "square"),
+        "rust_glidesort_stable": (palette[3], "triangle"),
         "rust_driftsort_stable": (palette[7], "square"),
         "cpp_std_libcxx_stable": (palette[4], "square"),
         "rust_ipn_stable": (palette[5], "square"),
@@ -141,16 +141,17 @@ def build_implementation_meta_info():
         "cpp_powersort_4way_stable": (palette[7], "square"),
         "rust_wpwoodjr_stable": (palette[7], "square"),
         "rust_tinymergesort_stable": (palette[7], "square"),
+        "rust_driftsort_stable": (palette[6], "circle"),
         # Unstable
         "c_crumsort_unstable": (palette[0], "square"),
         "cpp_std_sys_unstable": (palette[1], "square"),
         "cpp_std_gnu_unstable": (palette[1], "square"),
         "cpp_std_msvc_unstable": (palette[1], "square"),
-        "rust_std_unstable": (palette[2], "square"),
+        "rust_std_unstable": (palette[4], "square"),
         "cpp_pdqsort_unstable": (palette[3], "square"),
         "cpp_std_libcxx_unstable": (palette[4], "square"),
         "rust_ipn_unstable": (palette[5], "square"),
-        "rust_ipnsort_unstable": (palette[5], "square"),
+        "rust_ipnsort_unstable": (palette[5], "circle"),
         "cpp_ips4o_unstable": (palette[6], "square"),
         "cpp_blockquicksort": (palette[7], "square"),
         "rust_tinyheapsort_unstable": (palette[7], "square"),
@@ -190,7 +191,7 @@ def build_pattern_meta_info():
         "random_d20": (palette[3], "square_pin"),
         "random_p5": (palette[4], "square_cross"),
         "random_s95": (palette[5], "circle"),
-        "random_z1": (palette[6], "square_cross"),
+        "random_z1": (palette[6], "inverted_triangle"),
         "random": (palette[7], "triangle"),
     }
 

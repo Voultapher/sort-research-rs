@@ -18,14 +18,13 @@ from bokeh.models import FactorRange, LabelSet
 
 from natsort import natsorted
 
-TRANSFORMS = ["i32", "u64", "string", "1k", "f128"]
+from util import base_name, build_pattern_meta_info
 
 
-def is_stable_sort(sort_name):
-    return "_stable" in sort_name
+PATTERN_META_INFO = build_pattern_meta_info()
 
 
-def extract_groups(comp_data, stable):
+def extract_groups(comp_data):
     # Result layout:
     # { type (eg. u64):
     #   { test_len (eg. 500):
@@ -43,9 +42,6 @@ def extract_groups(comp_data, stable):
             continue
 
         sort_name, _, entry = line.partition("-")
-
-        if is_stable_sort(sort_name) ^ stable:
-            continue
 
         entry_parts = entry.split("-")
 
@@ -65,22 +61,6 @@ def extract_groups(comp_data, stable):
 
 # Needs to be shared instance :/
 TOOLS = None
-
-
-def init_bar_tools():
-    global TOOLS
-    TOOLS = [
-        models.WheelZoomTool(),
-        models.BoxZoomTool(),
-        models.PanTool(),
-        models.HoverTool(
-            tooltips=[
-                ("Sort", "@y"),
-                ("Comparisons", "@comp_counts_full"),
-            ],
-        ),
-        models.ResetTool(),
-    ]
 
 
 def init_evolution_tools():
@@ -109,117 +89,12 @@ def add_tools_to_plot(plot):
     plot.toolbar.active_drag = TOOLS[1]
 
 
-def make_map_val_to_color(values):
-    palette = Colorblind[len(values)]
-
-    def map_sort_to_color(value):
-        return palette[values.index(value)]
-
-    return map_sort_to_color
-
-
-def plot_single_size(ty, test_len, values):
-    sort_names = sorted(list(list(values.values())[0].keys()))
-    map_sort_to_color = make_map_val_to_color(sort_names)
-
-    max_comp_count = max([max(val.values()) for val in values.values()])
-    comp_div = test_len - 1
-
-    y = []
-    comp_counts = []
-    comp_counts_full = []
-    colors = []
-    for pattern, val in natsorted(values.items()):
-        for sort_name, comp_count in sorted(
-            val.items(), key=lambda x: x[1], reverse=True
-        ):
-            y.append((pattern, sort_name))
-            comp_counts.append(comp_count / comp_div)
-            comp_counts_full.append(comp_count)
-            colors.append(map_sort_to_color(sort_name))
-
-    comp_counts_text = [f"{x:.1f}" for x in comp_counts]
-
-    source = ColumnDataSource(
-        data={
-            "y": y,
-            "comp_counts": comp_counts,
-            "comp_counts_text": comp_counts_text,
-            "comp_counts_full": comp_counts_full,
-            "colors": colors,
-        }
-    )
-
-    log_n = math.log(test_len)
-
-    plot_name = f"comp-{ty}-{test_len}"
-    plot = figure(
-        x_axis_label=f"Comparisons performed / (N - 1), log(N) == {log_n:.1f} | Lower is better",
-        x_range=(0, max_comp_count / comp_div * 1.1),
-        y_range=FactorRange(*y),
-        y_axis_label="Pattern",
-        title=plot_name,
-        tools="",
-        plot_width=800,
-        plot_height=1000,
-    )
-
-    add_tools_to_plot(plot)
-
-    plot.hbar(
-        y="y",
-        right="comp_counts",
-        height=0.8,
-        source=source,
-        fill_color="colors",
-        line_color="black",
-    )
-
-    labels = LabelSet(
-        x="comp_counts",
-        y="y",
-        text="comp_counts_text",
-        x_offset=5,
-        y_offset=-5,
-        source=source,
-        render_mode="canvas",
-        text_font_size="10pt",
-    )
-    plot.add_layout(labels)
-
-    plot.x_range.start = 0
-    plot.ygrid.grid_line_color = None
-    plot.y_range.range_padding = 0.02
-
-    return plot_name, plot
-
-
-def plot_comparisons(groups, stable_name):
-    # Assumes all entries were tested for the same patterns.
-    for ty, val1 in groups.items():
-        for test_len, val2 in val1.items():
-            if test_len != 19:
-                continue
-
-            init_bar_tools()
-
-            plot_name, plot = plot_single_size(ty, test_len, val2)
-
-            show(plot)
-
-            # html = file_html(plot, CDN, plot_name)
-            # with open(f"{plot_name}.html", "w+") as outfile:
-            #     outfile.write(html)
-
-            raise Exception()
-
-
 def plot_comparison_evolution_single(sort_names, groups, sort_name):
     plot = figure(
         title=f"{sort_name}-comp-evolution",
         x_axis_label="Input length (log)",
         x_axis_type="log",
-        y_axis_label="Comparisons performed / (N - 1) | Lower is better",
+        y_axis_label="Mean comparisons performed / (N - 1) | Lower is better",
         y_range=(0, 30),  # Chosen to make comparing sorts easier.
         tools="",
     )
@@ -231,7 +106,6 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
     patterns = list(
         sorted(list(values.values())[len(values.values()) - 1].keys())
     )
-    map_pattern_to_color = make_map_val_to_color(patterns)
 
     pattern_comp_counts = {}
     for test_len, val1 in sorted(values.items()):
@@ -258,7 +132,7 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
 
     for pattern, data in natsorted(pattern_comp_counts.items()):
         source = ColumnDataSource(data=data)
-        color = map_pattern_to_color(pattern)
+        color, symbol = PATTERN_META_INFO[pattern]
 
         plot.line(
             x="test_sizes",
@@ -269,13 +143,14 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
             legend_label=pattern,
         )
 
-        plot.square(
+        getattr(plot, symbol)(
             x="test_sizes",
             y="comp_counts",
             source=source,
-            size=5,
+            size=6,
             fill_color=None,
             line_color=color,
+            legend_label=pattern,
         )
 
     plot.legend.location = "top_left"
@@ -283,7 +158,7 @@ def plot_comparison_evolution_single(sort_names, groups, sort_name):
     return plot
 
 
-def plot_comparison_evolution(groups, stable_name):
+def plot_comparison_evolution(groups):
     # Assumes all entries were tested for the same patterns.
     sort_names = sorted(
         list(
@@ -299,26 +174,15 @@ def plot_comparison_evolution(groups, stable_name):
     ]
 
     grid_plot = gridplot(plots, ncols=2)
-    name = os.path.basename(sys.argv[1]).partition(".")[0]
-    html = file_html(grid_plot, CDN, stable_name)
-    with open(f"{name}-{stable_name}.html", "w+") as outfile:
+    name = base_name()
+    html = file_html(grid_plot, CDN)
+    with open(f"{name}.html", "w+") as outfile:
         outfile.write(html)
 
 
 def plot_comp(comp_data):
-    stable_name = "stable"
-    stable = True
-
-    groups = extract_groups(comp_data, stable)
-    # plot_comparisons(groups, stable_name)
-    plot_comparison_evolution(groups, stable_name)
-
-    stable_name = "unstable"
-    stable = False
-
-    groups = extract_groups(comp_data, stable)
-    # plot_comparisons(groups, stable_name)
-    plot_comparison_evolution(groups, stable_name)
+    groups = extract_groups(comp_data)
+    plot_comparison_evolution(groups)
 
 
 if __name__ == "__main__":

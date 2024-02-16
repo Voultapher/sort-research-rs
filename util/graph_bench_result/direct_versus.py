@@ -2,10 +2,11 @@
 Produce graphs that show the relative speedup and slowdown between two implementations.
 """
 
-import sys
 import itertools
-import statistics
 import math
+import os
+import statistics
+import sys
 
 
 from bokeh import models
@@ -95,7 +96,7 @@ def extract_line(sort_name_a, sort_name_b, pattern, values):
     return x, y
 
 
-def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
+def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, clip_mode, values):
     patterns = natsorted(list(values.values())[0].keys())
     min_test_size = min(values.keys())
     max_test_size = max(values.keys())
@@ -132,7 +133,13 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
         if y_median == -1.0:
             y_median = 1.0
 
-        y_max = max(max(map(abs, y)), y_max)
+        # y_vals_sorted = sorted(map(abs, y))
+        # local_y_max_idx = \
+        #     max(len(y_vals_sorted) - (1 if clip_mode == "full" else 6), 0)
+        # y_max = max(y_vals_sorted[local_y_max_idx], y_max)
+
+        if clip_mode == "full" or pattern == os.environ.get("CLIP_PATTERN_OVERRIDE", "random"):
+            y_max = max(max(map(abs, y)), y_max)
 
         legend_label = pattern
 
@@ -190,17 +197,25 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
 
 
 def plot_types(sort_name_a, sort_name_b, groups):
+    clip_modes = {"full": "", "clipped": "-clipped"}
+
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
-            init_tools()
+            for clip_mode, name_suffix in clip_modes.items():
+                init_tools()
 
-            plot_name, plot = plot_versus(
-                sort_name_a, sort_name_b, ty, prediction_state, val2
-            )
+                plot_name, plot = plot_versus(
+                    sort_name_a,
+                    sort_name_b,
+                    ty,
+                    prediction_state,
+                    clip_mode,
+                    val2
+                )
 
-            html = file_html(plot, CDN, plot_name)
-            with open(f"{plot_name}.html", "w+") as outfile:
-                outfile.write(html)
+                html = file_html(plot, CDN, plot_name)
+                with open(f"{plot_name}{name_suffix}.html", "w+") as outfile:
+                    outfile.write(html)
 
 
 if __name__ == "__main__":
