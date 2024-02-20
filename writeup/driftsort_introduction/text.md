@@ -125,9 +125,9 @@ The cold benchmarks perform a step before each measurement that [overwrites](htt
 
 One common way to improve the performance of sort implementations is to use explicit vectorization. However doing so limits the applicability to a narrow set of built-in types and doesn't support user-defined comparison functions. A generic implementation has to handle user-defined types of various shapes, paired with user-defined comparison functions. For these reasons the implementation focuses on instruction-level parallelism (ILP) instead of SIMD. While there is an unlimited amount of possible combinations, it is possible to pick certain types that demonstrate possible properties and their effects. In the benchmarks the input length range is limited to 1e5 for practical resource reasons, except for `u64` and `i32`.
 
-#### Results Zen 3
+#### Benchmark setups
 
-The micro-architecture called Zen 3 released in the year 2020 by AMD, is in the year 2024 a widely used choice for cloud computing, gaming and more.
+Zen 3
 
 ```
 Linux 6.6
@@ -135,6 +135,30 @@ rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
 AMD Ryzen 9 5900X 12-Core Processor (Zen 3 micro-architecture)
 CPU boost enabled.
 ```
+
+Haswell
+
+```
+Linux 5.19
+rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
+Intel i7-5500U 2-Core Processor (Broadwell micro-architecture)
+CPU boost enabled.
+```
+
+Firestorm
+
+```
+Darwin Kernel Version 22.6.0
+rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
+Apple M1 Pro 6+2 Core Processor (Firestorm P-core micro-architecture)
+CPU boost enabled.
+```
+
+#### Results Zen 3
+
+Zen 3 is a CPU micro-architecture by AMD, released in the year 2020. In 2024 it is a popular choice for servers and desktops. With workloads ranging from HPC to general cloud computing to gaming and desktop usage.
+
+To keep the size of this document in check, this is the only micro-architecture for which the results will be discussed in detail.
 
 ##### u64 10k single size
 
@@ -318,74 +342,18 @@ impl PartialOrd for F128 {
 
 Observations:
 
-- Mostly similar to `u64` and `i32` with different curve offset.
+- Mostly similar to `u64` and `i32` with different curve offsets.
 
-#### Results Haswell
+#### All results
 
-The micro-architecture called Haswell released in the year 2013 by Intel, is the successor to the very successful Sandy Bridge micro-architecture released in the year 2011, which then was followed by [Skylake](https://chipsandcheese.com/2022/10/14/skylake-intels-longest-serving-architecture/) in the year 2015. Broadwell is a node shrink of the same micro-architecture, which implies higher frequencies and or better energy efficiency, but the micro-architecture is essentially the same.
-
-```
-Linux 5.19
-rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
-Intel i7-5500U 2-Core Processor (Broadwell micro-architecture)
-CPU boost enabled.
-```
-
-Observations are omitted here to keep the size of this document in check.
-
-##### 10k u64
-
-<img src="assets/haswell/10k-single-size.png" width=700 />
-
-##### u64
-
-<img src="assets/haswell/u64-clipped.png" width=960 />
-
-##### i32
-
-<img src="assets/haswell/i32-clipped.png" width=960 />
-
-##### 1k
-
-<img src="assets/haswell/1k-clipped.png" width=960 />
-
-##### f128
-
-<img src="assets/haswell/f128-clipped.png" width=960 />
-
-#### Results Firestorm
-
-The P-core micro-architecture called Firestorm released in the year 2020 by Apple and found in the A14 and M1 family of chips, is one of the widest and most capable micro-architectures available to consumers to date. The machine-code generated for the Arm instruction set architecture (ISA) by LLVM is broadly similar to the machine-code generated for the x86 ISA, but there are meaningful differences one has to account for when writing cross-platform high-performance code. Like the aforementioned loop unrolling issue, as described in the second section called "Performance measurement", and more.
-
-```
-Darwin Kernel Version 22.6.0
-rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
-Apple M1 Pro 6+2 Core Processor (Firestorm P-core micro-architecture)
-CPU boost enabled.
-```
-
-Observations are omitted here to keep the size of this document in check.
-
-##### 10k u64
-
-<img src="assets/firestorm/10k-single-size.png" width=700 />
-
-##### u64
-
-<img src="assets/firestorm/u64-clipped.png" width=960 />
-
-##### i32
-
-<img src="assets/firestorm/i32-clipped.png" width=960 />
-
-##### 1k
-
-<img src="assets/firestorm/1k-clipped.png" width=960 />
-
-##### f128
-
-<img src="assets/firestorm/f128-clipped.png" width=960 />
-
+|        | Zen 3 | Haswell | Firestorm
+|--------|-------|---------|----------
+| 10k u64 | <img src="assets/zen3/10k-single-size.png" width=300> | <img src="assets/haswell/10k-single-size.png" width=300> | <img src="assets/firestorm/10k-single-size.png" width=300>
+| u64     | <img src="assets/zen3/u64-clipped.png" width=300> | <img src="assets/haswell/u64-clipped.png" width=300> | <img src="assets/firestorm/u64-clipped.png" width=300>
+| i32     | <img src="assets/zen3/i32-clipped.png" width=300> | <img src="assets/haswell/i32-clipped.png" width=300> | <img src="assets/firestorm/i32-clipped.png" width=300>
+| string  | <img src="assets/zen3/string-clipped.png" width=300> | <img src="assets/haswell/string-clipped.png" width=300> | <img src="assets/firestorm/string-clipped.png" width=300>
+| 1k      | <img src="assets/zen3/1k-clipped.png" width=300> | <img src="assets/haswell/1k-clipped.png" width=300> | <img src="assets/firestorm/1k-clipped.png" width=300>
+| f128    | <img src="assets/zen3/f128-clipped.png" width=300> | <img src="assets/haswell/f128-clipped.png" width=300> | <img src="assets/firestorm/f128-clipped.png" width=300>
 ### Generic
 
 The driftsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. None of which are restricted to builtin types, treating user-defined types and builtin types the same way. The fact that the performance characteristics and output order of `u64` vs `Cell<u64>` are noticeably different is novel, and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
