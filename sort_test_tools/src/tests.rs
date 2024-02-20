@@ -1084,6 +1084,46 @@ pub fn deterministic_cell_i32<S: Sort>() {
     deterministic_impl::<S, Cell<i32>>(|val| Cell::new(val), |val| val.get());
 }
 
+fn self_cmp_impl<S: Sort, T: Ord + Clone + Debug>(type_into_fn: impl Fn(i32) -> T + Copy) {
+    let _seed = get_or_init_random_seed::<S>();
+
+    // It's possible for comparisons to run into problems if the values of `a` and `b` passed into
+    // the comparison function are the same reference.
+
+    let test_fn = |test_len: usize, pattern_fn: fn(usize) -> Vec<i32>| {
+        let mut test_input = pattern_fn(test_len)
+            .into_iter()
+            .map(|val| type_into_fn(val))
+            .collect::<Vec<_>>();
+
+        let comparison_fn = |a: &T, b: &T| {
+            assert_ne!(a as *const T as usize, b as *const T as usize);
+            a.cmp(b)
+        };
+
+        <S as Sort>::sort_by(&mut test_input, comparison_fn);
+
+        // Check that the output is actually sorted and wasn't stopped by the assert.
+        for window in test_input.windows(2) {
+            assert!(window[0] <= window[1]);
+        }
+    };
+
+    test_impl_custom(test_fn);
+}
+
+pub fn self_cmp_i32<S: Sort>() {
+    self_cmp_impl::<S, i32>(|val| val);
+}
+
+pub fn self_cmp_ffi_string<S: Sort>() {
+    self_cmp_impl::<S, FFIString>(|val| FFIString::new(format!("{:010}", val.saturating_abs())));
+}
+
+pub fn self_cmp_cell_i32<S: Sort>() {
+    self_cmp_impl::<S, Cell<i32>>(|val| Cell::new(val));
+}
+
 fn violate_ord_retain_original_set_impl<S: Sort, T: Ord>(
     type_into_fn: impl Fn(i32) -> T + Copy,
     type_from_fn: impl Fn(&T) -> i32,
@@ -1414,6 +1454,9 @@ macro_rules! instantiate_sort_tests {
             [miri_yes, deterministic_i32],
             [miri_no, deterministic_ffi_string],
             [miri_no, deterministic_cell_i32],
+            [miri_yes, self_cmp_i32],
+            [miri_no, self_cmp_ffi_string],
+            [miri_no, self_cmp_cell_i32],
             [miri_yes, violate_ord_retain_original_set_i32],
             [miri_no, violate_ord_retain_original_set_ffi_string],
             [miri_no, violate_ord_retain_original_set_cell_i32]
