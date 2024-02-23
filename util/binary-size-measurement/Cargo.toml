@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+paste = "1.0"
+
 # sort_comp = { path = "../../" }
 ipnsort = { path = "../../ipnsort" }
 
@@ -23,7 +25,7 @@ opt-level = "s"
 [features]
 default = []
 
-type_u64 = []
+type_int = []
 type_string = []
 
 sort_inst = []
