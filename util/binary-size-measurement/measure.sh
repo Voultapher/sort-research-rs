@@ -9,17 +9,12 @@ cargo clean &> /dev/null
 RESULT_TABLE=""
 
 function measure_binary_size_type_impl() {
+    mkdir -p out
     BIN_PATH="target/$1/binary-size-measurement"
 
-    cargo build --profile=$1 --quiet --features=$2
-    strip "$BIN_PATH"
-    BASELINE=$(stat --printf="%s" "$BIN_PATH")
-
-    cargo build --profile=$1 --quiet --features=$2,sort_inst
-    strip "$BIN_PATH"
-    WITH_SORT=$(stat --printf="%s" "$BIN_PATH")
-
-    BINARY_SIZE=$(($WITH_SORT - $BASELINE))
+    cargo bloat --profile=$1 --features $2 --no-relative-size -n 0 --message-format json > out/baseline_$2_$1.json
+    cargo bloat --profile=$1 --features $2,sort_inst --no-relative-size -n 0 --message-format json > out/with_sort_$2_$1.json
+    BINARY_SIZE=$(python eval_bloat.py out/baseline_$2_$1.json out/with_sort_$2_$1.json)
     RESULT_TABLE="$RESULT_TABLE$1 $3 $BINARY_SIZE\n"
 }
 
