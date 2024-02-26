@@ -10,6 +10,7 @@ edition = "2021"
 ipnsort = { path = "../../ipnsort" }
 
 [profile.release]
+debug=true
 
 [profile.release_lto_thin]
 inherits = "release"
