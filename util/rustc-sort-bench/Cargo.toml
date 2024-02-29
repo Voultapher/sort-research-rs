@@ -1,0 +1,21 @@
+[package]
+name = "rustc-sort-bench"
+version = "0.1.0"
+edition = "2021"
+authors = ["Lukas Bergdoll <lukas.bergdoll@gmail.com>"]
+
+[dependencies]
+core_affinity = { version = "0.7" }
+rand = { version = "0.8" }
+serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+zipf = { version = "7.0.0" }
+
+ipnsort = { path = "../../ipnsort" }
+
+[features]
+default = []
+
+# String is highly allocator and layout dependent, and is not reliable enough. So it is disabled by
+# default.
+string_bench = []
