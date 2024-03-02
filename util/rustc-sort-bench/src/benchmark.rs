@@ -51,7 +51,7 @@ impl BenchmarkResultKey {
     }
 
     fn part(&self, idx: usize) -> &str {
-        self.full_name.split('-').skip(idx).next().unwrap()
+        self.full_name.split('-').nth(idx).unwrap()
     }
 }
 
@@ -100,6 +100,7 @@ fn run_type_benchmarks<S: Sort, T: Ord>(
     type_producer: impl Fn(u64) -> T + Copy,
     results: &mut HashMap<BenchmarkResultKey, DurationOpaque>,
 ) {
+    #[allow(clippy::type_complexity)]
     let pattern_providers: Vec<(&'static str, fn(usize) -> Vec<u64>)> = vec![
         // Tests worst case branch-misprediction, and stress tests the small-sorts.
         ("random", patterns::random),
@@ -222,7 +223,7 @@ pub fn pin_thread_to_core() {
     use std::cell::Cell;
     let pin_core_id: usize = 2;
 
-    thread_local! {static AFFINITY_ALREADY_SET: Cell<bool> = Cell::new(false); }
+    thread_local! {static AFFINITY_ALREADY_SET: Cell<bool> = const { Cell::new(false) } }
 
     // Set affinity only once per thread.
     AFFINITY_ALREADY_SET.with(|affinity_already_set| {
@@ -263,19 +264,17 @@ impl Eq for F128 {}
 
 impl PartialOrd for F128 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        // Simulate expensive comparison function.
-        let this_div = self.x / self.y;
-        let other_div = other.x / other.y;
-
-        // SAFETY: The constructor guarantees that the values are normal.
-        let cmp_result = unsafe { this_div.partial_cmp(&other_div).unwrap_unchecked() };
-
-        Some(cmp_result)
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for F128 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        // Simulate expensive comparison function.
+        let this_div = self.x / self.y;
+        let other_div = other.x / other.y;
+
+        // SAFETY: The constructor guarantees that the values are normal.
+        unsafe { this_div.partial_cmp(&other_div).unwrap_unchecked() }
     }
 }

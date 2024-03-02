@@ -83,14 +83,14 @@ fn compare_results(baseline: &BenchmarkResult, new: &BenchmarkResult) -> Compare
 
     let baseline_name = baseline
         .results
-        .iter()
-        .map(|(key, _)| key.sort_name())
+        .keys()
+        .map(|key| key.sort_name())
         .next()
         .unwrap();
     let new_name = new
         .results
-        .iter()
-        .map(|(key, _)| key.sort_name())
+        .keys()
+        .map(|key| key.sort_name())
         .next()
         .unwrap();
 
@@ -104,10 +104,12 @@ fn compare_results(baseline: &BenchmarkResult, new: &BenchmarkResult) -> Compare
             bench_key.len()
         ));
 
-        let new_duration = new.results.get(&compare_name).expect(&format!(
-            "Result key not found in new results: {}",
-            bench_key.full_name()
-        ));
+        let new_duration = new.results.get(&compare_name).unwrap_or_else(|| {
+            panic!(
+                "Result key not found in new results: {}",
+                bench_key.full_name()
+            )
+        });
 
         let relative_speedup = relative_speedup(*new_duration, *old_duration);
 
@@ -155,11 +157,11 @@ fn compare_results(baseline: &BenchmarkResult, new: &BenchmarkResult) -> Compare
 
     println!(
         "\nIndividual changes: [{}]\n",
-        individual_changes.join(", ".into())
+        individual_changes.join(", ")
     );
 
     // This is necessary because we don't know the HashMap iter order.
-    for (_, relative_speedups) in &mut pattern_specific_speedups {
+    for relative_speedups in pattern_specific_speedups.values_mut() {
         relative_speedups.sort_unstable_by_key(|(len, _)| *len);
     }
 
@@ -254,7 +256,7 @@ fn check_consistent_regression(name: &str, speedups: &[(usize, f64)]) -> Compare
     const REQUIRED_PATTERN_CONSISTENCY_PERCENT: f64 = 70.0;
 
     let (consistent_improvement_count, consistent_regression_count) =
-        count_consistent_changes(&speedups, MIN_SIGNIFICANT_CONSISTENT_PATTERN_SPEEDUP);
+        count_consistent_changes(speedups, MIN_SIGNIFICANT_CONSISTENT_PATTERN_SPEEDUP);
 
     let min_change_len =
         (speedups.len() as f64 * (REQUIRED_PATTERN_CONSISTENCY_PERCENT / 100.0)).round() as usize;
