@@ -8,7 +8,8 @@ edition = "2021"
 [dependencies]
 # sort_research_rs = { path = "../../" }
 # sort_test_tools = { path = "../../sort_test_tools", default-features = false }
-ipnsort = { path = "../../ipnsort" }
+# ipnsort = { path = "../../ipnsort" }
+driftsort = { path = "../../../driftsort" }
 
 [profile.release]
 debug = true

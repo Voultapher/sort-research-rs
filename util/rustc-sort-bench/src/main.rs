@@ -44,11 +44,23 @@ impl Sort for IpnsortUnstable {
     }
 }
 
+struct DriftsortStable {}
+
+impl Sort for DriftsortStable {
+    fn name() -> String {
+        "rust_driftsort_stable".into()
+    }
+
+    fn sort<T: Ord>(v: &mut [T]) {
+        driftsort::sort(v);
+    }
+}
+
 fn main() {
     let args = env::args().collect::<Vec<_>>();
     let base_line_path = PathBuf::from(args.get(1).expect(
         "Please provide a base_line_path, that will either be created or compared against.",
     ));
 
-    compare_sort::<IpnsortUnstable>(&base_line_path);
+    compare_sort::<DriftsortStable>(&base_line_path);
 }

@@ -20,6 +20,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "driftsort"
+version = "0.1.0"
+
+[[package]]
 name = "getrandom"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -121,6 +125,7 @@ name = "rustc-sort-bench"
 version = "0.1.0"
 dependencies = [
  "core_affinity",
+ "driftsort",
  "ipnsort",
  "rand",
  "serde",
