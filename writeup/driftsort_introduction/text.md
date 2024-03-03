@@ -5,33 +5,35 @@
 Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp  
 Date: TODO (YYYY-MM-DD)
 
-This is an introduction and overview of an efficient, generic and robust stable sort implementation called driftsort by Orson Peters and Lukas Bergdoll [source code](https://github.com/Voultapher/driftsort).
+This is an introduction and overview of an efficient, generic and robust stable sort implementation called driftsort by Orson Peters and Lukas Bergdoll ([source code](https://github.com/Voultapher/driftsort)).
 
 TL;DR: driftsort improves upon `slice::sort` in a variety of ways.
 
 ---
 
-Bias disclosure. The authors of this analysis are the authors of driftsort.
+Bias disclosure: the authors of this analysis are the authors of driftsort.
 
 ## Design goals
 
 The primary goal was to develop a replacement for the current Rust standard library `slice::sort`.
 
-- **Correct**: Correct ordered output if the user-defined comparison function implements a strict weak ordering.
-- **Safe**: panic- observation- and Ord-violation-safe for any input. Zero UB regardless of input and user-defined comparison function.
-- **Stable**: Equal elements retain the same order they were in.
-- **Hardware agnostic**: No architecture specific code.
+- **Correct**: Correctly sorted output if the user-defined comparison function implements a strict weak ordering.
+- **Safe**: Zero UB regardless of input and user-defined comparison function. This includes panic safety, observability of interior mutability, and safety when Ord is violated for any input.
+- **Stable**: Equal elements retain the same relative order they were in in the input.
+- **Hardware agnostic**: No architecture-specific code.
 - **Efficient**: Race to sleep and focus on instruction-level-parallelism (ILP) over SIMD.
-  - Optimized and tested along these dimensions, ~6k data points::
-    - Input length (0-1e7)
-    - Input type (integer like, medium sized, large sized)
-    - Input pattern (fully random, Zipfian distributions, low cardinality, presorted + append, and more)
-    - CPU prediction state (hot loop only doing sort, cold code with i-cache misses)
+  - Optimized and tested along these dimensions, ~6k data points:
+    - Input length (0-1e7).
+    - Input type (integer-like, medium-sized, large-sized).
+    - Input pattern (fully random, Zipfian distributions, low cardinality, presorted + append, and more).
+    - CPU prediction state (hot loop only doing sort, cold code with i-cache misses).
   - Leverage existing ascending and descending runs in the input.
-- **Generic**: Works the same way for builtin types and user-defined types. Supports arbitrary comparison functions.
+- **Generic**: Works the same way for builtin types and user-defined types.
+  Supports arbitrary comparison functions.
 - **Robust**:
   - Guaranteed O(N * log(N)) worst case comparisons.
   - Guaranteed O(N) comparisons for fully ascending and descending inputs.
+  - Expected O(N * log(K)) comparisons when sorting K unique values.
   - Smooth run-time scaling with input length.
 - **Binary-size**: Relatively small binary-size for types like `u64` and `String`. i-cache is a shared resource and the program will likely do more than just sort.
 - **Compile-time**: At least as fast to compile as the current `slice::sort` if hardware-parallelism is available and not much worse if not. Both debug and release configurations.
@@ -40,7 +42,7 @@ The primary goal was to develop a replacement for the current Rust standard libr
 
 ## Design non-goals
 
-- **Fastest non-generic integer sort**: The staked design goals in combination are incompatible with this goal. Generally the existing advice that `slice::sort_unstable` is faster for integers, unless they contain long already sorted parts, still holds with [ipnsort](https://github.com/Voultapher/sort-research-rs/tree/main/ipnsort). In addition, once the sort implementation has a run-time of multiple milliseconds or more, using multithreading becomes beneficial, which is out of the scope of `slice::sort_unstable`.
+- **Fastest non-generic integer sort**: The stated design goals are incompatible with this goal. Generally the existing advice that `slice::sort_unstable` is faster for integers, unless they contain long already sorted parts, still holds with [ipnsort](https://github.com/Voultapher/sort-research-rs/tree/main/ipnsort). In addition, once the sort implementation has a run-time of multiple milliseconds or more, using multithreading becomes beneficial, which is out of the scope of `slice::sort_unstable`.
 - **Tiny binary-size**: Implementation complexity and binary-size are related, for projects that care about binary-size and or compile-time above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 - **Varied compilers**: Only rustc using LLVM was tested and designed for.
 
@@ -48,19 +50,13 @@ The primary goal was to develop a replacement for the current Rust standard libr
 
 Before working together on driftsort, the two authors had [competing desires](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/glidesort_perf_analysis/text.md) to build a `slice::sort` replacement. In 2023 they decided to work together, combining the best of both competing designs into a new design called driftsort. The influences a varied, but the core structure is derived from [glidesort](https://github.com/orlp/glidesort) by Orson Peters.
 
-Modern high-performance sort implementations combine various strategies to exploit input patterns and hardware capabilities. In effect this makes all of them hybrid algorithms. For this reason it is more appropriate to talk about sort implementations and their components instead of a "sort algorithm".
-
-### glidesort
-
-To better understand driftsort, we start with a component level overview of glidesort:
-
-TODO
+Modern high-performance sort implementations combine various strategies to exploit input patterns and hardware capabilities. In effect this makes all of them hybrid algorithms. For this reason it is more appropriate to talk about sort implementations and their components instead of a singular "sort algorithm".
 
 ### Current `slice::sort`
 
-- **Small input insertion sort**: Dedicated sort for N <= 20. Profiling shows that 95+% of inputs are of len <= 20. In such scenarios i-cache misses are often the most important factor. A dedicated and inlined insertion sort shows best overall performance across patterns and CPU prediction state, and it avoids allocating the auxillary memory.
+- **Small input insertion sort**: Dedicated sort for N <= 20. Profiling shows that 95+% of inputs are of len <= 20. In such scenarios i-cache misses are often the most important factor. A dedicated and inlined insertion sort shows best overall performance across patterns and CPU prediction state, and it avoids allocating the auxiliary memory.
 - **Timsort merge**: Top level loop and merging policy based on [Timsort](https://en.wikipedia.org/wiki/Timsort) by Tim Peters.
-- **Merge**: Branchless merge that requires at most N / 2 auxillary memory.
+- **Merge**: Branchless merge that requires at most N / 2 auxiliary memory.
 - **Already sorted detection**: Linear scan with early exit to find existing runs of sorted elements in the input.
 - **Insertion sort**: Run creation if no existing run was found in the input.
 
@@ -68,58 +64,118 @@ TODO
 
 Component level overview of driftsort and how and why it differs from glidesort:
 
-- **Small input insertion sort**: Dedicated sort for N <= 20. Profiling shows that 95+% of inputs are of len <= 20. In such scenarios i-cache misses are often the most important factor. A dedicated and inlined insertion sort shows best overall performance across patterns and CPU prediction state, and it avoids allocating the auxillary memory.
-- **Run creation and lazy merging**: Top level loop and algorithm. Combines bottom up merging and top down partitioning, by delaying merging as far as possible. driftsort retains the same logic while significantly shrinking the binary-size required to achieve this logic.
+- **Small input insertion sort**: Dedicated sort for N <= 20. Profiling shows that 95+% of inputs have a length <= 20. In such scenarios i-cache misses are often the most important factor. A dedicated and inlined insertion sort shows best overall performance across patterns and CPU prediction state, and it avoids allocating the auxiliary memory.
+- **Run creation and lazy merging**: Top level loop and algorithm adapted from glidesort. Combines bottom up merging and top down partitioning, by delaying merging as long as possible. driftsort retains the same logic as glidesort while significantly shrinking the binary-size required to achieve this logic.
 - **Powersort merge**: Merging policy based on [powersort](https://www.wild-inter.net/publications/munro-wild-2018.pdf) by J. Ian Munro and Sebastian Wild.
-- **Merge**: Branchless merge derived from the current `slice::sort` implementation. Requires at most N / 2 auxillary memory.
-- **Already sorted detection**: Linear scan with early exit to find existing runs of sorted elements in the input. In contrast to glidesort which uses a fixed length after which it counts an existing run as already sorted. driftsort has a min run length of ~sqrt(N). In addition driftsort will not try to find another run within the min run length region, if the first attempt failed. The advantage of disrupting the bottom up Quicksort process to merge with an existing run, requires a certain length relative to N to be worth it. This approach also avoids trying to find and merge small streaks in inputs with one common elements, which are more efficiently handled by the common element filtering in the Quicksort.
-- **Quicksort**: Top down partitioning loop and algorithm.
-- **Pivot selection**: Recursive median approximating sqrt(N) sampling.
-- **Hybrid small-sorts**: Two different recursion stopper small-sort implementations, chosen from at compile time based on type characteristics. Insertion sort as fallback for non `Freeze` types. Novel hybrid stable sorting network, bidirectional merging and insertion sort implementation shared with ipnsort. This small-sort approach achieves comparable results with the one in glidesort, but does so at a significantly smaller binary-size and compile-time cost.
-- **Ancestor pivot tracking**: Common element filtering allowing for O(K * log(N)) total comparisons where K is the number of distinct elements. Also great for Zipfian distributions.
-- **Partition**: Branchless stable partition. Left-to-right scan that performs a `cmov` style pointer select and appends fills the auxiliary memory buffer from left-to-right and right-to-left depending on the comparison outcome.
-- **Equal partition**: Same as regular partition with flipped comparison. Allows equal element filtering with efficient branchless partition scheme.
-- **Mergesort**: Mergesort fallback used when recursion depth limit is reached in the Quicksort. Uses driftsort with Quicksort run creation disabled, always eagerly creating runs with the small-sort if none are found.
+- **Merge**: Branchless merge derived from the current `slice::sort` implementation. Requires at most N / 2 auxiliary memory.
+- **Sorted run detection**: Linear scan with early exit to find existing runs of sorted elements in the input. In contrast to glidesort which uses a fixed length after which it counts an existing run as already sorted, driftsort has a min run length of ~sqrt(N). In addition driftsort will not try to find another run within the min run length region, if the first attempt failed. The advantage of disrupting the top-down Quicksort process to allow merging with an existing run, requires a certain length relative to N to be worth it. This approach also avoids trying to find and merge small streaks in inputs with few unique elements, which are more efficiently handled by the top-down Quicksort.
+- **Quicksort**: Top-down partitioning loop and algorithm.
+- **Pivot selection**: Recursive median-of-three approximating sqrt(N) sampling.
+- **Hybrid small-sorts**: Two different small-sort implementations as a base case for recursive quicksort, chosen at compile time based on type characteristics. Insertion sort is used as a fallback for non `Freeze` types. A novel hybrid stable small-sort, based on a fast fixed function for sorting 4 elements combined with bidirectional merging and insertion sort is used for `Freeze` types, shared with ipnsort. This small-sort approach achieves comparable results with the one in glidesort, but does so at a significantly smaller binary-size and compile-time cost.
+- **Ancestor pivot tracking**: By keeping track of earlier used pivots in Quicksort we can detect and process common elements, allowing for O(N * log(K)) total comparisons where K is the number of distinct elements. This is also great for Zipfian distributions.
+- **Partition**: Branchless stable partition. Left-to-right scan that performs a `cmov` style pointer select to fill the auxiliary memory buffer from left-to-right or right-to-left depending on the comparison outcome.
+- **Mergesort**: Mergesort fallback used when a recursion depth limit is reached in the Quicksort. Re-uses the existing merging code in driftsort by calling itself with a flag that forces small runs to be made with insertion sort.
+
+### Components from glidesort which are not incorporated
+
+Some components and techniques from glidesort were intentionally not incorporated because they were considered too niche or have too much binary-size overhead for a generic standard library sort:
+
+- **Merge splitting.** This allows arbitrarily small auxiliary buffers which was not necessary for `slice::sort` and enables interleaved merge loops which were not implemented for binary-size reasons.
+- **Quad-merges.** Delaying merges for quad-merges with interleaved loops and avoiding `memcpy`s was not implemented as the interleaved loops were too large and the `memcpy` relatively cheap.
+- **Bidirectional partitioning.** This was rather complex and a large amount of code to avoid relatively cheap `memcpy`s in the stable partition, and the interleaved loops were larger and slower on some processors.
+
 
 ## Verification
 
 ### Correct
 
-As part of the tailor made [test suite](https://github.com/Voultapher/sort-research-rs/blob/main/sort_test_tools/src/tests.rs) are test that compare the resulting output order to the output of `slice::sort`. All tests are done for a range of input lengths between 0 and 1_000_000. There are tests specifically for different input types as well as for different input patterns. As well as tests that test a specific property along two dimensions, input length and pattern. In addition the existing Rust standard library test suite also contains tests specifically for `slice::sort`. driftsort is a hybrid sort algorithm, and the individual components can more easily be reasoned about which reduces the risk of hidden correctness bugs. The only component that could be regarded as employing novel algorithmic ideas would be the lazy merging. However it is essentially the same as eager merging, where Quicksort is used to create runs.
+As part of the tailor-made [test suite](https://github.com/Voultapher/sort-research-rs/blob/main/sort_test_tools/src/tests.rs), there are tests that compare the resulting output order to the output of `slice::sort`. All tests are done for a range of input lengths between 0 and 1_000_000. There are tests specifically for different input types as well as for different input patterns. There are also tests that test a specific property along two dimensions: input length and pattern. In addition, the existing Rust standard library test suite also contains tests specifically for `slice::sort`.
+
+driftsort is a hybrid sort algorithm, which allows the individual components to be more easily reasoned about, which reduces the risk of hidden correctness bugs. The only component that could be regarded as employing novel ideas on an algorithmic level would be the lazy merging. However it is essentially the same as eager merging, where Quicksort is used to create runs.
 
 Result: The test suits pass.
 
 ### Safe
 
-Like the current `slice::sort` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort` allows for arbitrary logic in the user-defined comparison function. Which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability and or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and or return the input in a dangerous and unintuitive state. Even implementation written using purely safe abstractions are only guaranteed to avoid direct UB, and still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementation can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md). The bespoke test suite involves tests that trigger all these scenarios for various types, pattern and input sizes. In addition, carful care was taken to isolate `unsafe` abstractions where possible, localize `unsafe` invariants to small scopes, with each `unsafe` block accompanied by a `SAFETY:` comment explaining the assumptions. In addition some components were model checked with [kani](https://github.com/model-checking/kani), checking the full gamut of possible comparison result and input combinations. The implementations have also been fuzzed with libfuzzer and AFL, however the employed harnesses did assume simple comparisons. In addition the test suite is also run with [miri](https://github.com/rust-lang/miri) both under Stacked borrows and Tree borrows.
+Like the current `slice::sort` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort` allows for arbitrary logic in the user-defined comparison function, which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability, and/or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and or return the input in a dangerous partially initialized state. Even implementations written using purely safe abstractions are only guaranteed to avoid direct UB, and are still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementations can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
+
+The bespoke test suite involves tests that trigger all these scenarios for various types, pattern and input sizes. In addition, care was taken to isolate `unsafe` abstractions where possible, localize `unsafe` invariants to small scopes, with each `unsafe` block accompanied by a `SAFETY:` comment explaining the assumptions. In addition some components were model checked with [kani](https://github.com/model-checking/kani), checking the full gamut of possible comparison result and input combinations. The implementations have also been fuzzed with libfuzzer and AFL, however the employed harnesses did assume simple comparisons. In addition the test suite is also run with [miri](https://github.com/rust-lang/miri) both under Stacked borrows and Tree borrows.
 
 Result: The test suits pass both normally and when run with miri.
 
 ### Stable
 
-A variety of tests in the sort-research-rs test suite test the stable properties.
+A variety of tests in the sort-research-rs test suite test the stability of the sort.
 
 Result: Automatic tests pass.
 
-### Hardware agnostic
+### Hardware-agnostic
 
-No arch specific code was used, and the implementation relies on branchless ILP instead of auto-vectorization to saturate wide out-of-order (OoO) CPU micro-architectures.
+No architecture-specific code was used, and the implementation relies on branchless instruction-level parallelism instead of auto-vectorization to saturate wide out-of-order (OoO) CPU micro-architectures.
 
 Result: (rip)grepping the source code for "arch" yields no relevant match.
 
-### Efficient
+### Generic
 
-Smartphone and server CPUs alike can execute billions of instructions each second. For a variety of reasons many programs spend most of their time waiting. Predominantly waiting for memory and cache loads and stores. More than 30 years of CPU design have been invested into doing things while the CPU would otherwise wait. These optimizations such as [pipelining](https://en.wikipedia.org/wiki/Instruction_pipelining) cause new bottlenecks such as [pipeline control hazards](https://en.wikipedia.org/wiki/Hazard_(computer_architecture)#Control_hazards_(branch_hazards_or_instruction_hazards)), which then again are addressed by further optimizations like [predictive execution](https://en.wikipedia.org/wiki/Speculative_execution#Predictive_execution). This stack of hardware optimizations, implemented with [shared mutable state](https://raw.githubusercontent.com/Voultapher/Presentations/master/retpoline/assets/shared-mutable-cpu-state-all.jpg) in the CPU, make predicting performance very complex. Measuring performance comes with its own laundry list of pitfalls, spanning the gamut from poor experimental setups, to bad analysis to faulty assumptions about relevance. Performance and efficiency are usually correlated, in that taking half the time to do the same work, means the CPU can go back to sleep after only half the time, using less power overall. That said, improving efficiency has its own set of [conceptual pitfalls](https://solar.lowtechmagazine.com/2018/01/bedazzled-by-energy-efficiency).
+The driftsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The fact that the performance characteristics and the order in which comparison operators are called for `u64` vs `Cell<u64>` are noticeably different is novel, and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
 
-Sort implementations can leverage existing patterns in the input to perform less work. The following synthetic patterns represent a limited set of use cases. Their applicability to real world situations will vary from use case to use case. In the domain of databases, low cardinality distributions like random_d20, random_p5 and random_z1 have been found to be quite common in real world data. Zipfian distributions also known as 80/20 distributions are found in many real world data sets. Without prior distribution knowledge nor domain knowledge, a generic sort implementation has to exploit the gained information, without spending too much effort looking for an algorithmic optimization that won't be applicable or pay off.
+Result: The interface remains the same.
 
-- `ascending`, numbers `0..size`
-- `descending`, numbers `0..size` reversed
-- `random`, random numbers generated by the [rand crate](https://github.com/rust-random/rand) `StdRng::gen`
-- `random_d20`, uniform random numbers in the range `0..=20`
-- `random_p5`, 95% 0 and 5% random values mixed in, not uniform
-- `random_s95`, 95% sorted followed by 5% unsorted, simulates append + sort
-- `random_z1`, [Zipfian distribution](https://en.wikipedia.org/wiki/Zipf%27s_law) with characterizing exponent s == 1.0
+### Robust
+
+> Guaranteed O(N * log(N)) worst case comparisons.
+
+The same structure as the one found in [introsort](https://en.wikipedia.org/wiki/Introsort) is used by driftsort to avoid the well-known O(N^2) worst-case of Quicksort. Once a recursion depth of 2 * log2(N) is reached, it switches to a different algorithm.
+
+However, in the case of driftsort the algorithm it switches to is itself, but with a boolean flag set that forces small runs to be created in the input with insertion sort. This ensures it will never call quicksort again, only using the guaranteed O(N * log(N)) mergesort routines.
+
+> Guaranteed O(N) comparisons for fully ascending and descending inputs.
+
+The already-sorted detection component will detect fully ascending and descending inputs.
+
+> Smooth run-time scaling with input length.
+
+This point will be explored in more detail in the benchmark section, on some platforms there is a significant drop in throughput at the transition point from insertion sort to hybrid Merge-Quicksort due to implementation-specific and hardware-dependent effecst. But in terms of comparisons the scaling is generally speaking smooth.
+
+Plotting mean comparisons performed divided by N - 1 yields:
+
+<img src="assets/comp_info_glidesort.png" width=480 />
+
+<img src="assets/comp_info_stable.png" width=960 />
+
+Observations:
+
+- driftsort and std_stable, share hitting a worst case for insertion sort in the descending pattern, with the strongest measured log scaling outlier at length 17.
+- glidesort uses its core small-sort for N < 20, which has a best, average and worst case of O(N * log(N)).
+- For N > 20 driftsort and glidesort have similar scaling curves.
+- The changes in min run length heuristic, allow driftsort to take advantage of random_d20 earlier than glidesort.
+- All three implementations handle ascending and descending with O(N) comparisons for N > 20, with a constant of ~1.
+- driftsort and glidesort show linear scaling for random_d20, demonstrating the O(K * log(N)) capabilities.
+- driftsort and glidesort 
+- All three implementations handle random_s95 by finding the 95% already sorted at the start and merging it with the remaining 5% after sorting them. Which explains the comparatively low number of comparisons required for random_s95.
+- std_stable is incapable of taking advantage of low cardinality in inputs, as seen by random, random_z1 and random_d20 all requiring a similar amount of comparisons. The only exception is random_p5 which contains many short streaks of consecutive zeros, which std_stable recognizes.
+- driftsort shows a jump in required comparisons for random_z1, random_d20 and random_p5 for N > 1e6. This can be explained by the auxiliary memory allocation policy. Which will allocate a buffer of length N, as long as this would consume less than 8MB. The three patterns that see degradation are all those that take advantage of pdqsort style common element filtering. The input type used to generate these graphs is `u64` which is 8 bytes, and past length 1e6, this would be larger than 8MB. The stable partition in the Quicksort requires a buffer length N, which means the implementation will Quicksort multiple sub-slices and then merge them. Common element filtering is most efficient when it is done on the whole input at once. glidesort shows a similar effect, but less pronounced because of differences in the merge logic.
+- random_p5 shows the conflict between low cardinality and already sorted sub-slice detection in driftsort for N > ~1e2 and < ~1e4.
+
+Result: driftsort retains the existing best, average and worst case comparison characteristics, while significantly reducing the number of required comparisons for inputs with repeated values.
+
+
+
+## Benchmark
+
+Smartphone and server CPUs alike can execute billions of instructions each second. For a variety of reasons many programs spend most of their time waiting, predominantly for memory and cache loads and stores. More than 30 years of CPU design have been invested into doing things while the CPU would otherwise wait. These optimizations such as [pipelining](https://en.wikipedia.org/wiki/Instruction_pipelining) cause new bottlenecks such as [pipeline control hazards](https://en.wikipedia.org/wiki/Hazard_(computer_architecture)#Control_hazards_(branch_hazards_or_instruction_hazards)), which then again are addressed by further optimizations like [predictive execution](https://en.wikipedia.org/wiki/Speculative_execution#Predictive_execution). This stack of hardware optimizations, implemented with [shared mutable state](https://raw.githubusercontent.com/Voultapher/Presentations/master/retpoline/assets/shared-mutable-cpu-state-all.jpg) in the CPU, make predicting performance very complex. Measuring performance comes with its own laundry list of pitfalls, spanning the gamut from poor experimental setups, to bad analysis to faulty assumptions about relevance. Performance and efficiency are usually correlated, in that taking half the time to do the same work, means the CPU can go back to sleep after only half the time, using less power overall. That said, improving efficiency has its own set of [conceptual pitfalls](https://solar.lowtechmagazine.com/2018/01/bedazzled-by-energy-efficiency).
+
+Sort implementations can leverage existing patterns in the input to perform less work. The following synthetic patterns represent a limited set of use cases. Their applicability to real world situations will vary from use case to use case. In the domain of databases, low cardinality distributions like `random_d20`, `random_p5` and `random_z1` have been found to be quite common in real world data. Zipfian distributions also known as 80/20 distributions are found in many real world data sets. Without prior distribution knowledge nor domain knowledge, a generic sort implementation has to exploit the gained information, without spending too much effort looking for an algorithmic optimization that won't be applicable or pay off.
+
+The patterns used in this benchmark:
+
+- `ascending`, numbers `0..size`,
+- `descending`, numbers `0..size` reversed,
+- `random`, random numbers generated by the [rand crate](https://github.com/rust-random/rand) `StdRng::gen`,
+- `random_d20`, uniform random numbers in the range `0..=20`,
+- `random_p5`, 95% 0 and 5% random values mixed in, not uniform,
+- `random_s95`, 95% sorted followed by 5% unsorted, simulates append + sort, and
+- `random_z1`, [Zipfian distribution](https://en.wikipedia.org/wiki/Zipf%27s_law) with characterizing exponent s == 1.0,
 
 The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the first level instruction cache and branch-prediction caches with unrelated values. This measures a scenario where prior parts of a hypothetical larger program already loaded or generated the data that will be sorted into the suitable data caches. In this scenario the first level instruction cache and branch predictor caches are trained on other work than the sort implementation. "Hot" benchmarks are also possible but arguably [of little value](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#hot-benchmarks), as they measure a scenario where a program does nothing but sort inputs, which is unlikely to be a realistic use case.
 
@@ -175,7 +231,7 @@ Observations:
 - random_d20, random_p5 and random_z1 demonstrate the glidesort and driftsort capabilities to take advantage of low cardinality distributions. They can filter out common values by reversing the partition predicate when appropriate. This allows them to complete the sort with significantly fewer comparisons. This in turn allows them to complete the operation with less work performed, leading to higher throughput.
 - random_p5 sees the only major difference between driftsort and glidesort at this input length. This can be explained by the differences in already sorted detection.
 
-##### u64 random scaling
+#### u64 random scaling
 
 Comparing the run-time for a single pattern (random) across input lengths.
 
@@ -188,7 +244,7 @@ Observations:
 - All implementations show a dip in throughput when transitioning from small-input small-sort to their core loop. glidesort and driftsort are affected comparatively more because they have higher peek throughput, which they reach for L2 sized inputs.
 - driftsort shows a sharp reduction in throughput for N > 1e6. This is caused by the auxiliary memory allocation heuristic, switching from allocating a buffer of size N to progressive N / 2.
 
-##### u64
+#### u64
 
 Comparing the relative symmetric speedup across all measured input lengths and patterns. This is calculated by taking each measured input length and producing a relative symmetric speedup, where 1.5x means that A is 1.5x faster than B, and -1.5x means B is 1.5x faster than A. This approach avoids biasing one direction over the other, and symmetric effects can cancel each other out.
 
@@ -212,7 +268,7 @@ Observations:
 - random_d20 and random_p5 peak at 1e6, with a respective improvement of ~12x and ~16x. This is caused by the logarithmic scaling of the std_stable implementation, while driftsort can sort these inputs with near linear inpu length scaling.
 - All random patterns see a throughput regression for N > 1e6, this is caused by the auxiliary memory allocation heuristic. random_d20 and random_p5 are affected the most because they benefit the most from common element filtering. Which is most effective when it can happen over the whole input at once, instead of happening multiple times, followed by a merge.
 
-##### i32
+#### i32
 
 Signed 32-bit integer with values in full `i32` range.
 
@@ -224,7 +280,7 @@ Observations:
 - The ascending and descending regressions do not appear here, further cementing the analysis that this is caused by changes in code-alignment.
 - The relative throughput regression because of the auxiliary memory allocation heuristic happens for N > 2e6 instead of 1e6. This is consistent with the upper limit for full buffer allocation at 8MB. `i32` is 4 bytes, whereas `u64` is 8 bytes.
 
-##### string
+#### string
 
 Heap allocated string that resembles the rustc standard library `String`. All values for the benchmarks are derived from `i32` values. The strings all have the same length and are compared lexicographically, which in this case due to zero padding is the same as comparing the `val.saturating_abs()`. The string results are highly dependent on the allocation distribution, the benchmarks measure a relatively unrealistic scenario where the strings are allocated one after the other with minimal other work in-between.
 
@@ -251,7 +307,7 @@ Observations:
 - driftsort improves performance in the majority of measured pattern and length combinations, with a regression for N > 20 and < 100.
 - The improvement is significantly smaller, compared to the measured integers. This can be explained by the comparatively larger amount of time spent for each comparison, including memory indirection and a call to `memcmp`.
 
-##### 1k
+#### 1k
 
 The 1k type simulates a type that is expensive to copy at 1KiB, but has a relatively cheap comparison function.
 
@@ -294,7 +350,7 @@ Observations:
 - The 1k type poses a unique to challenge to sort implementations. The most expensive part is, not the control structure like it is for integers, or the comparison as for strings, but rather the act of making copies of the value. Copying the values is a crucial part of swapping elements for any comparison based sort implementation.
 - The spikes line up with the corresponding patterns that see large algorithmic advantages. However they quickly run into 8MB full buffer allocation limit.
 
-##### f128
+#### f128
 
 The f128 type simulates a type that is relatively cheap to copy at 16 bytes. Performs no heap access, but performs a relatively expensive math function as part of each comparison.
 
