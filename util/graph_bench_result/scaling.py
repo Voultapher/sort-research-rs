@@ -13,10 +13,8 @@ from bokeh.embed import file_html
 
 from cpu_info import get_cpu_info
 from util import (
-    parse_result,
-    extract_groups,
+    parse_bench_results,
     build_implementation_meta_info,
-    type_size,
     base_name,
     plot_name_suffix,
 )
@@ -174,9 +172,7 @@ def plot_patterns(groups):
 
 
 if __name__ == "__main__":
-    combined_result = parse_result(sys.argv[1])
-
-    groups = extract_groups(combined_result)
+    groups = parse_bench_results(sys.argv[1:])
 
     name = base_name()
     CPU_INFO = get_cpu_info(name)

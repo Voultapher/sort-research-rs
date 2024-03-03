@@ -3,21 +3,62 @@ import os
 import sys
 
 from collections import defaultdict
+from itertools import chain
 
 from bokeh.palettes import Colorblind
 
 
-def parse_result(path):
-    with open(path, "r") as file:
-        return json.load(file)
+def parse_bench_results(paths):
+    """Parse a list of benchmark result files, returning a unified auto-spliced
+    representation, in the groups format."""
+    if len(paths) == 0:
+        raise Exception("paths must not be non empty list.")
 
+    def parse_bench_result(path):
+        with open(path, "r") as file:
+            file_content = json.load(file)
 
-def parse_skip(key):
-    skip = os.environ.get(key)
-    if skip is None:
-        return []
+        source_format = (
+            "critcmp"
+            if file_content.get("benchmarks") is not None
+            else "rustc-sort-bench"
+        )
 
-    return skip.replace(" ", "").split(",")
+        if source_format == "critcmp":
+
+            def bench_result_iter():
+                for key, value in file_content["benchmarks"].items():
+                    benchmark_key = BenchmarkKey(key)
+                    bench_time_ns = value["criterion_estimates_v1"]["median"][
+                        "point_estimate"
+                    ]
+
+                    yield (benchmark_key, bench_time_ns)
+
+        elif source_format == "rustc-sort-bench":
+
+            def bench_result_iter():
+                for key, time_opaque in file_content["results"].items():
+                    benchmark_key = BenchmarkKey(key)
+                    if "_new." in path:
+                        benchmark_key.sort_name += "_new"
+
+                    # FIXME this is needs to be converted to ns.
+                    bench_time_ns = time_opaque
+
+                    yield (benchmark_key, bench_time_ns)
+
+        return list(bench_result_iter())
+
+    parsed_bench_results = [parse_bench_result(path) for path in paths]
+
+    # If there are multiple results, the first one will be the basis for the
+    # others. So the most limited set of results should be the first one passed
+    # to the tools.
+    baseline = parsed_bench_results[0]
+    splice_filter_fn = build_auto_splice_filter(baseline)
+
+    return extract_groups(chain.from_iterable(parsed_bench_results), splice_filter_fn)
 
 
 def base_name():
@@ -28,7 +69,103 @@ def plot_name_suffix():
     return os.environ.get("PLOT_NAME_SUFFIX", "")
 
 
-def extract_groups(bench_result):
+class BenchmarkKey:
+    def __init__(self, key):
+        self.sort_name, _, benchmark = key.partition("-")
+
+        entry_parts = benchmark.split("-")
+
+        self.pred_state = entry_parts[0]
+        self.ty = entry_parts[1]
+        self.pattern = entry_parts[2]
+        self.test_len_str = entry_parts[3]
+        self.test_len = int(self.test_len_str)
+
+
+def build_auto_splice_filter(bench_result_iter):
+    """Returns filter function based on baseline"""
+
+    # sort_names = set()
+    pred_states = set()
+    types = set()
+    patterns = set()
+    test_lens = set()
+
+    for benchmark_key, bench_time_ns in bench_result_iter:
+        # if benchmark_key.sort_name.endswith("_new"):
+        #     sort_names.add(benchmark_key.sort_name)
+        #     sort_names.add(benchmark_key.sort_name.rpartition("_new")[0])
+        # else:
+        #     sort_names.add(benchmark_key.sort_name)
+        #     sort_names.add(f"{benchmark_key.sort_name}_new")
+
+        pred_states.add(benchmark_key.pred_state)
+        types.add(benchmark_key.ty)
+        patterns.add(benchmark_key.pattern)
+        test_lens.add(benchmark_key.test_len)
+
+    def filter_fn(benchmark_key):
+        # if not any([sort_name == benchmark_key.sort_name for sort_name in sort_names]):
+        #     return True
+
+        if not any(
+            [pred_state == benchmark_key.pred_state for pred_state in pred_states]
+        ):
+            return True
+
+        if not any([ty == benchmark_key.ty for ty in types]):
+            return True
+
+        if not any([pattern == benchmark_key.pattern for pattern in patterns]):
+            return True
+
+        if not any([test_len == benchmark_key.test_len for test_len in test_lens]):
+            return True
+
+        return False
+
+    return filter_fn
+
+
+def parse_skip(key):
+    skip = os.environ.get(key)
+    if skip is None:
+        return []
+
+    return skip.replace(" ", "").split(",")
+
+
+def build_env_filter():
+    """Returns filter function based on environment variable filter settings"""
+
+    sort_name_skip = parse_skip("SORT_NAME_SKIP")
+    pred_state_skip = parse_skip("PRED_STATE_SKIP")
+    type_skip = parse_skip("TYPE_SKIP")
+    test_len_skip = parse_skip("TEST_LEN_SKIP")
+    pattern_skip = parse_skip("PATTERN_SKIP")
+
+    def filter_fn(benchmark_key):
+        if benchmark_key.sort_name in sort_name_skip:
+            return True
+
+        if benchmark_key.pred_state in pred_state_skip:
+            return True
+
+        if benchmark_key.ty in type_skip:
+            return True
+
+        if benchmark_key.test_len_str in test_len_skip:
+            return True
+
+        if benchmark_key.pattern in pattern_skip:
+            return True
+
+        return False
+
+    return filter_fn
+
+
+def extract_groups(bench_result_iter, splice_filter_fn):
     # Result layout:
     # { type (eg. u64):
     #   { prediction_state (eg. hot):
@@ -37,62 +174,21 @@ def extract_groups(bench_result):
     #         { sort_name (eg. rust_std_stable):
     #            bench_time_ns
     groups = defaultdict(
-        lambda: defaultdict(
-            lambda: defaultdict(lambda: defaultdict(lambda: {}))
-        )
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {})))
     )
 
-    sort_name_skip = parse_skip("SORT_NAME_SKIP")
-    pred_state_skip = parse_skip("PRED_STATE_SKIP")
-    type_skip = parse_skip("TYPE_SKIP")
-    test_len_skip = parse_skip("TEST_LEN_SKIP")
-    pattern_skip = parse_skip("PATTERN_SKIP")
+    env_filter_fn = build_env_filter()
 
-    for benchmark_full, value in bench_result["benchmarks"].items():
-        sort_name, _, benchmark = benchmark_full.partition("-")
-
-        entry_parts = benchmark.split("-")
-
-        pred_state = entry_parts[0]
-        ty = entry_parts[1]
-        pattern = entry_parts[2]
-        test_len_str = entry_parts[3]
-        test_len = int(test_len_str)
-
-        if sort_name in sort_name_skip:
+    for benchmark_key, bench_time_ns in bench_result_iter:
+        if env_filter_fn(benchmark_key):
             continue
 
-        if pred_state in pred_state_skip:
+        if splice_filter_fn is not None and splice_filter_fn(benchmark_key):
             continue
 
-        if ty in type_skip:
-            continue
-
-        if test_len_str in test_len_skip:
-            continue
-
-        if pattern in pattern_skip:
-            continue
-
-        if test_len <= 32:
-            continue
-
-        if pattern == "saws_short":
-            continue
-
-        # if sort_name not in (
-        #     "lomuto_branchy",
-        #     "lomuto_branchless",
-        #     "lomuto_branchless_cyclic",
-        #     "lomuto_branchless_cyclic_opt",
-        # ):
-        #     continue
-
-        bench_time_ns = value["criterion_estimates_v1"]["median"][
-            "point_estimate"
-        ]
-
-        groups[ty][pred_state][test_len][pattern][sort_name] = bench_time_ns
+        groups[benchmark_key.ty][benchmark_key.pred_state][benchmark_key.test_len][
+            benchmark_key.pattern
+        ][benchmark_key.sort_name] = bench_time_ns
 
     return groups
 

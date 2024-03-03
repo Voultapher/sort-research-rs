@@ -7,19 +7,18 @@ import itertools
 import statistics
 import math
 
+from itertools import chain
 
 from bokeh import models
 from bokeh.plotting import figure, ColumnDataSource
 from bokeh.resources import CDN
 from bokeh.embed import file_html
-from bokeh.palettes import Colorblind
 
 from natsort import natsorted
 
 from cpu_info import get_cpu_info
 from util import (
-    parse_result,
-    extract_groups,
+    parse_bench_results,
     build_pattern_meta_info,
     base_name,
 )
@@ -96,7 +95,10 @@ def extract_line(sort_name_a, sort_name_b, pattern, values):
 
 
 def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, values):
-    patterns = natsorted(list(values.values())[0].keys())
+    patterns = natsorted(
+        list(set(chain.from_iterable([val.keys() for val in values.values()])))
+    )
+
     min_test_size = min(values.keys())
     max_test_size = max(values.keys())
 
@@ -204,21 +206,15 @@ def plot_types(sort_name_a, sort_name_b, groups):
 
 
 if __name__ == "__main__":
-    combined_result = parse_result(sys.argv[1])
-
-    groups = extract_groups(combined_result)
+    groups = parse_bench_results(sys.argv[1:])
 
     sort_names = list(
-        list(
-            list(list(list(groups.values())[0].values())[0].values())[
-                0
-            ].values()
-        )[0].keys()
+        list(list(list(list(groups.values())[0].values())[0].values())[0].values())[
+            0
+        ].keys()
     )
 
-    for sort_name_a, sort_name_b in itertools.product(
-        *[sort_names, sort_names]
-    ):
+    for sort_name_a, sort_name_b in itertools.product(*[sort_names, sort_names]):
         if sort_name_a == sort_name_b:
             continue
 

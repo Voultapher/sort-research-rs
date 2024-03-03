@@ -20,24 +20,25 @@ if __name__ == "__main__":
 
     plot_skip = parse_skip("PLOT_SKIP")
 
+    bench_result_paths = []
+
     for path in sys.argv[1:]:
         if not os.path.exists(path):
             print(f"{path} not found, skipping.")
             continue
 
-        path_abs = os.path.abspath(path)
+        bench_result_paths.append(os.path.abspath(path))
 
-        for plot in PLOTS:
-            if plot in plot_skip:
-                continue
+    for plot in PLOTS:
+        if plot in plot_skip:
+            continue
 
-            cwd = os.path.join(analysis_dir, plot)
-            if not os.path.exists(cwd):
-                os.mkdir(cwd)
+        cwd = os.path.join(analysis_dir, plot)
+        if not os.path.exists(cwd):
+            os.mkdir(cwd)
 
-            args = [
-                sys.executable,
-                os.path.join(this_dir, f"{plot}.py"),
-                path_abs,
-            ]
-            subprocess.run(args, cwd=cwd, check=True)
+        args = [
+            sys.executable,
+            os.path.join(this_dir, f"{plot}.py"),
+        ] + bench_result_paths
+        subprocess.run(args, cwd=cwd, check=True)

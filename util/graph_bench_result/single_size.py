@@ -6,7 +6,7 @@ import sys
 
 
 from bokeh import models
-from bokeh.plotting import figure, ColumnDataSource, show
+from bokeh.plotting import figure, ColumnDataSource
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 from bokeh.models import FactorRange, LabelSet
@@ -15,8 +15,7 @@ from natsort import natsorted
 
 from cpu_info import get_cpu_info
 from util import (
-    parse_result,
-    extract_groups,
+    parse_bench_results,
     build_implementation_meta_info,
     base_name,
 )
@@ -162,23 +161,15 @@ def plot_sizes(groups):
             for test_len, val3 in val2.items():
                 init_tools()
 
-                plot_name, plot = plot_single_size(
-                    ty, prediction_state, test_len, val3
-                )
-
-                # show(plot)
+                plot_name, plot = plot_single_size(ty, prediction_state, test_len, val3)
 
                 html = file_html(plot, CDN, plot_name)
                 with open(f"{plot_name}.html", "w+") as outfile:
                     outfile.write(html)
 
-                # raise Exception()
-
 
 if __name__ == "__main__":
-    combined_result = parse_result(sys.argv[1])
-
-    groups = extract_groups(combined_result)
+    groups = parse_bench_results(sys.argv[1:])
 
     name = base_name()
     CPU_INFO = get_cpu_info(name)
