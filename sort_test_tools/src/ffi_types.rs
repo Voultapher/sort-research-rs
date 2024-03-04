@@ -1,4 +1,4 @@
-use std::cmp::{Ord, Ordering, PartialOrd};
+use std::cmp::Ordering;
 use std::ffi::c_char;
 use std::ptr;
 use std::str;
