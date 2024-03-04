@@ -85,10 +85,13 @@ def plot_single_size(ty, prediction_state, test_len, values):
     y = []
     bench_times = []
     colors = []
+    sort_names = set()
+
     for pattern, val in reversed(natsorted(values.items())):
         for sort_name, bench_times_ns in sorted(
             val.items(), key=lambda x: x[1], reverse=True
         ):
+            sort_names.add(sort_name)
             is_new_sort = sort_name.endswith("_new")
 
             effective_sort_name = (
@@ -112,6 +115,9 @@ def plot_single_size(ty, prediction_state, test_len, values):
         }
     )
 
+    # Dependent on the number of sort implementations.
+    plot_height_extra = min(max(0, len(sort_names) - 2), 3) * 100
+
     plot_name = f"{prediction_state}-{ty}-{test_len}"
     plot = figure(
         x_axis_label=f"Time ({time_unit}) | Lower is better | {CPU_INFO}",
@@ -121,7 +127,7 @@ def plot_single_size(ty, prediction_state, test_len, values):
         title=plot_name,
         tools="",
         plot_width=800,
-        plot_height=900,
+        plot_height=600 + plot_height_extra,
     )
 
     add_tools_to_plot(plot)
