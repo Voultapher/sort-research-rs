@@ -24,11 +24,15 @@ def parse_bench_results(paths):
             else "rustc-sort-bench"
         )
 
+        is_new_path = "_new" in path and len(paths) > 1 and path == paths[0]
+
         if source_format == "critcmp":
 
             def bench_result_iter():
                 for key, value in file_content["benchmarks"].items():
                     benchmark_key = BenchmarkKey(key)
+                    if is_new_path:
+                        benchmark_key.sort_name += "_new"
                     bench_time_ns = value["criterion_estimates_v1"]["median"][
                         "point_estimate"
                     ]
@@ -40,7 +44,7 @@ def parse_bench_results(paths):
             def bench_result_iter():
                 for key, time_opaque in file_content["results"].items():
                     benchmark_key = BenchmarkKey(key)
-                    if "_new." in path:
+                    if is_new_path:
                         benchmark_key.sort_name += "_new"
 
                     # FIXME this is needs to be converted to ns.
@@ -92,34 +96,22 @@ def build_auto_splice_filter(bench_result_iter):
     test_lens = set()
 
     for benchmark_key, bench_time_ns in bench_result_iter:
-        # if benchmark_key.sort_name.endswith("_new"):
-        #     sort_names.add(benchmark_key.sort_name)
-        #     sort_names.add(benchmark_key.sort_name.rpartition("_new")[0])
-        # else:
-        #     sort_names.add(benchmark_key.sort_name)
-        #     sort_names.add(f"{benchmark_key.sort_name}_new")
-
         pred_states.add(benchmark_key.pred_state)
         types.add(benchmark_key.ty)
         patterns.add(benchmark_key.pattern)
         test_lens.add(benchmark_key.test_len)
 
     def filter_fn(benchmark_key):
-        # if not any([sort_name == benchmark_key.sort_name for sort_name in sort_names]):
-        #     return True
-
-        if not any(
-            [pred_state == benchmark_key.pred_state for pred_state in pred_states]
-        ):
+        if benchmark_key.pred_state not in pred_states:
             return True
 
-        if not any([ty == benchmark_key.ty for ty in types]):
+        if benchmark_key.ty not in types:
             return True
 
-        if not any([pattern == benchmark_key.pattern for pattern in patterns]):
+        if benchmark_key.pattern not in patterns:
             return True
 
-        if not any([test_len == benchmark_key.test_len for test_len in test_lens]):
+        if benchmark_key.test_len not in test_lens:
             return True
 
         return False
