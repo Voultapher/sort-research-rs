@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use driftsort;
-
 sort_impl!("rust_driftsort_stable");
 
 pub fn sort<T: Ord>(data: &mut [T]) {

@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use glidesort;
-
 sort_impl!("rust_glidesort_stable");
 
 pub fn sort<T: Ord>(data: &mut [T]) {

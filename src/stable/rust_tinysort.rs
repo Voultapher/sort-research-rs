@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use tiny_sort;
-
 sort_impl!("rust_tinymergesort_stable");
 
 pub fn sort<T: Ord>(data: &mut [T]) {

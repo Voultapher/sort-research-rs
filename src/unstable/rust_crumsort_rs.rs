@@ -2,8 +2,6 @@ use std::cmp::Ordering;
 use std::ptr;
 use std::sync::Mutex;
 
-use crumsort;
-
 sort_impl!("rust_crumsort_rs_unstable");
 
 trait Crumsort: Sized {

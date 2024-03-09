@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use dmsort;
-
 sort_impl!("rust_dmsort_unstable");
 
 pub fn sort<T: Ord>(data: &mut [T]) {
