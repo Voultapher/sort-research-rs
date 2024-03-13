@@ -19,3 +19,6 @@ default = []
 # String is highly allocator and layout dependent, and is not reliable enough. So it is disabled by
 # default.
 string_bench = []
+
+[profile.release]
+lto = "thin"
