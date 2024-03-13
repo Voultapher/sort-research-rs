@@ -119,99 +119,88 @@ fn unstable_sort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // Sorting has no meaningful behavior on zero-sized types.
+    // Arrays of zero-sized types are always all-equal, and thus sorted.
     if T::IS_ZST {
         return;
     }
 
+    // Instrumenting the standard library showed that 90+% of the calls to sort
+    // by rustc are either of size 0 or 1.
     let len = v.len();
-
-    // This path is critical for very small inputs. Always pick insertion sort for these inputs,
-    // without any other analysis. This is perf critical for small inputs, in cold code.
-    const MAX_LEN_ALWAYS_INSERTION_SORT: usize = 20;
-
-    // Instrumenting the standard library showed that 90+% of the calls to `slice::sort` by rustc
-    // are either of size 0 or 1.
     if intrinsics::likely(len < 2) {
         return;
     }
 
-    // It's important to differentiate between small-sort performance for small slices and
-    // small-sort performance sorting small sub-slices as part of the main quicksort loop. For the
-    // former, testing showed that the representative benchmarks for real-world performance are cold
-    // CPU state and not single-size hot benchmarks. For the latter the CPU will call them many
-    // times, so hot benchmarks are fine and more realistic. And it's worth it to optimize sorting
-    // small sub-slices with more sophisticated solutions than insertion sort.
-
+    // More advanced sorting methods than insertion sort are faster if called in
+    // a hot loop for small inputs, but for general-purpose code the small
+    // binary size of insertion sort is more important. The instruction cache in
+    // modern processors is very valuable, and for a single sort call in general
+    // purpose code any gains from an advanced method are cancelled by i-cache
+    // misses during the sort, and thrashing the i-cache for surrounding code.
+    const MAX_LEN_ALWAYS_INSERTION_SORT: usize = 20;
     if intrinsics::likely(len <= MAX_LEN_ALWAYS_INSERTION_SORT) {
-        // More specialized and faster options, extending the range of allocation free sorting
-        // are possible but come at a great cost of additional code, which is problematic for
-        // compile-times.
-        crate::smallsort::insertion_sort_shift_left(v, 1, &mut is_less);
-    } else {
-        quicksort(v, is_less);
+        smallsort::insertion_sort_shift_left(v, 1, &mut is_less);
+        return;
     }
+
+    ipnsort(v, &mut is_less);
 }
 
+/// TODO explain and link explanation.
 #[inline(never)]
-fn quicksort<T, F>(v: &mut [T], mut is_less: F)
+fn ipnsort<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
     let len = v.len();
+    let (run_len, was_reversed) = find_existing_run(v, is_less);
 
-    let (streak_end, was_reversed) = find_streak(v, &mut is_less);
-    if streak_end == len {
+    // SAFETY: find_existing_run promises to return a valid run_len.
+    unsafe { intrinsics::assume(run_len <= len) };
+
+    if run_len == len {
         if was_reversed {
             v.reverse();
         }
 
-        // It would be possible to a do in-place merging here for a long existing streak. But that makes the
-        // implementation a lot bigger, users can use `slice::sort` for that use-case.
+        // It would be possible to a do in-place merging here for a long existing streak. But that
+        // makes the implementation a lot bigger, users can use `slice::sort` for that use-case.
         return;
     }
 
     // Limit the number of imbalanced partitions to `2 * floor(log2(len))`.
     // The binary OR by one is used to eliminate the zero-check in the logarithm.
     let limit = 2 * (len | 1).ilog2();
-
-    crate::quicksort::quicksort(v, None, limit, &mut is_less);
+    crate::quicksort::quicksort(v, None, limit, is_less);
 }
 
-/// Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
-/// value that is not part of said streak, and a bool denoting wether the streak was reversed.
-/// Streaks can be increasing or decreasing.
-fn find_streak<T, F>(v: &[T], is_less: &mut F) -> (usize, bool)
-where
-    F: FnMut(&T, &T) -> bool,
-{
+/// Finds a run of sorted elements starting at the beginning of the slice.
+///
+/// Returns the length of the run, and a bool that is false when the run
+/// is ascending, and true if the run strictly descending.
+fn find_existing_run<T, F: FnMut(&T, &T) -> bool>(v: &[T], is_less: &mut F) -> (usize, bool) {
     let len = v.len();
-
     if len < 2 {
         return (len, false);
     }
 
-    let mut end = 2;
-
-    // SAFETY: See below specific.
+    // SAFETY: We checked that len >= 2, so 0 and 1 are valid indices.
+    // This also means that run_len < len implies run_len and run_len - 1
+    // are valid indices as well.
     unsafe {
-        // SAFETY: We checked that len >= 2, so 0 and 1 are valid indices.
-        let assume_reverse = is_less(v.get_unchecked(1), v.get_unchecked(0));
-
-        // SAFETY: We know end >= 2 and check end < len.
-        // From that follows that accessing v at end and end - 1 is safe.
-        if assume_reverse {
-            while end < len && is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
-                end += 1;
+        let mut run_len = 2;
+        let strictly_descending = is_less(v.get_unchecked(1), v.get_unchecked(0));
+        if strictly_descending {
+            while run_len < len && is_less(v.get_unchecked(run_len), v.get_unchecked(run_len - 1)) {
+                run_len += 1;
             }
-
-            (end, true)
         } else {
-            while end < len && !is_less(v.get_unchecked(end), v.get_unchecked(end - 1)) {
-                end += 1;
+            while run_len < len && !is_less(v.get_unchecked(run_len), v.get_unchecked(run_len - 1))
+            {
+                run_len += 1;
             }
-            (end, false)
         }
+        (run_len, strictly_descending)
     }
 }
 

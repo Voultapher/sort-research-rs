@@ -3,7 +3,7 @@ use core::mem::{self, ManuallyDrop, MaybeUninit};
 use core::ptr;
 use core::slice;
 
-use crate::{has_efficient_in_place_swap, Freeze, GapGuard, IsTrue};
+use crate::{has_efficient_in_place_swap, Freeze, IsTrue};
 
 // Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
 // LLVM-IR for the sorting-network for types that don't qualify. This greatly helps with
@@ -32,7 +32,7 @@ impl<T> SmallSortImpl for T {
 }
 
 /// SAFETY: If you change this value, you have to adjust [`small_sort_general`] !
-const SMALL_SORT_GENERAL_THRESHOLD: usize = 20;
+const SMALL_SORT_GENERAL_THRESHOLD: usize = 32;
 
 /// [`small_sort_general`] uses [`sort8_stable`] as primitive and does a kind of ping-pong merge,
 /// where the output of the first two [`sort8_stable`] calls is stored at the end of the scratch
@@ -68,16 +68,16 @@ where
     where
         F: FnMut(&T, &T) -> bool,
     {
-        let mut scratch = MaybeUninit::<[T; SMALL_SORT_GENERAL_SCRATCH_LEN]>::uninit();
+        let mut stack_array = MaybeUninit::<[T; SMALL_SORT_GENERAL_SCRATCH_LEN]>::uninit();
 
-        let scratch_slice = unsafe {
+        let scratch = unsafe {
             slice::from_raw_parts_mut(
-                scratch.as_mut_ptr() as *mut MaybeUninit<T>,
+                stack_array.as_mut_ptr() as *mut MaybeUninit<T>,
                 SMALL_SORT_GENERAL_SCRATCH_LEN,
             )
         };
 
-        small_sort_general(v, scratch_slice, is_less);
+        small_sort_general(v, scratch, is_less);
     }
 }
 
@@ -94,184 +94,183 @@ where
         F: FnMut(&T, &T) -> bool,
     {
         // I suspect that generalized efficient indirect branchless sorting constructs like
-        // sort4_indirect for larger sizes exist. But finding them is an open research problem.
+        // sort4_stable for larger sizes exist. But finding them is an open research problem.
         // And even then it's not clear that they would be better than in-place sorting-networks
         // as used in small_sort_network.
         small_sort_network(v, is_less);
     }
 }
 
-#[inline(always)]
-unsafe fn merge_up<T, F>(
-    mut left_src: *const T,
-    mut right_src: *const T,
-    mut dst: *mut T,
+fn small_sort_general<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
+    v: &mut [T],
+    scratch: &mut [MaybeUninit<T>],
     is_less: &mut F,
-) -> (*const T, *const T, *mut T)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // This is a branchless merge utility function.
-    // The equivalent code with a branch would be:
-    //
-    // if !is_less(&*right_src, &*left_src) {
-    //     ptr::copy_nonoverlapping(left_src, dst, 1);
-    //     left_src = left_src.wrapping_add(1);
-    // } else {
-    //     ptr::copy_nonoverlapping(right_src, dst, 1);
-    //     right_src = right_src.wrapping_add(1);
-    // }
-    // dst = dst.add(1);
-
-    // SAFETY: The caller must guarantee that `left_src`, `right_src` are valid to read and
-    // `dst` is valid to write, while not aliasing.
-    unsafe {
-        let is_l = !is_less(&*right_src, &*left_src);
-        let src = if is_l { left_src } else { right_src };
-        ptr::copy_nonoverlapping(src, dst, 1);
-        right_src = right_src.wrapping_add(!is_l as usize);
-        left_src = left_src.wrapping_add(is_l as usize);
-        dst = dst.add(1);
-    }
-
-    (left_src, right_src, dst)
-}
-
-#[inline(always)]
-unsafe fn merge_down<T, F>(
-    mut left_src: *const T,
-    mut right_src: *const T,
-    mut dst: *mut T,
-    is_less: &mut F,
-) -> (*const T, *const T, *mut T)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // This is a branchless merge utility function.
-    // The equivalent code with a branch would be:
-    //
-    // if !is_less(&*right_src, &*left_src) {
-    //     ptr::copy_nonoverlapping(right_src, dst, 1);
-    //     right_src = right_src.wrapping_sub(1);
-    // } else {
-    //     ptr::copy_nonoverlapping(left_src, dst, 1);
-    //     left_src = left_src.wrapping_sub(1);
-    // }
-    // dst = dst.sub(1);
-
-    // SAFETY: The caller must guarantee that `left_src`, `right_src` are valid to read and
-    // `dst` is valid to write, while not aliasing.
-    unsafe {
-        let is_l = !is_less(&*right_src, &*left_src);
-        let src = if is_l { right_src } else { left_src };
-        ptr::copy_nonoverlapping(src, dst, 1);
-        right_src = right_src.wrapping_sub(is_l as usize);
-        left_src = left_src.wrapping_sub(!is_l as usize);
-        dst = dst.sub(1);
-    }
-
-    (left_src, right_src, dst)
-}
-
-/// Merge v assuming the len is even and v[..len / 2] and v[len / 2..] are sorted.
-///
-/// Original idea for bi-directional merging by Igor van den Hoven (quadsort), adapted to only use
-/// merge up and down. In contrast to the original parity_merge function, it performs 2 writes
-/// instead of 4 per iteration. Ord violation detection was added.
-unsafe fn bi_directional_merge_even<T, F>(v: &[T], dst: *mut T, is_less: &mut F)
-where
-    T: crate::Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: the caller must guarantee that `dst` is valid for v.len() writes.
-    // Also `v.as_ptr` and `dst` must not alias.
-    //
-    // The caller must guarantee that T cannot modify itself inside is_less.
-    // merge_up and merge_down read left and right pointers and potentially modify the stack value
-    // they point to, if T has interior mutability. This may leave one or two potential writes to
-    // the stack value un-observed when dst is copied onto of src.
-
-    // It helps to visualize the merge:
-    //
-    // Initial:
-    //
-    //  |dst (in dst)
-    //  |left               |right
-    //  v                   v
-    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
-    //                     ^                   ^
-    //                     |left_rev           |right_rev
-    //                                         |dst_rev (in dst)
-    //
-    // After:
-    //
-    //                      |dst (in dst)
-    //        |left         |           |right
-    //        v             v           v
-    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
-    //       ^             ^           ^
-    //       |left_rev     |           |right_rev
-    //                     |dst_rev (in dst)
-    //
-    //
-    // Note, the pointers that have been written, are now one past where they were read and
-    // copied. written == incremented or decremented + copy to dst.
-
+) {
     let len = v.len();
-    let src = v.as_ptr();
-    unsafe { intrinsics::assume(len > 0) };
+    if len < 2 {
+        return;
+    }
 
+    if scratch.len() < len + 16 {
+        intrinsics::abort();
+    }
+
+    let v_base = v.as_mut_ptr();
     let len_div_2 = len / 2;
 
-    // SAFETY: No matter what the result of the user-provided comparison function is, all 4 read
-    // pointers will always be in-bounds. Writing `dst` and `dst_rev` will always be in
-    // bounds if the caller guarantees that `dst` is valid for `v.len()` writes.
+    // SAFETY: See individual comments.
     unsafe {
-        let mut left = src;
-        let mut right = src.wrapping_add(len_div_2);
-        let mut dst = dst;
+        let scratch_base = scratch.as_mut_ptr() as *mut T;
 
-        let mut left_rev = src.wrapping_add(len_div_2 - 1);
-        let mut right_rev = src.wrapping_add(len - 1);
-        let mut dst_rev = dst.wrapping_add(len - 1);
+        let presorted_len = if const { mem::size_of::<T>() <= 16 } && len >= 16 {
+            // SAFETY: scratch_base is valid and has enough space.
+            sort8_stable(v_base, scratch_base, scratch_base.add(len), is_less);
+            sort8_stable(
+                v_base.add(len_div_2),
+                scratch_base.add(len_div_2),
+                scratch_base.add(len + 8),
+                is_less,
+            );
 
-        for _ in 0..len_div_2 {
-            (left, right, dst) = merge_up(left, right, dst, is_less);
-            (left_rev, right_rev, dst_rev) = merge_down(left_rev, right_rev, dst_rev, is_less);
+            8
+        } else if len >= 8 {
+            // SAFETY: scratch_base is valid and has enough space.
+            sort4_stable(v_base, scratch_base, is_less);
+            sort4_stable(v_base.add(len_div_2), scratch_base.add(len_div_2), is_less);
+
+            4
+        } else {
+            ptr::copy_nonoverlapping(v_base, scratch_base, 1);
+            ptr::copy_nonoverlapping(v_base.add(len_div_2), scratch_base.add(len_div_2), 1);
+
+            1
+        };
+
+        for offset in [0, len_div_2] {
+            // SAFETY: at this point dst is initialized with presorted_len elements.
+            // We extend this to desired_len, src is valid for desired_len elements.
+            let src = v_base.add(offset);
+            let dst = scratch_base.add(offset);
+            let desired_len = if offset == 0 {
+                len_div_2
+            } else {
+                len - len_div_2
+            };
+
+            for i in presorted_len..desired_len {
+                ptr::copy_nonoverlapping(src.add(i), dst.add(i), 1);
+                insert_tail(dst, dst.add(i), is_less);
+            }
         }
 
-        let left_diff = (left as usize).wrapping_sub(left_rev as usize);
-        let right_diff = (right as usize).wrapping_sub(right_rev as usize);
+        // SAFETY: see comment in `CopyOnDrop::drop`.
+        let drop_guard = CopyOnDrop {
+            src: scratch_base,
+            dst: v_base,
+            len,
+        };
 
-        if !(left_diff == mem::size_of::<T>() && right_diff == mem::size_of::<T>()) {
-            panic_on_ord_violation();
+        // SAFETY: at this point scratch_base is fully initialized, allowing us
+        // to use it as the source of our merge back into the original array.
+        // If a panic occurs we ensure the original array is restored to a valid
+        // permutation of the input through drop_guard. This technique is similar
+        // to ping-pong merging.
+        bidirectional_merge(
+            &*ptr::slice_from_raw_parts(drop_guard.src, drop_guard.len),
+            drop_guard.dst,
+            is_less,
+        );
+        mem::forget(drop_guard);
+    }
+}
+
+struct CopyOnDrop<T> {
+    src: *const T,
+    dst: *mut T,
+    len: usize,
+}
+
+impl<T> Drop for CopyOnDrop<T> {
+    fn drop(&mut self) {
+        // SAFETY: `src` must contain `len` initialized elements, and dst must
+        // be valid to write `len` elements.
+        unsafe {
+            ptr::copy_nonoverlapping(self.src, self.dst, self.len);
         }
     }
 }
 
-#[inline(always)]
-pub unsafe fn branchless_swap<T>(left: *mut T, right: *mut T, should_swap: bool) {
-    // SAFETY: the caller must guarantee that `left` and `right` are valid for writes
-    // and properly aligned, and part of the same allocation, and do not alias.
+fn small_sort_network<T, F>(v: &mut [T], is_less: &mut F)
+where
+    T: Freeze,
+    F: FnMut(&T, &T) -> bool,
+{
+    // This implementation is tuned to be efficient for integer types.
 
-    // This is a branchless version of swap if.
-    // The equivalent code with a branch would be:
+    let len = v.len();
+
+    // Always sort assuming somewhat random distribution.
+    // Patterns should have already been found by the other analysis steps.
     //
-    // if should_swap {
-    //     ptr::swap(left, right, 1);
-    // }
+    // Small total slices are handled separately, see function quicksort.
+    if len >= 2 {
+        let mut end = 1;
+        if len >= 18 {
+            end = sort18_plus(v, is_less);
+        } else if len >= 13 {
+            sort13_optimal(&mut v[0..13], is_less);
+            end = 13;
+        } else if len >= 9 {
+            sort9_optimal(&mut v[0..9], is_less);
+            end = 9;
+        }
 
-    // Give ourselves some scratch space to work with.
-    // We do not have to worry about drops: `MaybeUninit` does nothing when dropped.
+        insertion_sort_shift_left(v, end, is_less);
+    }
+}
 
-    // The goal is to generate cmov instructions here.
-    let left_swap = if should_swap { right } else { left };
-    let right_swap = if should_swap { left } else { right };
+fn sort18_plus<T, F>(v: &mut [T], is_less: &mut F) -> usize
+where
+    T: Freeze,
+    F: FnMut(&T, &T) -> bool,
+{
+    let len = v.len();
 
-    let right_swap_tmp = ManuallyDrop::new(ptr::read(right_swap));
+    if len < 18 || len > SMALL_SORT_NETWORK_SCRATCH_LEN {
+        intrinsics::abort();
+    }
 
-    ptr::copy(left_swap, left, 1);
-    ptr::copy_nonoverlapping(&*right_swap_tmp, right, 1);
+    // This should optimize to a shift right.
+    let even_len = len - (len % 2);
+    let len_div_2 = even_len / 2;
+
+    let presorted_len = if len < 26 {
+        sort9_optimal(&mut v[0..9], is_less);
+        sort9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
+
+        9
+    } else {
+        sort13_optimal(&mut v[0..13], is_less);
+        sort13_optimal(&mut v[len_div_2..(len_div_2 + 13)], is_less);
+
+        13
+    };
+
+    insertion_sort_shift_left(&mut v[0..len_div_2], presorted_len, is_less);
+    insertion_sort_shift_left(&mut v[len_div_2..even_len], presorted_len, is_less);
+
+    let mut scratch = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
+    let scratch_base = scratch.as_mut_ptr() as *mut T;
+
+    // SAFETY: We checked that T is Freeze and thus observation safe.
+    // Should is_less panic v was not modified in parity_merge and retains it's original input.
+    // scratch and v must not alias and scratch has v.len() space.
+    unsafe {
+        bidirectional_merge(&v[..even_len], scratch_base, is_less);
+        ptr::copy_nonoverlapping(scratch_base, v.as_mut_ptr(), even_len);
+    }
+
+    even_len
 }
 
 /// Swap two values in the slice pointed to by `v_base` at the position `a_pos` and `b_pos` if the
@@ -292,7 +291,21 @@ where
     // Important to only swap if it is more and not if it is equal. is_less should return false for
     // equal, so we don't swap.
     let should_swap = is_less(&*v_b, &*v_a);
-    branchless_swap(v_a, v_b, should_swap);
+
+    // This is a branchless version of swap if.
+    // The equivalent code with a branch would be:
+    //
+    // if should_swap {
+    //     ptr::swap(left, right, 1);
+    // }
+
+    // The goal is to generate cmov instructions here.
+    let left_swap = if should_swap { v_b } else { v_a };
+    let right_swap = if should_swap { v_a } else { v_b };
+
+    let right_swap_tmp = ManuallyDrop::new(ptr::read(right_swap));
+    ptr::copy(left_swap, v_a, 1);
+    ptr::copy_nonoverlapping(&*right_swap_tmp, v_b, 1);
 }
 
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
@@ -302,8 +315,8 @@ fn sort9_optimal<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
 {
-    // SAFETY: caller must ensure v.len() >=9.
-    if v.len() != 9 {
+    // SAFETY: caller must ensure v.len() >= 9.
+    if v.len() < 9 {
         intrinsics::abort();
     }
 
@@ -350,7 +363,7 @@ where
     F: FnMut(&T, &T) -> bool,
 {
     // SAFETY: caller must ensure v.len() >= 13.
-    if v.len() != 13 {
+    if v.len() < 13 {
         intrinsics::abort();
     }
 
@@ -409,196 +422,96 @@ where
     }
 }
 
-fn sort18_plus<T, F>(v: &mut [T], is_less: &mut F) -> usize
-where
-    T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
+/// Sorts range [begin, tail] assuming [begin, tail) is already sorted.
+///
+/// # Safety
+/// begin < tail and p must be valid and initialized for all begin <= p <= tail.
+unsafe fn insert_tail<T, F: FnMut(&T, &T) -> bool>(begin: *mut T, tail: *mut T, is_less: &mut F) {
+    // SAFETY: see individual comments.
+    unsafe {
+        // SAFETY: in-bounds as tail > begin.
+        let mut sift = tail.sub(1);
+        if !is_less(&*tail, &*sift) {
+            return;
+        }
 
-    if len < 18 || len > SMALL_SORT_NETWORK_SCRATCH_LEN {
+        // SAFETY: after this read tail is never read from again, as we only ever
+        // read from sift, sift < tail and we only ever decrease sift. Thus this is
+        // effectively a move, not a copy. Should a panic occur, or we have found
+        // the correct insertion position, gap_guard ensures the element is moved
+        // back into the array.
+        let tmp = ManuallyDrop::new(tail.read());
+        let mut gap_guard = CopyOnDrop {
+            src: &*tmp,
+            dst: tail,
+            len: 1,
+        };
+
+        loop {
+            // SAFETY: we move sift into the gap (which is valid), and point the
+            // gap guard destination at sift, ensuring that if a panic occurs the
+            // gap is once again filled.
+            ptr::copy_nonoverlapping(sift, gap_guard.dst, 1);
+            gap_guard.dst = sift;
+
+            if sift == begin {
+                break;
+            }
+
+            // SAFETY: we checked that sift != begin, thus this is in-bounds.
+            sift = sift.sub(1);
+            if !is_less(&tmp, &*sift) {
+                break;
+            }
+        }
+    }
+}
+
+/// Sort `v` assuming `v[..offset]` is already sorted.
+pub fn insertion_sort_shift_left<T, F: FnMut(&T, &T) -> bool>(
+    v: &mut [T],
+    offset: usize,
+    is_less: &mut F,
+) {
+    let len = v.len();
+    if offset == 0 || offset > len {
         intrinsics::abort();
     }
 
-    // This should optimize to a shift right.
-    let even_len = len - (len % 2);
-    let len_div_2 = even_len / 2;
-
-    let presorted_len = if len < 26 {
-        sort9_optimal(&mut v[0..9], is_less);
-        sort9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
-
-        9
-    } else {
-        sort13_optimal(&mut v[0..13], is_less);
-        sort13_optimal(&mut v[len_div_2..(len_div_2 + 13)], is_less);
-
-        13
-    };
-
-    insertion_sort_shift_left(&mut v[0..len_div_2], presorted_len, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..even_len], presorted_len, is_less);
-
-    let mut scratch = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
-    let scratch_base = scratch.as_mut_ptr() as *mut T;
-
-    // SAFETY: We checked that T is Freeze and thus observation safe.
-    // Should is_less panic v was not modified in parity_merge and retains it's original input.
-    // scratch and v must not alias and scratch has v.len() space.
+    // SAFETY: see individual comments.
     unsafe {
-        bi_directional_merge_even(&v[..even_len], scratch_base, is_less);
-        ptr::copy_nonoverlapping(scratch_base, v.as_mut_ptr(), even_len);
-    }
-
-    even_len
-}
-
-fn small_sort_network<T, F>(v: &mut [T], is_less: &mut F)
-where
-    T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    // This implementation is tuned to be efficient for integer types.
-
-    let len = v.len();
-
-    // Always sort assuming somewhat random distribution.
-    // Patterns should have already been found by the other analysis steps.
-    //
-    // Small total slices are handled separately, see function quicksort.
-    if len >= 2 {
-        let mut end = 1;
-        if len >= 18 {
-            end = sort18_plus(v, is_less);
-        } else if len >= 13 {
-            sort13_optimal(&mut v[0..13], is_less);
-            end = 13;
-        } else if len >= 9 {
-            sort9_optimal(&mut v[0..9], is_less);
-            end = 9;
-        }
-
-        insertion_sort_shift_left(v, end, is_less);
-    }
-}
-
-fn small_sort_general<T, F>(v: &mut [T], scratch: &mut [MaybeUninit<T>], is_less: &mut F)
-where
-    T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    // This implementation is tuned to be efficient for various types that are larger than u64.
-
-    let len = v.len();
-
-    if len >= 2 {
-        if scratch.len() < (T::SMALL_SORT_THRESHOLD + 16) {
-            intrinsics::abort();
-        }
-
+        // We write this basic loop directly using pointers, as when we use a
+        // for loop LLVM likes to unroll this loop which we do not want.
+        // SAFETY: v_end is the one-past-end pointer, and we checked that
+        // offset <= len, thus tail is also in-bounds.
         let v_base = v.as_mut_ptr();
+        let v_end = v_base.add(len);
+        let mut tail = v_base.add(offset);
+        while tail != v_end {
+            // SAFETY: v_base and tail are both valid pointers to elements, and
+            // v_base < tail since we checked offset != 0.
+            insert_tail(v_base, tail, is_less);
 
-        let offset = if len >= 8 {
-            let len_div_2 = len / 2;
-
-            // SAFETY: TODO
-            unsafe {
-                let scratch_base = scratch.as_mut_ptr() as *mut T;
-
-                let presorted_len = if len >= 16 {
-                    // SAFETY: scratch_base is valid and has enough space.
-                    sort8_stable(
-                        v_base,
-                        scratch_base.add(T::SMALL_SORT_THRESHOLD),
-                        scratch_base,
-                        is_less,
-                    );
-
-                    sort8_stable(
-                        v_base.add(len_div_2),
-                        scratch_base.add(T::SMALL_SORT_THRESHOLD + 8),
-                        scratch_base.add(len_div_2),
-                        is_less,
-                    );
-
-                    8
-                } else {
-                    // SAFETY: scratch_base is valid and has enough space.
-                    sort4_stable(v_base, scratch_base, is_less);
-                    sort4_stable(v_base.add(len_div_2), scratch_base.add(len_div_2), is_less);
-
-                    4
-                };
-
-                for offset in [0, len_div_2] {
-                    let src = scratch_base.add(offset);
-                    let dst = v_base.add(offset);
-
-                    for i in presorted_len..len_div_2 {
-                        ptr::copy_nonoverlapping(dst.add(i), src.add(i), 1);
-                        let scratch_slice = &mut *ptr::slice_from_raw_parts_mut(src, i + 1);
-                        insert_tail(scratch_slice, is_less);
-                    }
-                }
-
-                let even_len = len - (len % 2);
-
-                // See comment in `DropGuard::drop`.
-                let drop_guard = DropGuard {
-                    src: scratch_base,
-                    dst: v_base,
-                    len: even_len,
-                };
-
-                // It's faster to merge directly into `v` and copy over the 'safe' elements of
-                // `scratch` into v only if there was a panic. This technique is similar to
-                // ping-pong merging.
-                bi_directional_merge_even(
-                    &*ptr::slice_from_raw_parts(drop_guard.src, drop_guard.len),
-                    drop_guard.dst,
-                    is_less,
-                );
-                mem::forget(drop_guard);
-
-                even_len
-            }
-        } else {
-            1
-        };
-
-        insertion_sort_shift_left(v, offset, is_less);
-    }
-
-    struct DropGuard<T> {
-        src: *mut T,
-        dst: *mut T,
-        len: usize,
-    }
-
-    impl<T> Drop for DropGuard<T> {
-        fn drop(&mut self) {
-            // SAFETY: `src` must hold the original `len` elements of `v` in any order. And dst
-            // must be valid to write `len` elements.
-            unsafe {
-                ptr::copy_nonoverlapping(self.src, self.dst, self.len);
-            }
+            // SAFETY: we checked that tail is not yet the one-past-end pointer.
+            tail = tail.add(1);
         }
     }
 }
 
-/// SAFETY: The caller MUST guarantee that `v_base` is valid for 4 reads and `dest_ptr` is valid
-/// for 4 writes. The result will be stored in `dst[0..4]`.
-pub unsafe fn sort4_stable<T, F>(v_base: *const T, dst: *mut T, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    // By limiting select to picking pointers, we are guaranteed good cmov code-gen regardless of
-    // type T layout. Further this only does 5 instead of 6 comparisons compared to a stable
-    // transposition 4 element sorting-network. Also by only operating on pointers, we get optimal
-    // element copy usage. Doing exactly 1 copy per element.
+/// SAFETY: The caller MUST guarantee that `v_base` is valid for 4 reads and
+/// `dst` is valid for 4 writes. The result will be stored in `dst[0..4]`.
+pub unsafe fn sort4_stable<T, F: FnMut(&T, &T) -> bool>(
+    v_base: *const T,
+    dst: *mut T,
+    is_less: &mut F,
+) {
+    // By limiting select to picking pointers, we are guaranteed good cmov code-gen
+    // regardless of type T's size. Further this only does 5 instead of 6
+    // comparisons compared to a stable transposition 4 element sorting-network,
+    // and always copies each element exactly once.
 
-    // let v_base = v.as_ptr();
-
+    // SAFETY: all pointers have offset at most 3 from v_base and dst, and are
+    // thus in-bounds by the precondition.
     unsafe {
         // Stably create two pairs a <= b and c <= d.
         let c1 = is_less(&*v_base.add(1), &*v_base);
@@ -635,7 +548,7 @@ where
     }
 
     #[inline(always)]
-    pub fn select<T>(cond: bool, if_true: *const T, if_false: *const T) -> *const T {
+    fn select<T>(cond: bool, if_true: *const T, if_false: *const T) -> *const T {
         if cond {
             if_true
         } else {
@@ -644,98 +557,182 @@ where
     }
 }
 
-/// SAFETY: The caller MUST guarantee that `v_base` is valid for 8 reads and writes, `scratch_base`
-/// and `dst` MUST be valid for 8 writes. The result will be stored in `dst[0..8]`.
-#[inline(never)]
-unsafe fn sort8_stable<T, F>(v_base: *mut T, scratch_base: *mut T, dst: *mut T, is_less: &mut F)
-where
-    T: crate::Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    // SAFETY: The caller must guarantee that scratch_base is valid for 8 writes, and that v_base is
-    // valid for 8 reads.
+/// SAFETY: The caller MUST guarantee that `v_base` is valid for 8 reads and
+/// writes, `scratch_base` and `dst` MUST be valid for 8 writes. The result will
+/// be stored in `dst[0..8]`.
+unsafe fn sort8_stable<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
+    v_base: *mut T,
+    dst: *mut T,
+    scratch_base: *mut T,
+    is_less: &mut F,
+) {
+    // SAFETY: these pointers are all in-bounds by the precondition of our function.
     unsafe {
         sort4_stable(v_base, scratch_base, is_less);
         sort4_stable(v_base.add(4), scratch_base.add(4), is_less);
     }
 
-    // SAFETY: TODO
+    // SAFETY: scratch_base[0..8] is now initialized, allowing us to merge back
+    // into dst.
     unsafe {
-        bi_directional_merge_even(&*ptr::slice_from_raw_parts(scratch_base, 8), dst, is_less);
+        bidirectional_merge(&*ptr::slice_from_raw_parts(scratch_base, 8), dst, is_less);
     }
 }
 
-// --- Insertion sort ---
+#[inline(always)]
+unsafe fn merge_up<T, F: FnMut(&T, &T) -> bool>(
+    mut left_src: *const T,
+    mut right_src: *const T,
+    mut dst: *mut T,
+    is_less: &mut F,
+) -> (*const T, *const T, *mut T) {
+    // This is a branchless merge utility function.
+    // The equivalent code with a branch would be:
+    //
+    // if !is_less(&*right_src, &*left_src) {
+    //     ptr::copy_nonoverlapping(left_src, dst, 1);
+    //     left_src = left_src.add(1);
+    // } else {
+    //     ptr::copy_nonoverlapping(right_src, dst, 1);
+    //     right_src = right_src.add(1);
+    // }
+    // dst = dst.add(1);
 
-/// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
-/// becomes sorted.
-fn insert_tail<T, F>(v: &mut [T], is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
-    if v.len() < 2 {
-        intrinsics::abort();
-    }
-
-    let v_base = v.as_mut_ptr();
-    let i = v.len() - 1;
-
-    // SAFETY: We checked that `v.len()` is at least 2.
+    // SAFETY: The caller must guarantee that `left_src`, `right_src` are valid
+    // to read and `dst` is valid to write, while not aliasing.
     unsafe {
-        // See insert_head which talks about why this approach is beneficial.
-        let v_i = v_base.add(i);
-
-        // It's important that we use v_i here. If this check is positive and we continue,
-        // We want to make sure that no other copy of the value was seen by is_less.
-        // Otherwise we would have to copy it back.
-        if is_less(&*v_i, &*v_i.sub(1)) {
-            // It's important, that we use tmp for comparison from now on. As it is the value that
-            // will be copied back. And notionally we could have created a divergence if we copy
-            // back the wrong value.
-            // Intermediate state of the insertion process is always tracked by `gap`, which
-            // serves two purposes:
-            // 1. Protects integrity of `v` from panics in `is_less`.
-            // 2. Fills the remaining gap in `v` in the end.
-            //
-            // Panic safety:
-            //
-            // If `is_less` panics at any point during the process, `gap` will get dropped and
-            // fill the gap in `v` with `tmp`, thus ensuring that `v` still holds every object it
-            // initially held exactly once.
-            let mut gap = GapGuard {
-                pos: v_i.sub(1),
-                value: ManuallyDrop::new(ptr::read(v_i)),
-            };
-            ptr::copy_nonoverlapping(gap.pos, v_i, 1);
-
-            // SAFETY: We know i is at least 1.
-            for j in (0..(i - 1)).rev() {
-                let v_j = v_base.add(j);
-                if !is_less(&*gap.value, &*v_j) {
-                    break;
-                }
-
-                ptr::copy_nonoverlapping(v_j, gap.pos, 1);
-                gap.pos = v_j;
-            }
-            // `gap` gets dropped and thus copies `tmp` into the remaining gap in `v`.
-        }
+        let is_l = !is_less(&*right_src, &*left_src);
+        let src = if is_l { left_src } else { right_src };
+        ptr::copy_nonoverlapping(src, dst, 1);
+        right_src = right_src.add(!is_l as usize);
+        left_src = left_src.add(is_l as usize);
+        dst = dst.add(1);
     }
+
+    (left_src, right_src, dst)
 }
 
-/// Sort `v` assuming `v[..offset]` is already sorted.
-pub fn insertion_sort_shift_left<T, F>(v: &mut [T], offset: usize, is_less: &mut F)
-where
-    F: FnMut(&T, &T) -> bool,
-{
+#[inline(always)]
+unsafe fn merge_down<T, F: FnMut(&T, &T) -> bool>(
+    mut left_src: *const T,
+    mut right_src: *const T,
+    mut dst: *mut T,
+    is_less: &mut F,
+) -> (*const T, *const T, *mut T) {
+    // This is a branchless merge utility function.
+    // The equivalent code with a branch would be:
+    //
+    // if !is_less(&*right_src, &*left_src) {
+    //     ptr::copy_nonoverlapping(right_src, dst, 1);
+    //     right_src = right_src.wrapping_sub(1);
+    // } else {
+    //     ptr::copy_nonoverlapping(left_src, dst, 1);
+    //     left_src = left_src.wrapping_sub(1);
+    // }
+    // dst = dst.sub(1);
+
+    // SAFETY: The caller must guarantee that `left_src`, `right_src` are valid
+    // to read and `dst` is valid to write, while not aliasing.
+    unsafe {
+        let is_l = !is_less(&*right_src, &*left_src);
+        let src = if is_l { right_src } else { left_src };
+        ptr::copy_nonoverlapping(src, dst, 1);
+        right_src = right_src.wrapping_sub(is_l as usize);
+        left_src = left_src.wrapping_sub(!is_l as usize);
+        dst = dst.sub(1);
+    }
+
+    (left_src, right_src, dst)
+}
+
+/// Merge v assuming v[..len / 2] and v[len / 2..] are sorted.
+///
+/// Original idea for bi-directional merging by Igor van den Hoven (quadsort),
+/// adapted to only use merge up and down. In contrast to the original
+/// parity_merge function, it performs 2 writes instead of 4 per iteration.
+///
+/// # Safety
+/// The caller must guarantee that `dst` is valid for v.len() writes.
+/// Also `v.as_ptr()` and `dst` must not alias and v.len() must be >= 2.
+///
+/// Note that T must be Freeze, the comparison function is evaluated on outdated
+/// temporary 'copies' that may not end up in the final array.
+unsafe fn bidirectional_merge<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
+    v: &[T],
+    dst: *mut T,
+    is_less: &mut F,
+) {
+    // It helps to visualize the merge:
+    //
+    // Initial:
+    //
+    //  |dst (in dst)
+    //  |left               |right
+    //  v                   v
+    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+    //                     ^                   ^
+    //                     |left_rev           |right_rev
+    //                                         |dst_rev (in dst)
+    //
+    // After:
+    //
+    //                      |dst (in dst)
+    //        |left         |           |right
+    //        v             v           v
+    // [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+    //       ^             ^           ^
+    //       |left_rev     |           |right_rev
+    //                     |dst_rev (in dst)
+    //
+    // In each iteration one of left or right moves up one position, and one of
+    // left_rev or right_rev moves down one position, whereas dst always moves
+    // up one position and dst_rev always moves down one position. Assuming
+    // the input was sorted and the comparison function is correctly implemented
+    // at the end we will have left == left_rev + 1, and right == right_rev + 1,
+    // fully consuming the input having written it to dst.
+
     let len = v.len();
+    let src = v.as_ptr();
 
-    // This would be a logic bug in other code.
-    debug_assert!(offset != 0 && offset <= len);
+    let len_div_2 = len / 2;
+    intrinsics::assume(len_div_2 != 0); // This can avoid useless code-gen.
 
-    // Shift each element of the unsorted region v[i..] as far left as is needed to make v sorted.
-    for i in offset..len {
-        insert_tail(&mut v[..=i], is_less);
+    // SAFETY: no matter what the result of the user-provided comparison function
+    // is, all 4 read pointers will always be in-bounds. Writing `dst` and `dst_rev`
+    // will always be in bounds if the caller guarantees that `dst` is valid for
+    // `v.len()` writes.
+    unsafe {
+        let mut left = src;
+        let mut right = src.add(len_div_2);
+        let mut dst = dst;
+
+        let mut left_rev = src.add(len_div_2 - 1);
+        let mut right_rev = src.add(len - 1);
+        let mut dst_rev = dst.add(len - 1);
+
+        for _ in 0..len_div_2 {
+            (left, right, dst) = merge_up(left, right, dst, is_less);
+            (left_rev, right_rev, dst_rev) = merge_down(left_rev, right_rev, dst_rev, is_less);
+        }
+
+        let left_end = left_rev.wrapping_add(1);
+        let right_end = right_rev.wrapping_add(1);
+
+        // Odd length, so one element is left unconsumed in the input.
+        if len % 2 != 0 {
+            let left_nonempty = left < left_end;
+            let last_src = if left_nonempty { left } else { right };
+            ptr::copy_nonoverlapping(last_src, dst, 1);
+            left = left.add(left_nonempty as usize);
+            right = right.add((!left_nonempty) as usize);
+        }
+
+        // We now should have consumed the full input exactly once. This can
+        // only fail if the comparison operator fails to be Ord, in which case
+        // we will panic and never access the inconsistent state in dst.
+        if left != left_end || right != right_end {
+            panic_on_ord_violation();
+        }
     }
 }
 

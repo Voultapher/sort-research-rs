@@ -273,51 +273,6 @@ struct PartitionState<T> {
     gap: GapGuardRaw<T>,
 }
 
-/// This construct works around a couple of issues with auto unrolling as well as manual unrolling.
-/// Auto unrolling as tested with rustc 1.75 is somewhat run-time and binary-size inefficient,
-/// because it performs additional math to calculate the loop end, which we can avoid by
-/// precomputing the loop end. Also auto unrolling only happens on x86 but not on Arm where doing so
-/// for the Firestorm micro-architecture yields a 5+% performance improvement. Manual unrolling via
-/// repeated code has a large negative impact on debug compile-times, and unrolling via `for _ in
-/// 0..UNROLL_LEN` has a 10-20% perf penalty when compiling with `opt-level=s` which is deemed
-/// unacceptable for such a crucial component of the sort implementation.
-trait UnrollHelper: Sized {
-    const UNROLL_LEN: usize;
-
-    unsafe fn unrolled_loop_body<F: FnMut(&mut PartitionState<Self>)>(
-        loop_body: F,
-        state: &mut PartitionState<Self>,
-    );
-}
-
-impl<T> UnrollHelper for T {
-    default const UNROLL_LEN: usize = 1;
-
-    #[inline(always)]
-    default unsafe fn unrolled_loop_body<F: FnMut(&mut PartitionState<T>)>(
-        mut loop_body: F,
-        state: &mut PartitionState<T>,
-    ) {
-        loop_body(state);
-    }
-}
-
-impl<T> UnrollHelper for T
-where
-    (): crate::IsTrue<{ mem::size_of::<T>() <= 16 }>,
-{
-    const UNROLL_LEN: usize = 2;
-
-    #[inline(always)]
-    unsafe fn unrolled_loop_body<F: FnMut(&mut PartitionState<T>)>(
-        mut loop_body: F,
-        state: &mut PartitionState<T>,
-    ) {
-        loop_body(state);
-        loop_body(state);
-    }
-}
-
 fn partition_lomuto_branchless_cyclic<T, F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
 where
     F: FnMut(&T, &T) -> bool,
@@ -378,9 +333,22 @@ where
             },
         };
 
-        let unroll_end = v_base.add(len - (T::UNROLL_LEN - 1));
+        // Manual unrolling that works well on x86, Arm and with opt-level=s without murdering
+        // compile-times. Leaving this to the compiler yields ok to bad results.
+        let unroll_len = if const { mem::size_of::<T>() <= 16 } {
+            2
+        } else {
+            1
+        };
+
+        let unroll_end = v_base.add(len - (unroll_len - 1));
         while state.right < unroll_end {
-            T::unrolled_loop_body(&mut loop_body, &mut state);
+            if unroll_len == 2 {
+                loop_body(&mut state);
+                loop_body(&mut state);
+            } else {
+                loop_body(&mut state);
+            }
         }
 
         // Single instantiate `loop_body` for both the unroll cleanup and cyclic permutation
