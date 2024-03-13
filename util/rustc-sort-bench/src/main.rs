@@ -50,5 +50,5 @@ fn main() {
         "Please provide a base_line_path, that will either be created or compared against.",
     ));
 
-    compare_sort::<StdUnstable>(&base_line_path);
+    compare_sort::<IpnsortUnstable>(&base_line_path);
 }
