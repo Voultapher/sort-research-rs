@@ -1,5 +1,5 @@
-use std::env;
 use std::hint::black_box;
+use std::ptr;
 
 #[allow(dead_code)]
 #[inline(never)]
@@ -10,28 +10,31 @@ fn instantiate_sort<T: Ord>(v: &mut [T]) {
     ipnsort::sort(v);
 }
 
+#[inline(never)]
+fn produce_slice<T>() -> &'static mut [T] {
+    // SAFETY: This is just for compile artifact measuring to have reliable side-effects. This could
+    // is not meant to be run for real.
+    unsafe {
+        let data = black_box(ptr::null_mut());
+        let len = black_box(0);
+        &mut *ptr::slice_from_raw_parts_mut(data, len)
+    }
+}
+
 fn main() {
-    let len = black_box(env::args().len());
-
-    let mut input_u64 = (0..len).map(|x| x as u64).collect::<Vec<_>>();
-    black_box(&mut input_u64);
-
-    let mut input_string = (0..len).map(|x| format!("{x}")).collect::<Vec<_>>();
-    black_box(&mut input_string);
-
-    // Always instantiate string comparison.
-    black_box(input_string[0].cmp(&input_string[1]));
+    let input_u64 = produce_slice::<u64>();
+    let input_string = produce_slice::<String>();
 
     #[cfg(feature = "sort_inst")]
     {
         #[cfg(feature = "type_u64")]
         {
-            instantiate_sort(&mut input_u64);
+            instantiate_sort(input_u64);
         }
 
         #[cfg(feature = "type_string")]
         {
-            instantiate_sort(&mut input_string);
+            instantiate_sort(input_string);
         }
     }
 

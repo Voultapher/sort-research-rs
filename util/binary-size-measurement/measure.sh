@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -u
 
 rustc --version
 
@@ -12,8 +12,22 @@ function measure_binary_size_type_impl() {
     mkdir -p out
     BIN_PATH="target/$1/binary-size-measurement"
 
-    cargo bloat --profile=$1 --features $2 --no-relative-size -n 0 --message-format json > out/baseline_$2_$1.json 2> /dev/null
-    cargo bloat --profile=$1 --features $2,sort_inst --no-relative-size -n 0 --message-format json > out/with_sort_$2_$1.json 2> /dev/null
+    tmpfile=$(mktemp)
+
+    cargo bloat --profile=$1 --features $2 --no-relative-size -n 0 --message-format json > out/baseline_$2_$1.json 2> "$tmpfile"
+
+    if [ $? -ne 0 ]; then
+        cat "$tmpfile"
+    fi
+
+    cargo bloat --profile=$1 --features $2,sort_inst --no-relative-size -n 0 --message-format json > out/with_sort_$2_$1.json 2> "$tmpfile"
+
+    if [ $? -ne 0 ]; then
+        cat "$tmpfile"
+    fi
+
+    rm "$tmpfile"
+
     BINARY_SIZE=$(python eval_bloat.py out/baseline_$2_$1.json out/with_sort_$2_$1.json)
     RESULT_TABLE="$RESULT_TABLE$1 $3 $BINARY_SIZE\n"
 }
