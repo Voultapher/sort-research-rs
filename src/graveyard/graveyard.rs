@@ -927,7 +927,7 @@ fn xx() {
     // let mut input = patterns::random_uniform(16, 10..100);
     // let mut input = (0..8).rev().collect::<Vec<i32>>();
     let mut input = vec![3, 7, 2, 4, 8, 0, 6, 1];
-    sort_comp::new_stable_sort::sort(&mut input);
+    sort_research_rs::new_stable_sort::sort(&mut input);
 
     // panic!();
 }

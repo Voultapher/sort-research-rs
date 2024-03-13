@@ -567,7 +567,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sort_comp"
+name = "sort_research_rs"
 version = "0.1.0"
 dependencies = [
  "cc",

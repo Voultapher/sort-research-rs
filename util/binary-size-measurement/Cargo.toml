@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# sort_comp = { path = "../../" }
+# sort_research_rs = { path = "../../" }
 ipnsort = { path = "../../ipnsort" }
 
 [profile.release]
-debug=true
+debug = true
 
 [profile.release_lto_thin]
 inherits = "release"

@@ -7,7 +7,7 @@ use std::time;
 
 use criterion::{black_box, Criterion};
 
-use sort_comp::other::partition::{self, Partition};
+use sort_research_rs::other::partition::{self, Partition};
 
 use crate::modules::util::{cpu_max_freq_hz, pin_thread_to_core, should_run_benchmark};
 
@@ -72,9 +72,11 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     let mut side_effect = 0;
 
     // Ensure that the tls scratch is initialized for this test size.
-    black_box(sort_comp::other::partition::get_or_alloc_tls_scratch(
-        std::alloc::Layout::array::<T>(test_len).unwrap(),
-    ));
+    black_box(
+        sort_research_rs::other::partition::get_or_alloc_tls_scratch(
+            std::alloc::Layout::array::<T>(test_len).unwrap(),
+        ),
+    );
 
     for i in 0..(batched_runs + 1) {
         let mut test_inputs = (0..batch_len)

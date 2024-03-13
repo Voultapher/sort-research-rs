@@ -1,12 +1,12 @@
 [package]
-name = "afl"
+name = "sort_research_rs_fuzz_afl"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sort_comp = { path = ".." }
+sort_research_rs = { path = ".." }
 afl = "0.12"
 
 [profile.release]

@@ -5,7 +5,7 @@ use criterion::{black_box, Criterion};
 use sort_test_tools::Sort;
 
 #[allow(unused_imports)]
-use sort_comp::{other, stable, unstable};
+use sort_research_rs::{other, stable, unstable};
 
 use crate::modules::util;
 

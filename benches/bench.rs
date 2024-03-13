@@ -9,7 +9,7 @@ use sort_test_tools::ffi_types::{FFIOneKibiByte, FFIString, F128};
 use sort_test_tools::patterns;
 
 #[allow(unused_imports)]
-use sort_comp::{stable, unstable};
+use sort_research_rs::{stable, unstable};
 
 #[cfg(feature = "cold_benchmarks")]
 mod trash_prediction;

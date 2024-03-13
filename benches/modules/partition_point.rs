@@ -4,7 +4,7 @@ use criterion::Criterion;
 
 use rand::prelude::*;
 
-use sort_comp::other::partition_point::{self, PartitionPoint};
+use sort_research_rs::other::partition_point::{self, PartitionPoint};
 
 use crate::modules::util::bench_fn;
 

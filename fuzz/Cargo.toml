@@ -1,5 +1,5 @@
 [package]
-name = "sort_comp-fuzz"
+name = "sort_research_rs_fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-sort_comp = { path = ".." }
+sort_research_rs = { path = ".." }
 
 [profile.release]
 debug = 1
