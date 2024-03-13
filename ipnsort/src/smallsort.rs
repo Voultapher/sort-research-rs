@@ -93,11 +93,20 @@ where
     where
         F: FnMut(&T, &T) -> bool,
     {
+        let mut stack_array = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
+
+        let scratch = unsafe {
+            slice::from_raw_parts_mut(
+                stack_array.as_mut_ptr() as *mut MaybeUninit<T>,
+                SMALL_SORT_NETWORK_SCRATCH_LEN,
+            )
+        };
+
         // I suspect that generalized efficient indirect branchless sorting constructs like
         // sort4_stable for larger sizes exist. But finding them is an open research problem.
         // And even then it's not clear that they would be better than in-place sorting-networks
         // as used in small_sort_network.
-        small_sort_network(v, is_less);
+        small_sort_network(v, scratch, is_less);
     }
 }
 
@@ -200,7 +209,7 @@ impl<T> Drop for CopyOnDrop<T> {
     }
 }
 
-fn small_sort_network<T, F>(v: &mut [T], is_less: &mut F)
+fn small_sort_network<T, F>(v: &mut [T], scratch: &mut [MaybeUninit<T>], is_less: &mut F)
 where
     T: Freeze,
     F: FnMut(&T, &T) -> bool,
@@ -208,69 +217,61 @@ where
     // This implementation is tuned to be efficient for integer types.
 
     let len = v.len();
-
-    // Always sort assuming somewhat random distribution.
-    // Patterns should have already been found by the other analysis steps.
-    //
-    // Small total slices are handled separately, see function quicksort.
-    if len >= 2 {
-        let mut end = 1;
-        if len >= 18 {
-            end = sort18_plus(v, is_less);
-        } else if len >= 13 {
-            sort13_optimal(&mut v[0..13], is_less);
-            end = 13;
-        } else if len >= 9 {
-            sort9_optimal(&mut v[0..9], is_less);
-            end = 9;
-        }
-
-        insertion_sort_shift_left(v, end, is_less);
+    if len < 2 {
+        return;
     }
-}
 
-fn sort18_plus<T, F>(v: &mut [T], is_less: &mut F) -> usize
-where
-    T: Freeze,
-    F: FnMut(&T, &T) -> bool,
-{
-    let len = v.len();
-
-    if len < 18 || len > SMALL_SORT_NETWORK_SCRATCH_LEN {
+    if scratch.len() < len {
         intrinsics::abort();
     }
 
-    // This should optimize to a shift right.
-    let even_len = len - (len % 2);
-    let len_div_2 = even_len / 2;
+    let len_div_2 = len / 2;
+    let no_merge = len < 18;
 
-    let presorted_len = if len < 26 {
-        sort9_optimal(&mut v[0..9], is_less);
-        sort9_optimal(&mut v[len_div_2..(len_div_2 + 9)], is_less);
+    let v_base = v.as_mut_ptr();
+    let initial_region_len = if no_merge { len } else { len_div_2 };
+    // SAFETY: Both possible values of `initial_region_len` are in-bounds.
+    let mut region = unsafe { &mut *ptr::slice_from_raw_parts_mut(v_base, initial_region_len) };
 
-        9
-    } else {
-        sort13_optimal(&mut v[0..13], is_less);
-        sort13_optimal(&mut v[len_div_2..(len_div_2 + 13)], is_less);
+    // Avoid compiler unrolling, we *really* don't want that to happen here for binary-size reasons.
+    loop {
+        let presorted_len = if region.len() >= 13 {
+            sort13_optimal(region, is_less);
+            13
+        } else if region.len() >= 9 {
+            sort9_optimal(region, is_less);
+            9
+        } else {
+            1
+        };
 
-        13
-    };
+        insertion_sort_shift_left(region, presorted_len, is_less);
 
-    insertion_sort_shift_left(&mut v[0..len_div_2], presorted_len, is_less);
-    insertion_sort_shift_left(&mut v[len_div_2..even_len], presorted_len, is_less);
+        if no_merge {
+            return;
+        }
 
-    let mut scratch = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
-    let scratch_base = scratch.as_mut_ptr() as *mut T;
+        if region.as_ptr() != v_base {
+            break;
+        }
+
+        // SAFETY: The right side of `v` based on `len_div_2` is guaranteed in-bounds.
+        region =
+            unsafe { &mut *ptr::slice_from_raw_parts_mut(v_base.add(len_div_2), len - len_div_2) };
+    }
 
     // SAFETY: We checked that T is Freeze and thus observation safe.
     // Should is_less panic v was not modified in parity_merge and retains it's original input.
     // scratch and v must not alias and scratch has v.len() space.
     unsafe {
-        bidirectional_merge(&v[..even_len], scratch_base, is_less);
-        ptr::copy_nonoverlapping(scratch_base, v.as_mut_ptr(), even_len);
+        let scratch_base = scratch.as_mut_ptr() as *mut T;
+        bidirectional_merge(
+            &mut *ptr::slice_from_raw_parts_mut(v_base, len),
+            scratch_base,
+            is_less,
+        );
+        ptr::copy_nonoverlapping(scratch_base, v_base, len);
     }
-
-    even_len
 }
 
 /// Swap two values in the slice pointed to by `v_base` at the position `a_pos` and `b_pos` if the
@@ -310,7 +311,6 @@ where
 
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 // performance impact.
-#[inline(never)]
 fn sort9_optimal<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -357,7 +357,6 @@ where
 
 // Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 // performance impact.
-#[inline(never)]
 fn sort13_optimal<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
