@@ -29,14 +29,14 @@ def yield_pairs():
 
 def print_simple_swap_if(pairs):
     for a, b in pairs:
-        print(f"swap_if_less(arr_ptr, {a}, {b}, is_less);")
+        print(f"swap_if_less(v_base, {a}, {b}, is_less);")
 
 
 def print_ptr_select(pairs):
     net_size = max(max(a, b) for a, b in pairs) + 1
 
     for i in range(net_size):
-        print(f"let mut val_{i}_ptr = arr_ptr.add({i});")
+        print(f"let mut val_{i}_ptr = v_base.add({i});")
 
     for a, b in pairs:
         print(
