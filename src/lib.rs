@@ -39,7 +39,7 @@ macro_rules! sort_impl {
             #[inline]
             fn sort_by<T, F>(arr: &mut [T], compare: F)
             where
-                F: FnMut(&T, &T) -> Ordering,
+                F: FnMut(&T, &T) -> std::cmp::Ordering,
             {
                 sort_by(arr, compare);
             }

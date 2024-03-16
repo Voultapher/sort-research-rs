@@ -8,21 +8,6 @@ use crate::other::partition::get_or_alloc_tls_scratch;
 
 partition_impl!("stable_2side_fill");
 
-// Can the type have interior mutability, this is checked by testing if T is Copy. If the type can
-// have interior mutability it may alter itself during comparison in a way that must be observed
-// after the sort operation concludes. Otherwise a type like Mutex<Option<Box<str>>> could lead to
-// double free.
-//
-// Direct copy of stdlib internal implementation of Freeze.
-pub(crate) unsafe auto trait Freeze {}
-
-impl<T: ?Sized> !Freeze for core::cell::UnsafeCell<T> {}
-unsafe impl<T: ?Sized> Freeze for core::marker::PhantomData<T> {}
-unsafe impl<T: ?Sized> Freeze for *const T {}
-unsafe impl<T: ?Sized> Freeze for *mut T {}
-unsafe impl<T: ?Sized> Freeze for &T {}
-unsafe impl<T: ?Sized> Freeze for &mut T {}
-
 #[must_use]
 const fn is_int_like_type<T>() -> bool {
     // A heuristic that guesses whether a type looks like an int for optimization purposes.

@@ -200,32 +200,31 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     bench_inst!(other::singeli_singelisort);
 
     #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::stable::timsort_evo0);
-    #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::stable::timsort_evo1);
-    #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::stable::timsort_evo2);
-    #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::stable::timsort_evo3);
-    #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::stable::timsort_evo4);
-    #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::unstable::quicksort_evo0);
-    #[cfg(feature = "evolution")]
-    bench_inst!(other::sort_evolution::unstable::quicksort_stack_evo0);
+    {
+        bench_inst!(other::sort_evolution::stable::timsort_evo0);
+        bench_inst!(other::sort_evolution::stable::timsort_evo1);
+        bench_inst!(other::sort_evolution::stable::timsort_evo2);
+        bench_inst!(other::sort_evolution::stable::timsort_evo3);
+        bench_inst!(other::sort_evolution::stable::timsort_evo4);
+
+        bench_inst!(other::sort_evolution::unstable::quicksort_evo0);
+        bench_inst!(other::sort_evolution::unstable::quicksort_stack_evo0);
+
+        bench_inst!(other::sort_evolution::other::bucket_btree);
+        bench_inst!(other::sort_evolution::other::bucket_hash);
+        bench_inst!(other::sort_evolution::other::bucket_match);
+        bench_inst!(other::sort_evolution::other::bucket_branchless);
+        bench_inst!(other::sort_evolution::other::bucket_phf);
+    }
 
     #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort4_unstable_cmp_swap);
-    #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort4_unstable_ptr_select);
-    #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort4_unstable_branchy);
-    #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort4_stable_orson);
-    #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort10_unstable_cmp_swaps);
-    #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort10_unstable_experimental);
-    #[cfg(feature = "small_sort")]
-    bench_inst!(other::small_sort::sort10_unstable_ptr_select);
+    {
+        bench_inst!(other::small_sort::sort4_unstable_cmp_swap);
+        bench_inst!(other::small_sort::sort4_unstable_ptr_select);
+        bench_inst!(other::small_sort::sort4_unstable_branchy);
+        bench_inst!(other::small_sort::sort4_stable_orson);
+        bench_inst!(other::small_sort::sort10_unstable_cmp_swaps);
+        bench_inst!(other::small_sort::sort10_unstable_experimental);
+        bench_inst!(other::small_sort::sort10_unstable_ptr_select);
+    }
 }
