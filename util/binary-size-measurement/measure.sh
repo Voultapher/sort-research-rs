@@ -4,8 +4,6 @@ set -u
 
 rustc --version
 
-cargo clean &> /dev/null
-
 RESULT_TABLE=""
 
 function measure_binary_size_type_impl() {
