@@ -1,7 +1,5 @@
 use core::intrinsics;
 
-use crate::smallsort::SmallSortImpl;
-
 // Recursively select a pseudomedian if above this threshold.
 const PSEUDO_MEDIAN_REC_THRESHOLD: usize = 64;
 
@@ -15,8 +13,7 @@ pub fn choose_pivot<T, F: FnMut(&T, &T) -> bool>(v: &[T], is_less: &mut F) -> us
     // branches and function call overhead.
 
     let len = v.len();
-    if len < T::SMALL_SORT_THRESHOLD {
-        // It's a logic bug if this get's called on slice that would be small-sorted.
+    if len < 8 {
         intrinsics::abort();
     }
 

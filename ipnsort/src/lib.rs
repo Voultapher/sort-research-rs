@@ -2,20 +2,18 @@
 #![allow(incomplete_features, internal_features)]
 #![feature(
     ptr_sub_ptr,
-    maybe_uninit_slice,
     auto_traits,
     negative_impls,
     specialization,
-    const_trait_impl,
     inline_const,
     core_intrinsics,
     sized_type_properties,
-    generic_const_exprs
+    const_mut_refs
 )]
 
 use core::cmp::Ordering;
 use core::intrinsics;
-use core::mem::{self, ManuallyDrop, SizedTypeProperties};
+use core::mem::{ManuallyDrop, SizedTypeProperties};
 use core::ptr;
 
 mod heapsort;
@@ -219,24 +217,6 @@ unsafe impl<T: ?Sized> Freeze for *const T {}
 unsafe impl<T: ?Sized> Freeze for *mut T {}
 unsafe impl<T: ?Sized> Freeze for &T {}
 unsafe impl<T: ?Sized> Freeze for &mut T {}
-
-#[must_use]
-const fn has_efficient_in_place_swap<T>() -> bool {
-    const MEM_SIZE_U64: usize = mem::size_of::<u64>();
-
-    mem::size_of::<T>() <= MEM_SIZE_U64
-}
-
-#[test]
-fn type_info() {
-    assert!(has_efficient_in_place_swap::<i32>());
-    assert!(has_efficient_in_place_swap::<u64>());
-    assert!(!has_efficient_in_place_swap::<u128>());
-    assert!(!has_efficient_in_place_swap::<String>());
-}
-
-trait IsTrue<const B: bool> {}
-impl IsTrue<true> for () {}
 
 struct GapGuard<T> {
     pos: *mut T,

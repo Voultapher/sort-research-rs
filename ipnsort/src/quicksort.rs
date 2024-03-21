@@ -2,8 +2,8 @@ use core::intrinsics;
 use core::mem::{self, ManuallyDrop};
 use core::ptr;
 
-use crate::smallsort::SmallSortImpl;
-use crate::{GapGuard, IsTrue};
+use crate::smallsort::UnstableSmallSortTypeImpl;
+use crate::GapGuard;
 
 /// Sorts `v` recursively.
 ///
@@ -22,7 +22,7 @@ pub(crate) fn quicksort<'a, T, F>(
     loop {
         // println!("len: {}", v.len());
 
-        if v.len() <= T::SMALL_SORT_THRESHOLD {
+        if v.len() <= T::small_sort_threshold() {
             T::small_sort(v, is_less);
             return;
         }
@@ -140,7 +140,9 @@ where
     // a drop guard.
     let pivot = &mut pivot[0];
 
-    let num_lt = T::partition(v_without_pivot, pivot, is_less);
+    // This construct is used to limit the LLVM IR generated, which saves large amounts of
+    // compile-time by only instantiating the code that is needed. Idea by Frank Steffahn.
+    let num_lt = (const { inst_partition::<T, F>() })(v_without_pivot, pivot, is_less);
 
     // Place the pivot between the two partitions.
     v.swap(0, num_lt);
@@ -148,35 +150,14 @@ where
     num_lt
 }
 
-trait PartitionImpl: Sized {
-    /// See [`partition`].
-    fn partition<F>(v: &mut [Self], pivot: &Self, is_less: &mut F) -> usize
-    where
-        F: FnMut(&Self, &Self) -> bool;
-}
-
-impl<T> PartitionImpl for T {
-    default fn partition<F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-    where
-        F: FnMut(&T, &T) -> bool,
-    {
-        partition_hoare_branchy_cyclic(v, pivot, is_less)
-    }
-}
-
-const MAX_BRANCHLESS_PARTITION_SIZE: usize = 96;
-
-/// Specialize for types that are relatively cheap to copy, where branchless optimizations have
-/// large leverage e.g. `u64` and `String`.
-impl<T> PartitionImpl for T
-where
-    (): IsTrue<{ mem::size_of::<T>() <= MAX_BRANCHLESS_PARTITION_SIZE }>,
-{
-    fn partition<F>(v: &mut [T], pivot: &T, is_less: &mut F) -> usize
-    where
-        F: FnMut(&T, &T) -> bool,
-    {
-        partition_lomuto_branchless_cyclic(v, pivot, is_less)
+const fn inst_partition<T, F: FnMut(&T, &T) -> bool>() -> fn(&mut [T], &T, &mut F) -> usize {
+    const MAX_BRANCHLESS_PARTITION_SIZE: usize = 96;
+    if mem::size_of::<T>() <= MAX_BRANCHLESS_PARTITION_SIZE {
+        // Specialize for types that are relatively cheap to copy, where branchless optimizations
+        // have large leverage e.g. `u64` and `String`.
+        partition_lomuto_branchless_cyclic::<T, F>
+    } else {
+        partition_hoare_branchy_cyclic::<T, F>
     }
 }
 

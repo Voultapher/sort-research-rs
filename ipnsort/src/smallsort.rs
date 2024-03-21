@@ -3,33 +3,56 @@ use core::mem::{self, ManuallyDrop, MaybeUninit};
 use core::ptr;
 use core::slice;
 
-use crate::{has_efficient_in_place_swap, Freeze, IsTrue};
+use crate::Freeze;
 
-// Use a trait to focus code-gen on only the parts actually relevant for the type. Avoid generating
-// LLVM-IR for the sorting-network for types that don't qualify. This greatly helps with
-// compile-times.
-pub(crate) trait SmallSortImpl: Sized {
-    const SMALL_SORT_THRESHOLD: usize;
+/// Using a trait allows us to specialize on `Freeze` which in turn allows us to make safe
+/// abstractions.
+pub(crate) trait UnstableSmallSortTypeImpl: Sized {
+    /// For which input length <= return value of this function, is it valid to call `small_sort`.
+    fn small_sort_threshold() -> usize;
 
     /// Sorts `v` using strategies optimized for small sizes.
-    fn small_sort<F>(v: &mut [Self], is_less: &mut F)
-    where
-        F: FnMut(&Self, &Self) -> bool;
+    fn small_sort<F: FnMut(&Self, &Self) -> bool>(v: &mut [Self], is_less: &mut F);
 }
 
-impl<T> SmallSortImpl for T {
-    default const SMALL_SORT_THRESHOLD: usize = 20;
+impl<T> UnstableSmallSortTypeImpl for T {
+    #[inline(always)]
+    default fn small_sort_threshold() -> usize {
+        SMALL_SORT_FALLBACK_THRESHOLD
+    }
 
     #[inline(always)]
     default fn small_sort<F>(v: &mut [T], is_less: &mut F)
     where
         F: FnMut(&T, &T) -> bool,
     {
-        if v.len() >= 2 {
-            insertion_sort_shift_left(v, 1, is_less);
-        }
+        small_sort_fallback(v, is_less);
     }
 }
+
+impl<T: Freeze> UnstableSmallSortTypeImpl for T {
+    #[inline(always)]
+    fn small_sort_threshold() -> usize {
+        match const { choose_unstable_small_sort::<T>() } {
+            UnstalbeSmallSort::Fallback => SMALL_SORT_FALLBACK_THRESHOLD,
+            UnstalbeSmallSort::General => SMALL_SORT_GENERAL_THRESHOLD,
+            UnstalbeSmallSort::Network => SMALL_SORT_NETWORK_THRESHOLD,
+        }
+    }
+
+    #[inline(always)]
+    fn small_sort<F>(v: &mut [T], is_less: &mut F)
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        // This construct is used to limit the LLVM IR generated, which saves large amounts of
+        // compile-time by only instantiating the code that is needed. Idea by Frank Steffahn.
+        (const { inst_unstable_small_sort::<T, F>() })(v, is_less);
+    }
+}
+
+/// Optimal number of comparisons, and good perf.
+const SMALL_SORT_FALLBACK_THRESHOLD: usize = 16;
 
 /// SAFETY: If you change this value, you have to adjust [`small_sort_general`] !
 const SMALL_SORT_GENERAL_THRESHOLD: usize = 32;
@@ -43,74 +66,64 @@ const SMALL_SORT_GENERAL_THRESHOLD: usize = 32;
 const SMALL_SORT_GENERAL_SCRATCH_LEN: usize = SMALL_SORT_GENERAL_THRESHOLD + 16;
 
 /// SAFETY: If you change this value, you have to adjust [`small_sort_network`] !
-const SMALL_SORT_NETWORK_SCRATCH_LEN: usize = 32;
+const SMALL_SORT_NETWORK_THRESHOLD: usize = 32;
+const SMALL_SORT_NETWORK_SCRATCH_LEN: usize = SMALL_SORT_NETWORK_THRESHOLD;
 
 /// Using a stack array, could cause a stack overflow if the type `T` is very large. To be
 /// conservative we limit the usage of small-sorts that require a stack array to types that fit
 /// within this limit.
 const MAX_STACK_ARRAY_SIZE: usize = 4096;
 
-trait QualifiesForStackArrayUsage {}
-
-impl<T> QualifiesForStackArrayUsage for T where
-    (): IsTrue<{ (mem::size_of::<T>() * SMALL_SORT_GENERAL_SCRATCH_LEN) <= MAX_STACK_ARRAY_SIZE }>
-{
+enum UnstalbeSmallSort {
+    Fallback,
+    General,
+    Network,
 }
 
-impl<T> SmallSortImpl for T
-where
-    T: QualifiesForStackArrayUsage + Freeze,
-{
-    default const SMALL_SORT_THRESHOLD: usize = SMALL_SORT_GENERAL_THRESHOLD;
-
-    #[inline(always)]
-    default fn small_sort<F>(v: &mut [T], is_less: &mut F)
-    where
-        F: FnMut(&T, &T) -> bool,
+const fn choose_unstable_small_sort<T: Freeze>() -> UnstalbeSmallSort {
+    if T::IS_COPY
+        && has_efficient_in_place_swap::<T>()
+        && (mem::size_of::<T>() * SMALL_SORT_NETWORK_SCRATCH_LEN) <= MAX_STACK_ARRAY_SIZE
     {
-        let mut stack_array = MaybeUninit::<[T; SMALL_SORT_GENERAL_SCRATCH_LEN]>::uninit();
+        // Heuristic for int like types.
+        return UnstalbeSmallSort::Network;
+    }
 
-        let scratch = unsafe {
-            slice::from_raw_parts_mut(
-                stack_array.as_mut_ptr() as *mut MaybeUninit<T>,
-                SMALL_SORT_GENERAL_SCRATCH_LEN,
-            )
-        };
+    if (mem::size_of::<T>() * SMALL_SORT_GENERAL_SCRATCH_LEN) <= MAX_STACK_ARRAY_SIZE {
+        return UnstalbeSmallSort::General;
+    }
 
-        small_sort_general(v, scratch, is_less);
+    UnstalbeSmallSort::Fallback
+}
+
+const fn inst_unstable_small_sort<T: Freeze, F: FnMut(&T, &T) -> bool>() -> fn(&mut [T], &mut F) {
+    match const { choose_unstable_small_sort::<T>() } {
+        UnstalbeSmallSort::Fallback => small_sort_fallback::<T, F>,
+        UnstalbeSmallSort::General => small_sort_general::<T, F>,
+        UnstalbeSmallSort::Network => small_sort_network::<T, F>,
     }
 }
 
-impl<T> SmallSortImpl for T
-where
-    T: QualifiesForStackArrayUsage + Freeze + Copy,
-    (): IsTrue<{ has_efficient_in_place_swap::<T>() }>,
-{
-    const SMALL_SORT_THRESHOLD: usize = SMALL_SORT_NETWORK_SCRATCH_LEN;
-
-    #[inline(always)]
-    fn small_sort<F>(v: &mut [T], is_less: &mut F)
-    where
-        F: FnMut(&T, &T) -> bool,
-    {
-        let mut stack_array = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
-
-        let scratch = unsafe {
-            slice::from_raw_parts_mut(
-                stack_array.as_mut_ptr() as *mut MaybeUninit<T>,
-                SMALL_SORT_NETWORK_SCRATCH_LEN,
-            )
-        };
-
-        // I suspect that generalized efficient indirect branchless sorting constructs like
-        // sort4_stable for larger sizes exist. But finding them is an open research problem.
-        // And even then it's not clear that they would be better than in-place sorting-networks
-        // as used in small_sort_network.
-        small_sort_network(v, scratch, is_less);
+fn small_sort_fallback<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], is_less: &mut F) {
+    if v.len() >= 2 {
+        insertion_sort_shift_left(v, 1, is_less);
     }
 }
 
-fn small_sort_general<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
+fn small_sort_general<T: Freeze, F: FnMut(&T, &T) -> bool>(v: &mut [T], is_less: &mut F) {
+    let mut stack_array = MaybeUninit::<[T; SMALL_SORT_GENERAL_SCRATCH_LEN]>::uninit();
+
+    let scratch = unsafe {
+        slice::from_raw_parts_mut(
+            stack_array.as_mut_ptr() as *mut MaybeUninit<T>,
+            SMALL_SORT_GENERAL_SCRATCH_LEN,
+        )
+    };
+
+    small_sort_general_with_scratch(v, scratch, is_less);
+}
+
+fn small_sort_general_with_scratch<T: Freeze, F: FnMut(&T, &T) -> bool>(
     v: &mut [T],
     scratch: &mut [MaybeUninit<T>],
     is_less: &mut F,
@@ -209,7 +222,7 @@ impl<T> Drop for CopyOnDrop<T> {
     }
 }
 
-fn small_sort_network<T, F>(v: &mut [T], scratch: &mut [MaybeUninit<T>], is_less: &mut F)
+fn small_sort_network<T, F>(v: &mut [T], is_less: &mut F)
 where
     T: Freeze,
     F: FnMut(&T, &T) -> bool,
@@ -221,9 +234,11 @@ where
         return;
     }
 
-    if scratch.len() < len {
+    if len > SMALL_SORT_NETWORK_SCRATCH_LEN {
         intrinsics::abort();
     }
+
+    let mut stack_array = MaybeUninit::<[T; SMALL_SORT_NETWORK_SCRATCH_LEN]>::uninit();
 
     let len_div_2 = len / 2;
     let no_merge = len < 18;
@@ -264,7 +279,7 @@ where
     // Should is_less panic v was not modified in parity_merge and retains it's original input.
     // scratch and v must not alias and scratch has v.len() space.
     unsafe {
-        let scratch_base = scratch.as_mut_ptr() as *mut T;
+        let scratch_base = stack_array.as_mut_ptr() as *mut T;
         bidirectional_merge(
             &mut *ptr::slice_from_raw_parts_mut(v_base, len),
             scratch_base,
@@ -559,7 +574,7 @@ pub unsafe fn sort4_stable<T, F: FnMut(&T, &T) -> bool>(
 /// SAFETY: The caller MUST guarantee that `v_base` is valid for 8 reads and
 /// writes, `scratch_base` and `dst` MUST be valid for 8 writes. The result will
 /// be stored in `dst[0..8]`.
-unsafe fn sort8_stable<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
+unsafe fn sort8_stable<T: Freeze, F: FnMut(&T, &T) -> bool>(
     v_base: *mut T,
     dst: *mut T,
     scratch_base: *mut T,
@@ -656,7 +671,7 @@ unsafe fn merge_down<T, F: FnMut(&T, &T) -> bool>(
 ///
 /// Note that T must be Freeze, the comparison function is evaluated on outdated
 /// temporary 'copies' that may not end up in the final array.
-unsafe fn bidirectional_merge<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
+unsafe fn bidirectional_merge<T: Freeze, F: FnMut(&T, &T) -> bool>(
     v: &[T],
     dst: *mut T,
     is_less: &mut F,
@@ -738,4 +753,31 @@ unsafe fn bidirectional_merge<T: crate::Freeze, F: FnMut(&T, &T) -> bool>(
 #[inline(never)]
 fn panic_on_ord_violation() -> ! {
     panic!("Ord violation");
+}
+
+#[must_use]
+const fn has_efficient_in_place_swap<T>() -> bool {
+    const MEM_SIZE_U64: usize = mem::size_of::<u64>();
+
+    mem::size_of::<T>() <= MEM_SIZE_U64
+}
+
+#[test]
+fn type_info() {
+    assert!(has_efficient_in_place_swap::<i32>());
+    assert!(has_efficient_in_place_swap::<u64>());
+    assert!(!has_efficient_in_place_swap::<u128>());
+    assert!(!has_efficient_in_place_swap::<String>());
+}
+
+trait IsCopy {
+    const IS_COPY: bool;
+}
+
+impl<T> IsCopy for T {
+    default const IS_COPY: bool = false;
+}
+
+impl<T: Copy> IsCopy for T {
+    const IS_COPY: bool = true;
 }
