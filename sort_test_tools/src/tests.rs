@@ -13,20 +13,20 @@ use crate::patterns;
 use crate::Sort;
 
 #[cfg(miri)]
-const TEST_SIZES: [usize; 18] = [
+const TEST_SIZES: &[usize] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 24, 33, 50, 100, 280, 400,
 ];
 
 #[cfg(feature = "large_test_sizes")]
 #[cfg(not(miri))]
-const TEST_SIZES: [usize; 30] = [
+const TEST_SIZES: &[usize] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500, 1_000,
     2_048, 5_000, 10_000, 100_000, 1_000_000,
 ];
 
 #[cfg(not(feature = "large_test_sizes"))]
 #[cfg(not(miri))]
-const TEST_SIZES: [usize; 28] = [
+const TEST_SIZES: &[usize] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500, 1_000,
     2_048, 5_000, 10_000,
 ];
@@ -98,7 +98,7 @@ fn sort_comp<T: Ord + Clone + Debug, S: Sort>(v: &mut [T]) {
 
 fn test_impl<T: Ord + Clone + Debug, S: Sort>(pattern_fn: impl Fn(usize) -> Vec<T>) {
     for test_len in TEST_SIZES {
-        let mut test_data = pattern_fn(test_len);
+        let mut test_data = pattern_fn(*test_len);
         sort_comp::<T, S>(test_data.as_mut_slice());
     }
 }

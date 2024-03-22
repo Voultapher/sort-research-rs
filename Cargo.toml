@@ -65,6 +65,7 @@ default = [
     # "small_sort",
     # "partition",
     # "partition_point",
+    # "selection",
     # "bench_type_rust_string",
     # "bench_type_val_with_mutex",
     # "bench_type_u8",
@@ -199,6 +200,9 @@ partition = []
 
 # Enable partition_point benchmarks.
 partition_point = []
+
+# Enable selection benchmarks.
+selection = []
 
 # --- Other ---
 

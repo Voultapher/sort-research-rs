@@ -3,7 +3,6 @@ use core::mem::{self, ManuallyDrop};
 use core::ptr;
 
 use crate::smallsort::UnstableSmallSortTypeImpl;
-use crate::GapGuard;
 
 /// Sorts `v` recursively.
 ///
@@ -352,6 +351,19 @@ where
         }
 
         state.num_lt
+    }
+}
+
+struct GapGuard<T> {
+    pos: *mut T,
+    value: ManuallyDrop<T>,
+}
+
+impl<T> Drop for GapGuard<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::copy_nonoverlapping(&*self.value, self.pos, 1);
+        }
     }
 }
 

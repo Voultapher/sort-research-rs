@@ -13,8 +13,7 @@
 
 use core::cmp::Ordering;
 use core::intrinsics;
-use core::mem::{ManuallyDrop, SizedTypeProperties};
-use core::ptr;
+use core::mem::SizedTypeProperties;
 
 mod heapsort;
 mod pivot;
@@ -217,16 +216,3 @@ unsafe impl<T: ?Sized> Freeze for *const T {}
 unsafe impl<T: ?Sized> Freeze for *mut T {}
 unsafe impl<T: ?Sized> Freeze for &T {}
 unsafe impl<T: ?Sized> Freeze for &mut T {}
-
-struct GapGuard<T> {
-    pos: *mut T,
-    value: ManuallyDrop<T>,
-}
-
-impl<T> Drop for GapGuard<T> {
-    fn drop(&mut self) {
-        unsafe {
-            ptr::copy_nonoverlapping(&*self.value, self.pos, 1);
-        }
-    }
-}

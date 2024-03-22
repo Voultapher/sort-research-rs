@@ -28,3 +28,6 @@ pub mod partition_point;
 
 #[cfg(feature = "partition")]
 pub mod partition;
+
+#[cfg(feature = "selection")]
+pub mod selection;

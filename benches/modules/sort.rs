@@ -227,4 +227,10 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         bench_inst!(other::small_sort::sort10_unstable_experimental);
         bench_inst!(other::small_sort::sort10_unstable_ptr_select);
     }
+
+    #[cfg(feature = "selection")]
+    {
+        bench_inst!(other::selection::rust_ipnsort);
+        bench_inst!(other::selection::rust_std);
+    }
 }
