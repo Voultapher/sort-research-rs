@@ -1,11 +1,11 @@
-# An introduction to driftsort
+# driftsort: an efficient, generic and robust stable sort implementation.
 
 # Work in progress please do not publish!
 
 Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp  
 Date: TODO (YYYY-MM-DD)
 
-This is an introduction and overview of an efficient, generic and robust stable sort implementation called driftsort by Orson Peters and Lukas Bergdoll ([source code](https://github.com/Voultapher/driftsort)).
+This document explains and verifies the design goals for an efficient, generic and robust stable sort implementation called driftsort by Orson Peters and Lukas Bergdoll ([source code](https://github.com/Voultapher/driftsort)).
 
 TL;DR: driftsort improves upon `slice::sort` in a variety of ways.
 

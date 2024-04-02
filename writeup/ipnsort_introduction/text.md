@@ -1,17 +1,17 @@
-# An introduction to ipnsort
+# ipnsort: an efficient, generic and robust unstable sort implementation.
 
 # Work in progress please do not publish!
 
-Author: Lukas Bergdoll @Voultapher  
+Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp  
 Date: TODO (YYYY-MM-DD)
 
-This is an introduction and overview of an efficient, generic and robust unstable sort implementation called ipnsort (instruction-parallel-network sort) by Lukas Bergdoll [source code](https://github.com/Voultapher/sort-research-rs/tree/main/ipnsort).
+This document explains and verifies the design goals for an efficient, generic and robust unstable sort implementation called ipnsort by Lukas Bergdoll and Orson Peters ([source code](https://github.com/Voultapher/sort-research-rs/tree/ipnsort-writeup/ipnsort)).
 
 TL;DR: ipnsort improves upon `slice::sort_unstable` in a variety of ways.
 
 ---
 
-Bias disclosure. The author of this analysis is the author of ipnsort.
+Bias disclosure: the authors of this analysis are the authors of ipnsort.
 
 ## Design goals
 
