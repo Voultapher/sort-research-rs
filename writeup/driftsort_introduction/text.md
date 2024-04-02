@@ -174,7 +174,7 @@ The patterns used in this benchmark:
 - `random_s95`, 95% sorted followed by 5% unsorted, simulates append + sort, and
 - `random_z1`, [Zipfian distribution](https://en.wikipedia.org/wiki/Zipf%27s_law) with characterizing exponent s == 1.0,
 
-The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the first level instruction cache and branch-prediction caches with unrelated values. This measures a scenario where prior parts of a hypothetical larger program already loaded or generated the data that will be sorted into the suitable data caches. In this scenario the first level instruction cache and branch predictor caches are trained on other work than the sort implementation. "Hot" benchmarks that keep the data and algorithm in the CPU cache are also possible but are only relevant for usecases where this also happens in the real-world, and are not representative for code which only occasionally calls sort in the context of a larger program.
+The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the first level instruction cache and branch-prediction caches with unrelated values. This measures a scenario where prior parts of a hypothetical larger program already loaded or generated the data that will be sorted into the suitable data caches. In this scenario the first level instruction cache and branch predictor caches are trained on other work than the sort implementation. "Hot" benchmarks that keep the data and instructions in the lowest level CPU caches are also possible. Such use cases are present in real-world applications, for example when computing a rolling median. Analyzing the use of `slice::sort` suggests, that cold use cases are significantly more common.
 
 One common way to improve the performance of sort implementations is to use explicit vectorization. However doing so limits the applicability to a narrow set of built-in types and doesn't support user-defined comparison functions. A generic implementation has to handle user-defined types of various shapes, paired with user-defined comparison functions. For these reasons the implementation focuses on instruction-level parallelism (ILP) instead of SIMD. There are also micro-architectures that have wider capabilities than exposed via the available vectorization, which means an ILP approach may yield [better results](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#neon-test-machine). While there is an unlimited amount of possible combinations, it is possible to pick certain types that demonstrate possible properties and their effects. In the benchmarks the input length range is limited to 1e5 for practical resource reasons, except for `u64` and `i32`.
 
@@ -252,7 +252,7 @@ Observations:
 - random shows a fairly flat ~2.4x throughput improvement for N > 1e4 and <= 1e6. This is can be explained by a similar amount of conceptual comparison work that needs to be done, where driftsort is more efficient at performing the same workload.
 - random_z1 follows a similar curve shape to random, however it has a steeper slope, which is explained by the increasing algorithmic advantage it has thanks to common element filtering.
 - random_d20 and random_p5 leave the charted area thanks to the large algorithmic reduction in work.
-- For N > 1e3 ascending and descending show a small regression. It is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use exactly the same code for run detection and reversing, yet it can result in significant differences depending on compiler version, allocation length and other factors. The same regression does not occur on Firestorm, nor on Haswell for N >= 1e6.
+- For N > 1e3 ascending and descending show a small regression. It is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use exactly the same code for run detection and reversing, yet it can result in significant differences depending on compiler version, allocation length and other factors. The same regression does not occur on Firestorm.
 
 Zooming out to see the full range:
 
@@ -411,7 +411,7 @@ Results for all the tested machines:
 
 ### Binary-size
 
-[Measuring](https://github.com/Voultapher/sort-research-rs/tree/9e4e774eec423a53cb82be34c9dc04482a8675e0/util/binary-size-measurement) the binary-size cost of an instantiation with a new type. In our test we have already instantiated the sort once with another type, so we benchmark the penalty for each added monomorphization after the first, to not penalize code which can be shared between all sort instantiations:
+[Measuring](https://github.com/Voultapher/sort-research-rs/tree/9e4e774eec423a53cb82be34c9dc04482a8675e0/util/binary-size-measurement) the binary-size cost of an instantiation with a new type:
 
 Configuration                | Type     | Size current (bytes) | Size glidesort (bytes) | Size driftsort (bytes)
 -----------------------------|----------|----------------------|------------------------|-----------------------
@@ -523,14 +523,14 @@ Result: driftsort shows no major change in wall or user time compared to `slice:
 - In addition to the continued [intuitive exception safety](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#exception-safety) guarantee, driftsort has a high chance of detecting strict weak ordering violations and reporting them to users via a panic, regardless of build configuration. This surfaces logic bugs earlier and more directly than the current implementation.
 - The authors went to great length to test and verify the memory safety of the implementation.
 - On machines with available multi-threading resources debug builds can see compile-time improvements.
-- driftsort greatly improves the run-time performance for the majority of tested micro-architecture, input length, type and pattern combinations with speedups breaking the order-of-magnitude barrier for some (realistic and non-trivial) combinations.
+- driftsort greatly improves the run-time performance for the majority of tested micro-architectures, input length, type and pattern combinations with speedups breaking the order-of-magnitude barrier for some realistic and non-trivial combinations.
 
 ## Authors' conclusion and opinion
 
 driftsort manages to take many of the ideas found in glidesort and build a comparably capable implementation without 10+x regressions in binary-size and compile-times. At the same time, the current `slice::sort` implementation is so simple by comparison, that leveraging low-cardinality inputs, while also being efficient at handling partially sorted inputs, comes with an unavoidable binary-size penalty. Compile-time regressions are mostly avoided, despite the ~4x increase in LoC from 212 to 853.
 
-driftsort is a story of many compromises and doing more with less. A story of working together to achieve a common goal. It was a lot of work and gave a result we are proud of.
+driftsort is a story of many compromises and doing more with less. A story of working together to achieve a common goal, a lot of work and a result we are proud of.
 
 ## Acknowledgements
 
-None of this would have been possible without the work of all those that came before us. We stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, J. Ian Munro and Sebastian Wild, Igor van den Hoven, and many others have been invaluable in building driftsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements.
+None of this would have been possible without the work of all those that came before us. We stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, J. Ian Munro, Sebastian Wild, Igor van den Hoven, and many others have been invaluable in building driftsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements. Roland Bock as reviewer for the technical writing helped us communicate our work.
