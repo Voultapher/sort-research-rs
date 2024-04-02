@@ -5,11 +5,13 @@
 
 This repository contains:
 
-* An exhaustive test suite, including [properties](https://github.com/Voultapher/sort-research-rs/blob/sort-corectness-writeup/writeup/sort_safety/text.md#property-analysis) not commonly checked or upheld
+* An exhaustive test suite, including [properties](writeup/sort_safety/text.md#property-analysis) not commonly checked or upheld
 * An extensive benchmark suite, abstracting over types, patterns and sizes
 * A fuzzing harness
 * A novel sort implementation [ipnsort](ipnsort) (Instruction-Parallel-Network-Sort)
 * Vendored sort implementations (Rust, C++, C), eg. cpp_pdqsort, rust_std_stable
+* Various experiments and demonstrations
+* Results of the research as [papers](writeup/README.md)
 
 Most tests and benchmarks can be applied to non Rust implementations.
 This works by implementing the 5 benchmark types as #[repr(C)] and having
@@ -19,11 +21,12 @@ Most functionality is by default disabled via cargo features, see the
 Cargo.toml. Some functionality can be enabled or switched by setting environment
 variables. See for example benches/bench.rs.
 
-### Installing
+## Research results
 
-[See cargo docs](https://doc.rust-lang.org/cargo/guide/).
-
-Note, you'll need a nightly rust toolchain.
+* [Fast, small, robust: pick three. Introducing a novel branchless partition implementation.](writeup/lomcyc_partition/text.md)
+* [Safety vs Performance. A case study of C, C++ and Rust sort implementations.](writeup/sort_safety/text.md)
+* [10~17x faster than what? A performance analysis of Intel's x86-simd-sort (AVX-512)](writeup/intel_avx512/text.md)
+* [A performance analysis of glidesort and ipn_stable](writeup/glidesort_perf_analysis/text.md)
 
 ## Running the tests
 
