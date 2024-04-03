@@ -125,6 +125,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "c_fluxsort")]
     bench_inst!(stable::c_fluxsort);
 
+    #[cfg(feature = "golang_std")]
+    bench_inst!(stable::golang_std);
+
     #[cfg(feature = "rust_wpwoodjr")]
     bench_inst!(stable::rust_wpwoodjr);
 
@@ -181,6 +184,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     #[cfg(feature = "cpp_std_gcc4_3")]
     bench_inst!(unstable::cpp_std_gcc4_3);
+
+    #[cfg(feature = "golang_std")]
+    bench_inst!(unstable::golang_std);
 
     // --- Other sorts ---
 

@@ -36,3 +36,7 @@ pub mod cpp_powersort_4way;
 // Note, this sort is only stable if the the supplied comparison returns less, equal and more.
 #[cfg(feature = "c_fluxsort")]
 pub mod c_fluxsort;
+
+// Call golang slices.SortStable
+#[cfg(feature = "golang_std")]
+pub mod golang_std;

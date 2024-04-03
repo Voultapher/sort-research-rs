@@ -89,6 +89,7 @@ default = [
     # "c_crumsort",
     # "c_fluxsort",
     # "singeli_singelisort",
+    # "golang_std",
     # "rust_wpwoodjr",
     # "rust_radsort",
     # "rust_dmsort",
@@ -162,6 +163,9 @@ c_fluxsort = []
 # Enable SingeliSort by Marshall Lochbaum.
 # Uses system C++ standard lib.
 singeli_singelisort = []
+
+# Enable golang slices.Sort and slices.SortStable.
+golang_std = []
 
 # Enable rust_wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.

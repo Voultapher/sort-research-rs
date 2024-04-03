@@ -49,3 +49,7 @@ pub mod cpp_std_libcxx;
 // Call stdlib std::sort sort via FFI.
 #[cfg(feature = "cpp_std_gcc4_3")]
 pub mod cpp_std_gcc4_3;
+
+// Call golang slices.Sort
+#[cfg(feature = "golang_std")]
+pub mod golang_std;

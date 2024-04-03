@@ -8,7 +8,7 @@ const CLANG_PATH: &str = "clang++";
 #[allow(dead_code)]
 fn build_and_link_cpp_sort(
     file_name: &str,
-    specialize_fn: Option<fn(&mut cc::Build) -> Option<String>>,
+    specialize_fn: Option<impl FnOnce(&mut cc::Build) -> Option<String>>,
 ) {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 
@@ -146,6 +146,63 @@ fn build_and_link_singelisort() {
 
 #[cfg(not(feature = "singeli_singelisort"))]
 fn build_and_link_singelisort() {}
+
+#[cfg(feature = "golang_std")]
+fn build_and_link_golang_std() {
+    use std::fs;
+    use std::process::Command;
+
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    let go_ffi_lib_file_path = manifest_dir
+        .join("src")
+        .join("cpp")
+        .join(format!("golang_std_ffi_lib.go"));
+
+    println!("cargo:rerun-if-changed={}", go_ffi_lib_file_path.display());
+
+    let cmd_output = Command::new("go")
+        .args([
+            "build",
+            "-buildmode=c-archive",
+            &go_ffi_lib_file_path.display().to_string(),
+        ])
+        .current_dir(&out_dir)
+        .output()
+        .expect("failed to execute process");
+
+    if !cmd_output.status.success() {
+        eprintln!("{}", String::from_utf8(cmd_output.stderr).unwrap());
+        panic!();
+    }
+
+    let golang_std_ffi_lib_path = out_dir.join("golang_std_ffi_lib.a");
+    if !golang_std_ffi_lib_path.exists() {
+        panic!("go build did not produce static library as expected");
+    }
+
+    fs::rename(
+        &golang_std_ffi_lib_path,
+        out_dir.join("libgolang_std_ffi.a"),
+    )
+    .unwrap();
+
+    println!("cargo:rustc-link-search={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static=golang_std_ffi");
+
+    build_and_link_cpp_sort(
+        "golang_std",
+        Some(|builder: &mut cc::Build| {
+            builder.include(&out_dir);
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "golang_std"))]
+fn build_and_link_golang_std() {}
 
 #[cfg(not(feature = "cpp_ips4o"))]
 fn build_and_link_cpp_ips4o() {}
@@ -295,6 +352,7 @@ fn main() {
     build_and_link_cpp_vqsort();
     build_and_link_cpp_intel_avx512();
     build_and_link_singelisort();
+    build_and_link_golang_std();
     build_and_link_cpp_ips4o();
     build_and_link_cpp_blockquicksort();
     build_and_link_cpp_gerbens_qsort();
