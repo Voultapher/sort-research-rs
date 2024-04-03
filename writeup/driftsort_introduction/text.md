@@ -252,7 +252,7 @@ Observations:
 - random shows a fairly flat ~2.4x throughput improvement for N > 1e4 and <= 1e6. This is can be explained by a similar amount of conceptual comparison work that needs to be done, where driftsort is more efficient at performing the same workload.
 - random_z1 follows a similar curve shape to random, however it has a steeper slope, which is explained by the increasing algorithmic advantage it has thanks to common element filtering.
 - random_d20 and random_p5 leave the charted area thanks to the large algorithmic reduction in work.
-- For N > 1e3 ascending and descending show a small regression. It is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use exactly the same code for run detection and reversing, yet it can result in significant differences depending on compiler version, allocation length and other factors. The same regression does not occur on Firestorm.
+- For N > 1e3 ascending and descending show a small regression. This is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use exactly the same code for run detection and reversing, yet it can result in significant differences depending on compiler version, allocation length and other factors. The same regression does not occur on Firestorm.
 
 Zooming out to see the full range:
 

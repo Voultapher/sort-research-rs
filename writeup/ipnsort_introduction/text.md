@@ -253,6 +253,7 @@ Observations:
 - For N > 20 and < 1e5, ascending and descending throughput is improved, thanks to a the changes to the already sorted detection.
 - random_s95 for N > 20 and < ~200, sees a small to large regression in throughput. This can be explained by the changes to partial insertion sort, which has a hard limit of 5 elements. random_s95 at length 100 is 95 first elements already sorted and the last 5 elements unsorted. This is an ideal situation for the partial insertion sort. Once the the unsorted number of elements at the end exceeds the fixed limit, the throughput curve approaches the shape of random.
 - random_p5 for N > 1e4, shows a [~1.2x regression for partition](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/lomcyc_partition/text.md#lomuto_branchless_cyclic_opt-vs-hoare_block) in isolation. Yet in total the small-sort compensates this regression, together with the changes to already sorted detection.
+- ascending and descending show a large improvement. This is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use very similar code for run detection and reversing, yet it can result in significant differences depending on compiler version and other factors. The same improvement does not occur on Firestorm or for older rustc versions.
 
 Zooming out to see the full range:
 
@@ -273,6 +274,7 @@ Signed 32-bit integer with values in full `i32` range.
 Observations:
 
 - Overall very similar to `u64`.
+- descending shows a large regression for N > 1e2 despite performing exactly the same number of comparisons and using very similar run detection code. Again, this effect does not reproduce on Firestorm.
 - random_p5 sees a minor improvement for N > 1e5, in contrast to `u64` which sees parity in that range. This can be explained by a subtle code-gen difference on x86 in the BlockQuicksort derived partition implementation in std_unstable. LLVM doesn't generate the same efficient `adc` instructions for signed integers, that it will for unsigned integers, in the context of block offset generation. This also explain the overall improvement across all patterns compared to `u64`.
 
 ##### string
