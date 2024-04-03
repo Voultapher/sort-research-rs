@@ -17,21 +17,24 @@ Bias disclosure: the authors of this analysis are the authors of ipnsort.
 
 The primary goal was to develop a replacement for the current Rust standard library `slice::sort_unstable`.
 
-- **Correct**: Correct ordered output if the user-defined comparison function implements a strict weak ordering.
-- **Safe**: panic- observation- and Ord-violation-safe for any input. Zero UB regardless of input and user-defined comparison function.
+- **Correct**: Correctly sorted output if the user-defined comparison function implements a strict weak ordering.
+- **Safe**: Zero UB regardless of input and user-defined comparison function. This includes panic safety, observability of interior mutability, and safety when Ord is violated for any input.
 - **Deterministic**: Same output, every time, on every machine and ISA.
-- **Hardware agnostic**: No architecture specific code.
-- **Efficient**: Race to sleep and focus on instruction-level-parallelism (ILP) over SIMD.
-  - Optimized and tested along these dimensions, ~6k data points:
-    - Input length (0-1e7)
-    - Input type (integer like, medium sized, large sized)
-    - Input pattern (fully random, Zipfian distributions, low cardinality, presorted + append, and more)
-    - CPU prediction state (hot loop only doing sort, cold code with i-cache misses)
-- **Generic**: Works the same way for builtin types and user-defined types. Supports arbitrary comparison functions.
+- **Hardware agnostic**: No architecture-specific code.
+- **Generic**: Works the same way for builtin types and user-defined types.
+  Supports arbitrary comparison functions.
 - **Robust**:
   - Guaranteed O(N * log(N)) worst case comparisons.
   - Guaranteed O(N) comparisons for fully ascending and descending inputs.
+  - Expected O(N * log(K)) comparisons when sorting K unique values.
   - Smooth run-time scaling with input length.
+- **Efficient**: Race to sleep and focus on instruction-level-parallelism (ILP) over SIMD.
+  - Optimized and tested along these dimensions, ~6k data points:
+    - Input length (0-1e7).
+    - Input type (integer-like, medium-sized, large-sized).
+    - Input pattern (fully random, Zipfian distributions, low-cardinality, presorted + append, and more).
+    - CPU prediction state (hot loop only doing sort, cold code with i-cache misses).
+  - Leverage existing ascending and descending runs in the input.
 - **Binary-size**: Relatively small binary-size for types like `u64` and `String`. i-cache is a shared resource and the program will likely do more than just sort.
 - **Compile-time**: At least as fast to compile as the current `slice::sort_unstable` if hardware-parallelism is available and not much worse if not. Both debug and release configurations.
 - **In-place**: No heap allocations. And explicit stack usage should be limited to a couple kB.
@@ -39,13 +42,13 @@ The primary goal was to develop a replacement for the current Rust standard libr
 
 ## Design non-goals
 
-- **Fastest non-generic integer sort**: The staked design goals in combination are incompatible with this goal. The author is aware of simple ways to improve integer performance by 10-20% if some of the design goals are ignored. For best in-class performance [vqsort](https://github.com/google/highway/tree/master/hwy/contrib/sort) by Mark Blacher, Joachim Giesen, Peter Sanders and Jan Wassenberg, can be used, assuming AVX2+ and Clang. For very small types `mem::size_of::<T>() <= mem::size_of::<16>()` a good counting or radix sort is almost certainly faster. More info here [10~17x faster than what? A performance analysis of Intel's x86-simd-sort (AVX-512)](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md). In addition, once the sort implementation has a run-time of multiple milliseconds or more, using multithreading becomes beneficial, which is out of the scope of `slice::sort_unstable`.
+- **Fastest non-generic integer sort**: The staked design goals in combination are incompatible with this goal. The authors are aware of simple ways to improve integer performance by 10-20% if some of the design goals are ignored. For best in-class performance [vqsort](https://github.com/google/highway/tree/master/hwy/contrib/sort) by Mark Blacher, Joachim Giesen, Peter Sanders and Jan Wassenberg, can be used, assuming AVX2+ and Clang. For very small types `mem::size_of::<T>() <= mem::size_of::<16>()` a good counting or radix sort is almost certainly faster. More info here [10~17x faster than what? A performance analysis of Intel's x86-simd-sort (AVX-512)](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md). In addition, once the sort implementation has a run-time of multiple milliseconds or more, using multithreading becomes beneficial, which is out of the scope of `slice::sort_unstable`.
 - **Tiny binary-size**: Implementation complexity and binary-size are related, for projects that care about binary-size and or compile-time above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 - **Varied compilers**: Only rustc using LLVM was tested and designed for.
 
 ## High level overview
 
-The starting point for this journey was the source code of `slice::sort_unstable`. Which itself is mostly a port of [pdqsort](https://github.com/orlp/pdqsort) by Orson Peters.
+The starting point for ipnsort was the source code of `slice::sort_unstable`. Which itself is mostly a port of [pdqsort](https://github.com/orlp/pdqsort) by Orson Peters.
 
 Modern high-performance sort implementations combine various strategies to exploit input patterns and hardware capabilities. In effect this makes all of them hybrid algorithms. For this reason it is more appropriate to talk about sort implementations and their components instead of a "sort algorithm".
 
@@ -57,7 +60,7 @@ To better understand ipnsort, we start with a component level overview of pdqsor
 - **Quicksort**: Top level loop and algorithm.
 - **Pivot selection**: Median of 3 or pseudo median of 9 depending on sub-slice length.
 - **Insertion sort**: Recursion stopper small-sort.
-- **Ancestor pivot tracking**: Common element filtering allowing for O(K * log(N)) total comparisons where K is the number of distinct elements. Also great for Zipfian distributions.
+- **Ancestor pivot tracking**: Common element filtering allowing for O(N * log(K)) total comparisons where K is the number of distinct elements. Also great for Zipfian distributions.
 - **Partition**: Hoare partition with branchless block offset computation and cyclic permutation element swapping derived from [BlockQuicksort](https://arxiv.org/pdf/1604.06697.pdf) by Stefan Edelkamp and Armin Weiß.
 - **Equal partition**: Branchy Hoare partition for filtering out common elements.
 - **Pattern breaker**: Xorshift RNG element shuffling to avoid fallback.
@@ -79,28 +82,32 @@ Component level overview of ipnsort and how and why it differs from the current 
 - **Quicksort**: Top level loop and algorithm. Shorter side recursion is reverted back to left side recursion.
 - **Pivot selection**: Recursive median approximating sqrt(N) sampling taken from [glidesort](https://github.com/orlp/glidesort) by Orson Peters.
 - **Hybrid small-sorts**: Three different recursion stopper small-sort implementations, chosen from at compile time based on type characteristics. Insertion sort as fallback for non `Freeze` types. Novel hybrid sorting network, bidirectional merging and insertion sort implementations with different network sizes for int like types and medium sized `Freeze` types.
-- **Ancestor pivot tracking**: Common element filtering allowing for O(K * log(N)) total comparisons where K is the number of distinct elements. Also great for Zipfian distributions.
+- **Ancestor pivot tracking**: Common element filtering allowing for O(N * log(K)) total comparisons where K is the number of distinct elements. Also great for Zipfian distributions.
 - **Partition**: Two partition implementations. A [novel branchless Lomuto partition implementation](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/lomcyc_partition/text.md) for small to medium sized types. And a branchy Hoare implementation for large expensive to copy types.
-- **Equal partition**: Same as regular partition with flipped comparison. Allows equal element filtering with efficient branchless partition scheme. Greatly improves performance for low cardinality and Zipfian distribution inputs.
+- **Equal partition**: Same as regular partition with flipped comparison. Allows equal element filtering with efficient branchless partition scheme. Greatly improves performance for low-cardinality and Zipfian distribution inputs.
 - **Heapsort**: Branchless Heapsort fallback triggered by simple recursion depth limit. By making the heapsort used as fallback [branchless](https://github.com/rust-lang/rust/pull/107894) worst case performance is significantly improved. Tracking wether a partition was effective adds additional complexity and branch miss opportunities. By switching to a simple 2 * log2(N) depth limit, both the effectiveness tracking as well as the pattern breaker can be avoided. The improved pivot selection as well reduced heapsort penalty compensate the loss of pattern breaking.
 
 ## Verification
 
 ### Correct
 
-As part of the tailor made [test suite](https://github.com/Voultapher/sort-research-rs/blob/main/sort_test_tools/src/tests.rs) are test that compare the resulting output order to the output of `slice::sort`. All tests are done for a range of input lengths between 0 and 1_000_000. There are tests specifically for different input types as well as for different input patterns. As well as tests that test a specific property along two dimensions, input length and pattern. In addition the existing Rust standard library test suite also contains tests specifically for `slice::sort_unstable`. ipnsort is a hybrid sort algorithm, and the individual components can more easily be reasoned about which reduces the risk of hidden correctness bugs. In addition none of the components employ novel algorithmic ideas, further reducing the risk of unforeseen correctness bugs.
+As part of the tailor-made [test suite](https://github.com/Voultapher/sort-research-rs/blob/main/sort_test_tools/src/tests.rs), there are tests that compare the resulting output order to the output of `slice::sort`. All tests are done for a range of input lengths between 0 and 1_000_000. There are tests specifically for different input types as well as for different input patterns. There are also tests that test a specific property along two dimensions: input length and pattern. In addition, the existing Rust standard library test suite also contains tests specifically for `slice::sort_unstable`.
+
+ipnsort is a hybrid sort algorithm, which allows the individual components to be more easily reasoned about, which reduces the risk of hidden correctness bugs. There are no novel algorithmic components.
 
 Result: The test suits pass.
 
 ### Safe
 
-Like the current `slice::sort_unstable` the ipnsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort_unstable` allows for arbitrary logic in the user-defined comparison function. Which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability and or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and or return the input in a dangerous and unintuitive state. Even implementation written using purely safe abstractions are only guaranteed to avoid direct UB, and still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementation can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md). The bespoke test suite involves tests that trigger all these scenarios for various types, pattern and input sizes. In addition, carful care was taken to isolate `unsafe` abstractions where possible, localize `unsafe` invariants to small scopes, with each `unsafe` block accompanied by a `SAFETY:` comment explaining the assumptions. In addition some components were model checked with [kani](https://github.com/model-checking/kani), checking the full gamut of possible comparison result and input combinations. The implementations have also been fuzzed with libfuzzer and AFL, however the employed harnesses did assume simple comparisons. In addition the test suite is also run with [miri](https://github.com/rust-lang/miri) both under Stacked borrows and Tree borrows.
+Like the current `slice::sort_unstable` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort_unstable` allows for arbitrary logic in the user-defined comparison function, which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability, and/or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and or return the input in a dangerous partially initialized state. Even implementations written using purely safe abstractions are only guaranteed to avoid direct UB, and are still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementations can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
+
+The bespoke test suite involves tests that trigger all these scenarios for various types, pattern and input sizes. In addition, care was taken to isolate `unsafe` abstractions where possible, localize `unsafe` invariants to small scopes, with each `unsafe` block accompanied by a `SAFETY:` comment explaining the assumptions. In addition some components were model checked with [kani](https://github.com/model-checking/kani), checking the full gamut of possible comparison result and input combinations. The implementations have also been fuzzed with libfuzzer and AFL, however the employed harnesses did assume simple comparisons. In addition the test suite is also run with [miri](https://github.com/rust-lang/miri) both under Stacked borrows and Tree borrows.
 
 Result: The test suits pass both normally and when run with miri.
 
 ### Deterministic
 
-To the extent of the author's knowledge no construct was used that would produce non-deterministic results. And there is a test that checks that the implementation produces the same output within a reduced key space. Which can catch inter-run non-determinism. In addition a manual test was performed to verify that it produces the same output in a reduced key space on x86_64 Zen 3 and Armv8 Firestorm.
+To the extent of the authors' knowledge no construct was used that would produce non-deterministic results. And there is a test that checks that the implementation produces the same output within a reduced key space. Which can catch inter-run non-determinism. In addition a manual test was performed to verify that it produces the same output in a reduced key space on x86_64 Zen 3 and Armv8 Firestorm.
 
 Result: Both automatic and manual tests pass.
 
@@ -110,27 +117,66 @@ No arch specific code was used, and the implementation relies on branchless ILP 
 
 Result: (rip)grepping the source code for "arch" yields no relevant match.
 
+### Generic
+
+The ipnsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort_unstable`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The fact that the performance characteristics and the order in which comparison operators are called for `u64` vs `Cell<u64>` are noticeably different is novel, and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
+
+Result: The interface remains the same.
+
+### Robust
+
+> Guaranteed O(N * log(N)) worst case comparisons.
+
+The same structure as the one found in [introsort](https://en.wikipedia.org/wiki/Introsort) is used by ipnsort to avoid the well-known O(N^2) worst-case of Quicksort. Once a recursion depth of 2 * log2(N) is reached, it switches to heapsort.
+
+> Guaranteed O(N) comparisons for fully ascending and descending inputs.
+
+The already-sorted detection component will detect fully ascending and descending inputs.
+
+> Smooth run-time scaling with input length.
+
+This point will be explored in more detail in the benchmark section, on some platforms there is a significant drop in throughput at the transition point from insertion sort to hybrid Merge-Quicksort due to implementation-specific and hardware-dependent effects. But in terms of comparisons the scaling is generally speaking smooth.
+
+Plotting mean comparisons performed divided by N - 1 yields:
+
+<img src="assets/comp_info_pdqsort.png" width=480 />
+
+<img src="assets/comp_info_unstable.png" width=960 />
+
+Observations:
+
+- All three implementations, share hitting a worst case for insertion sort in the descending pattern, with the strongest measured log scaling outlier at length 17.
+- random, random_d20 and random_z1 show similar scaling for N <= 20.
+- ascending, random_p5 and random_s95 are nearly sorted for N <= 20 and can be handled with a minimal amount of comparison.
+- pdqsort requires on average ~2N comparisons to sort fully ascending inputs and ~3N for fully descending inputs. std_unstable improves this to ~1N, however at the cost of greatly raising the number of comparisons performed for the random_s95 pattern. ipnsort performs exactly N - 1 comparisons for N > 20 for both ascending and descending inputs, decreasing the random_s95 penalty.
+- ipnsort requires fewer comparisons for the random pattern, ~24.0N at input length 1e7, whereas std_unstable requires ~25.5N and pdqsort ~25.9N. This is caused by using comparison efficient sorting networks and merging in the small sort. This difference has a negligible impact on performance for types like `u64`, but can play a larger role for types that are expensive to compare.
+- All pdqsort derived implementations show linear scaling for random_d20, demonstrating the O(N * log(K)) capabilities.
+
+Result: ipnsort retains the existing best, average and worst case comparison characteristics, while avoiding the large penalty for random_s95. It also has a more defined and consistent transition between N <= 20 and N > 20.
+
 ### Efficient
 
-Smartphone and server CPUs alike can execute billions of instructions each second. For a variety of reasons many programs spend most of their time waiting. Predominantly waiting for memory and cache loads and stores. More than 30 years of CPU design have been invested into doing things while the CPU would otherwise wait. These optimizations such as [pipelining](https://en.wikipedia.org/wiki/Instruction_pipelining) cause new bottlenecks such as [pipeline control hazards](https://en.wikipedia.org/wiki/Hazard_(computer_architecture)#Control_hazards_(branch_hazards_or_instruction_hazards)), which then again are addressed by further optimizations like [predictive execution](https://en.wikipedia.org/wiki/Speculative_execution#Predictive_execution). This stack of hardware optimizations, implemented with [shared mutable state](https://raw.githubusercontent.com/Voultapher/Presentations/master/retpoline/assets/shared-mutable-cpu-state-all.jpg) in the CPU, make predicting performance very complex. Measuring performance comes with its own laundry list of pitfalls, spanning the gamut from poor experimental setups, to bad analysis to faulty assumptions about relevance. Performance and efficiency are usually correlated, in that taking half the time to do the same work, means the CPU can go back to sleep after only half the time, using less power overall. That said, improving efficiency has its own set of [conceptual pitfalls](https://solar.lowtechmagazine.com/2018/01/bedazzled-by-energy-efficiency).
+Smartphone and server CPUs alike can execute billions of instructions each second. For a variety of reasons many programs spend most of their time waiting, predominantly for memory and cache loads and stores. More than 30 years of CPU design have been invested into doing things while the CPU would otherwise wait. These optimizations such as [pipelining](https://en.wikipedia.org/wiki/Instruction_pipelining) cause new bottlenecks such as [pipeline control hazards](https://en.wikipedia.org/wiki/Hazard_(computer_architecture)#Control_hazards_(branch_hazards_or_instruction_hazards)), which then again are addressed by further optimizations like [predictive execution](https://en.wikipedia.org/wiki/Speculative_execution#Predictive_execution). This stack of hardware optimizations, implemented with [shared mutable state](https://raw.githubusercontent.com/Voultapher/Presentations/master/retpoline/assets/shared-mutable-cpu-state-all.jpg) in the CPU, make predicting performance very complex. Measuring performance comes with its own laundry list of pitfalls, spanning the gamut from poor experimental setups, to bad analysis to faulty assumptions about relevance. Performance and efficiency are usually correlated, in that taking half the time to do the same work, means the CPU can go back to sleep after only half the time, using less power overall. That said, improving efficiency has its own set of [conceptual pitfalls](https://solar.lowtechmagazine.com/2018/01/bedazzled-by-energy-efficiency).
 
-Sort implementations can leverage existing patterns in the input to perform less work. The following synthetic patterns represent a limited set of use cases. Their applicability to real world situations will vary from use case to use case. In the domain of databases, low cardinality distributions like random_d20, random_p5 and random_z1 have been found to be quite common in real world data. Zipfian distributions also known as 80/20 distributions are found in many real world data sets. Without prior distribution knowledge nor domain knowledge, a generic sort implementation has to exploit the gained information, without spending too much effort looking for an algorithmic optimization that won't be applicable or pay off.
+Sort implementations can leverage existing patterns in the input to perform less work. The following synthetic patterns represent a limited set of use cases. Their applicability to real-world situations will vary from use case to use case. In the domain of databases, low-cardinality distributions like `random_d20`, `random_p5` and `random_z1` have been found to be quite common in real-world data. Zipfian distributions also known as 80/20 distributions are found in many real-world data sets. Without prior distribution knowledge nor domain knowledge, a generic sort implementation has to exploit the gained information, without spending too much effort looking for an algorithmic optimization that won't be applicable or pay off.
 
-- `ascending`, numbers `0..size`
-- `descending`, numbers `0..size` reversed
-- `random`, random numbers generated by the [rand crate](https://github.com/rust-random/rand) `StdRng::gen`
-- `random_d20`, uniform random numbers in the range `0..=20`
-- `random_p5`, 95% 0 and 5% random values mixed in, not uniform
-- `random_s95`, 95% sorted followed by 5% unsorted, simulates append + sort
-- `random_z1`, [Zipfian distribution](https://en.wikipedia.org/wiki/Zipf%27s_law) with characterizing exponent s == 1.0
+The patterns used in this benchmark:
 
-The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the first level instruction cache and branch-prediction caches with unrelated values. This measures a scenario where prior parts of a hypothetical larger program already loaded or generated the data that will be sorted into the suitable data caches. In this scenario the first level instruction cache and branch predictor caches are trained on other work than the sort implementation. "Hot" benchmarks are also possible but arguably [of little value](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#hot-benchmarks), as they measure a scenario where a program does nothing but sort inputs, which is unlikely to be a realistic use case.
+- `ascending`, numbers `0..size`,
+- `descending`, numbers `0..size` reversed,
+- `random`, random numbers generated by the [rand crate](https://github.com/rust-random/rand) `StdRng::gen`,
+- `random_d20`, uniform random numbers in the range `0..=20`,
+- `random_p5`, 95% 0 and 5% random values mixed in, not uniform,
+- `random_s95`, 95% sorted followed by 5% unsorted, simulates append + sort, and
+- `random_z1`, [Zipfian distribution](https://en.wikipedia.org/wiki/Zipf%27s_law) with characterizing exponent s == 1.0,
+
+The cold benchmarks perform a step before each measurement that [overwrites](https://github.com/Voultapher/sort-research-rs/blob/lomcyc-partition-bench/benches/modules/util.rs#L128) the first level instruction cache and branch-prediction caches with unrelated values. This measures a scenario where prior parts of a hypothetical larger program already loaded or generated the data that will be sorted into the suitable data caches. In this scenario the first level instruction cache and branch predictor caches are trained on other work than the sort implementation. "Hot" benchmarks that keep the data and instructions in the lowest level CPU caches are also possible. Such use cases are present in real-world applications, for example when computing a rolling median. Analyzing the use of `slice::sort` suggests, that cold use cases are significantly more common.
 
 One common way to improve the performance of sort implementations is to use explicit vectorization. However doing so limits the applicability to a narrow set of built-in types and doesn't support user-defined comparison functions. A generic implementation has to handle user-defined types of various shapes, paired with user-defined comparison functions. For these reasons the implementation focuses on instruction-level parallelism (ILP) instead of SIMD. There are also micro-architectures that have wider capabilities than exposed via the available vectorization, which means an ILP approach may yield [better results](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md#neon-test-machine). While there is an unlimited amount of possible combinations, it is possible to pick certain types that demonstrate possible properties and their effects. In the benchmarks the input length range is limited to 1e5 for practical resource reasons, except for `u64` and `i32`.
 
-#### Results Zen 3
+#### Benchmark setups
 
-The micro-architecture called Zen 3 released in the year 2020 by AMD, is in the year 2024 a widely used choice for cloud computing, gaming and more.
+Zen 3
 
 ```
 Linux 6.6
@@ -138,6 +184,30 @@ rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
 AMD Ryzen 9 5900X 12-Core Processor (Zen 3 micro-architecture)
 CPU boost enabled.
 ```
+
+Haswell
+
+```
+Linux 5.19
+rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
+Intel i7-5500U 2-Core Processor (Broadwell micro-architecture)
+CPU boost enabled.
+```
+
+Firestorm
+
+```
+Darwin Kernel Version 22.6.0
+rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
+Apple M1 Pro 6+2 Core Processor (Firestorm P-core micro-architecture)
+CPU boost enabled.
+```
+
+#### Results Zen 3
+
+Zen 3 is a CPU micro-architecture by AMD, released in the year 2020. In 2024 it is a popular choice for servers and desktops, with workloads ranging from HPC to general cloud computing to gaming and desktop usage.
+
+To keep the size of this document in check, this is the only micro-architecture for which the results will be discussed in detail.
 
 ##### u64 10k single size
 
@@ -327,120 +397,22 @@ Observations:
 
 - The relative speedup per pattern is distributed differently than `u64` and `i32`. One difference is a different small-sort. But this wouldn't explain why random_d20 shows a similar speedup to random. Given that random_d20 basically doesn't use the small-sort at larger input lengths. One key difference is the comparison function of f128. It generates a 64-bit floating point division, which has a 13.5 cycle latency on Zen 3. The partition and small-sort implementations of ipnsort are implemented in a way that allows it to make more efficient use of the multiple FP ports in the CPU execution engine. By issuing 2 comparisons within one loop iteration that are independent of each other, the effective latency can be cut in half.
 
-#### Results Haswell
+#### All results
 
-The micro-architecture called Haswell released in the year 2013 by Intel, is the successor to the very successful Sandy Bridge micro-architecture released in the year 2011, which then was followed by [Skylake](https://chipsandcheese.com/2022/10/14/skylake-intels-longest-serving-architecture/) in the year 2015. Broadwell is a node shrink of the same micro-architecture, which implies higher frequencies and or better energy efficiency, but the micro-architecture is essentially the same.
+Results for all the tested machines:
 
-```
-Linux 5.19
-rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
-Intel i7-5500U 2-Core Processor (Broadwell micro-architecture)
-CPU boost enabled.
-```
-
-Observations are omitted here to keep the size of this document in check.
-
-##### 10k u64
-
-<img src="assets/haswell/10k-single-size.png" width=700 />
-
-##### u64
-
-<img src="assets/haswell/u64-clipped.png" width=960 />
-
-##### i32
-
-<img src="assets/haswell/i32-clipped.png" width=960 />
-
-##### string
-
-<img src="assets/haswell/string-clipped.png" width=960 />
-
-##### 1k
-
-<img src="assets/haswell/1k-clipped.png" width=960 />
-
-##### f128
-
-<img src="assets/haswell/f128-clipped.png" width=960 />
-
-#### Results Firestorm
-
-The P-core micro-architecture called Firestorm released in the year 2020 by Apple and found in the A14 and M1 family of chips, is one of the widest and most capable micro-architectures available to consumers to date. The machine-code generated for the Arm instruction set architecture (ISA) by LLVM is broadly similar to the machine-code generated for the x86 ISA, but there are meaningful differences one has to account for when writing cross-platform high-performance code. Like the aforementioned loop unrolling issue, as described in the second section called "Performance measurement", and more.
-
-```
-Darwin Kernel Version 22.6.0
-rustc 1.77.0-nightly (6ae4cfbbb 2024-01-17)
-Apple M1 Pro 6+2 Core Processor (Firestorm P-core micro-architecture)
-CPU boost enabled.
-```
-
-Observations are omitted here to keep the size of this document in check.
-
-##### 10k u64
-
-<img src="assets/firestorm/10k-single-size.png" width=700 />
-
-##### u64
-
-<img src="assets/firestorm/u64-clipped.png" width=960 />
-
-##### i32
-
-<img src="assets/firestorm/i32-clipped.png" width=960 />
-
-##### string
-
-<img src="assets/firestorm/string-clipped.png" width=960 />
-
-##### 1k
-
-<img src="assets/firestorm/1k-clipped.png" width=960 />
-
-##### f128
-
-<img src="assets/firestorm/f128-clipped.png" width=960 />
-
-### Generic
-
-The ipnsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort_unstable`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. None of which are restricted to builtin types, treating user-defined types and builtin types the same way. The fact that the performance characteristics and output order of `u64` vs `Cell<u64>` are noticeably different is novel, and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
-
-Result: The interface remains the same.
-
-### Robust
-
-> Guaranteed O(N * log(N)) worst case comparisons.
-
-The same structure as pdqsort is used to guarantee O(N * log(N)) worst case comparisons. Once a recursion depth of 2 * log2(N) is reached, it switches to heapsort, which has a guarantee O(N * log(N)) worst case. This only applies to inputs N > 20. For smaller inputs O(N^2) is the average case because of the insertion sort.
-
-> Guaranteed O(N) comparisons for fully ascending and descending inputs.
-
-The first thing it does for inputs N > 20 is a single pass scan with early exit for fully ascending and descending inputs.
-
-> Smooth run-time scaling with input length.
-
-This point has in part been explored in the section on efficiency.
-
-Plotting mean comparisons performed divided by N - 1 yields:
-
-<img src="assets/comp_info_pdqsort.png" width=480 />
-
-<img src="assets/comp_info_unstable.png" width=960 />
-
-Observations:
-
-- All three implementations, share hitting a worst case for insertion sort in the descending pattern, with the strongest measured log scaling outlier at length 17.
-- random, random_d20 and random_z1 show similar scaling for N <= 20.
-- ascending, random_p5 and random_s95 are nearly sorted for N <= 20 and can be handled with a minimal amount of comparison.
-- pdqsort requires on average ~2N comparisons to sort fully ascending inputs and ~3N for fully descending inputs. std_unstable improves this to ~1N, however at the cost of greatly raising the number of comparisons performed for the random_s95 pattern. ipnsort performs exactly N - 1 comparisons for N > 20 for both ascending and descending inputs, decreasing the random_s95 penalty.
-- ipnsort requires fewer comparisons for the random pattern, ~24.0N at input length 1e7, whereas std_unstable requires ~25.5N and pdqsort ~25.9N. This is caused by using comparison efficient sorting networks and merging in the small sort. This difference has a negligible impact on performance for types like `u64`, but can play a larger role for types that are expensive to compare.
-- All pdqsort derived implementations show linear scaling for random_d20, demonstrating the O(K * log(N)) capabilities.
-
-Result: ipnsort retains the existing best, average and worst case comparison characteristics, while avoiding the large penalty for random_s95. It also has a more defined and consistent transition between N <= 20 and N > 20.
+|        | Zen 3 | Haswell | Firestorm
+|--------|-------|---------|----------
+| 10k u64 | <img src="assets/zen3/10k-single-size.png" width=300> | <img src="assets/haswell/10k-single-size.png" width=300> | <img src="assets/firestorm/10k-single-size.png" width=300>
+| u64     | <img src="assets/zen3/u64-clipped.png" width=300> | <img src="assets/haswell/u64-clipped.png" width=300> | <img src="assets/firestorm/u64-clipped.png" width=300>
+| i32     | <img src="assets/zen3/i32-clipped.png" width=300> | <img src="assets/haswell/i32-clipped.png" width=300> | <img src="assets/firestorm/i32-clipped.png" width=300>
+| string  | <img src="assets/zen3/string-clipped.png" width=300> | <img src="assets/haswell/string-clipped.png" width=300> | <img src="assets/firestorm/string-clipped.png" width=300>
+| 1k      | <img src="assets/zen3/1k-clipped.png" width=300> | <img src="assets/haswell/1k-clipped.png" width=300> | <img src="assets/firestorm/1k-clipped.png" width=300>
+| f128    | <img src="assets/zen3/f128-clipped.png" width=300> | <img src="assets/haswell/f128-clipped.png" width=300> | <img src="assets/firestorm/f128-clipped.png" width=300>
 
 ### Binary-size
 
-[Measuring](https://github.com/Voultapher/sort-research-rs/tree/9e4e774eec423a53cb82be34c9dc04482a8675e0/util/binary-size-measurement) the binary-size cost of an instantiation with a new type, when the implementation has already been instantiated, in short, monomorphized, with another type, yields:
+[Measuring](https://github.com/Voultapher/sort-research-rs/tree/9e4e774eec423a53cb82be34c9dc04482a8675e0/util/binary-size-measurement) the binary-size cost of an instantiation with a new type:
 
 Configuration                | Type     | Size current (bytes) | Size ipnsort (bytes)
 -----------------------------|----------|----------------------|---------------------
@@ -451,13 +423,13 @@ release_lto_thin             | `String` | 7365                 | 4941
 release_lto_thin_opt_level_s | `u64`    | 2712                 | 3096
 release_lto_thin_opt_level_s | `String` | 5066                 | 4487
 
-The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort_unstable`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has ipnsort only use an inlined insertion sort using < 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
+The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort_unstable`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has ipnsort only use an inlined insertion sort using less than 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 
 Result: ipnsort improves the binary-size in every tested scenario, compared to the current `slice::sort_unstable`. With a relatively larger gain for non-integer like types like `String`.
 
 ### Compile-time
 
-Compile-times are often cited as one of Rust's issues, and the compiler team has invested considerable effort in improving compile-times. `slice::sort_unstable` is implementation wise one of the largest and most complicated functions in the standard library. As a consequence, the compile-time impact it has on user applications that call it directly or indirectly can be [substantial](https://github.com/rust-lang/rust/pull/108662#issuecomment-1453507495). To measure the impact on compile-time, a [test program](https://github.com/Voultapher/sort-research-rs/blob/main/util/compile_time_impact/src/main.rs) was created that contains a total of 256 sort instantiation, each with a newtype wrapper. 50% `u64`, 45% `String` and 5% `Cell<u64>`. This program is then clean compiled multiple times and wall and user time are evaluated.
+Compile-times are often cited as one of Rust's issues, and the compiler team has invested considerable effort in improving compile-times. `slice::sort_unstable` is implementation-wise one of the largest and most complicated functions in the standard library. As a consequence, the compile-time impact it has on user applications that call it directly or indirectly can be [substantial](https://github.com/rust-lang/rust/pull/108662#issuecomment-1453507495). To measure the impact on compile-time, a [test program](https://github.com/Voultapher/sort-research-rs/blob/main/util/compile_time_impact/src/main.rs) was created that contains a total of 256 sort instantiation, each with a newtype wrapper. 50% `u64`, 45% `String` and 5% `Cell<u64>`. This program is then clean compiled multiple times and wall and user time are evaluated.
 
 Current `slice::sort_unstable`:
 
@@ -483,7 +455,7 @@ $ hyperfine --min-runs 5 --prepare 'cargo clean' 'cargo build --release'
   Range (min … max):    5.331 s …  5.394 s    5 runs
 ```
 
-The primary reported time is the wall clock, how much time it took overall. The User time represents the elapsed time across all used threads. And the System time represents the time spent in the kernel. ipnsort carefully splits its implementation into multiple modules, mostly avoiding run-time penalities for intra-module-only LTO builds. Which allows rustc to parallelize and make use of multi-threading capabilities. In contrast the current `slice::sort_unstable` is contained in a single module, and subsequently spends nearly all its time on the same thread, making poor use of multi-threading capabilities.
+The primary reported time is the wall clock, how much time it took overall. The User time represents the elapsed time across all used threads. And the System time represents the time spent in the kernel. ipnsort carefully splits its implementation into multiple modules, mostly avoiding run-time penalities for intra-module-only LTO builds. This allows rustc to parallelize and make use of multi-threading capabilities. In contrast the current `slice::sort_unstable` is contained in a single module, and subsequently spends nearly all its time on the same thread, making poor use of multi-threading capabilities.
 
 Result: If the system has multi-threading capabilities and time available during compilation, compiling ipnsort is significantly faster than the current `slice::sort_unstable`. Both for debug and release builds. If not, the time spent is similar for debug builds, and a sizable improvement for release builds.
 
@@ -513,7 +485,7 @@ $ hyperfine --min-runs 5 "cargo t -- -Z unstable-options --shuffle-seed 778"
   Range (min … max):    4.363 s …  4.491 s    5 runs
 ```
 
-The large variance for `slice::sort_unstable` is repeatable and the author is not sure what to attribute it to.
+The large variance for `slice::sort_unstable` is repeatable and the authors are not sure what to attribute it to.
 
 Result: ipnsort improves debug performance both in terms of wall clock and total time across all CPU cores.
 
@@ -527,20 +499,18 @@ Result: ipnsort improves debug performance both in terms of wall clock and total
 ### Reasons that speak for adoption
 
 - In addition to the continued [intuitive exception safety](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#exception-safety) guarantee, ipnsort has a high chance of detecting strict weak ordering violations and reporting them to users via a panic, regardless of build configuration. This surfaces logic bugs earlier and more directly than the current implementation.
-- The author went to great length to test and verify the memory safety of the implementation.
+- The authors went to great length to test and verify the memory safety of the implementation.
 - ipnsort greatly improves the run-time performance across nearly every tested micro-architecture, input length, type and pattern combination.
 - ipnsort improves binary-size for all tested types, with all tested compiler settings.
 - ipnsort improves debug performance in the tested scenario.
 - ipnsort greatly improves compile-times in the majority of tested scenarios, especially when multi-threaded resources are available.
 
-## Author's conclusion and opinion
+## Authors' conclusion and opinion
 
-A sort implementation is a bit like a battery. It's relatively easy to be good in one specific property, but being good in most aspects and bad in none is *a lot* harder. The work on ipnsort consumed more than a thousand hours of my personal time in 2022 and 2023, I'm happy to have achieved my ambitious goals and even managed to innovate some aspects.
+Lukas: A sort implementation is a bit like a battery. It's relatively easy to be good in one specific property, but being good in most aspects and bad in none is *a lot* harder. The work on ipnsort consumed more than a thousand hours of my personal time in 2022 and 2023, I'm happy to have achieved my ambitious goals and even managed to innovate some aspects.
+
+Orson: TODO
 
 ## Acknowledgements
 
-None of this would have been possible without the work of all those that came before me. I stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß and Orson Peters and many others have been invaluable in building ipnsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements.
-
-## Thanks
-
-TODO
+None of this would have been possible without the work of all those that came before me. I stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, Igor van den Hoven and many others have been invaluable in building ipnsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements. Roland Bock as reviewer for the technical writing helped us communicate our work.

@@ -48,7 +48,7 @@ The primary goal was to develop a replacement for the current Rust standard libr
 
 ## High level overview
 
-Before working together on driftsort, the two authors had [competing desires](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/glidesort_perf_analysis/text.md) to build a `slice::sort` replacement. In 2023 they decided to work together, combining the best of both competing designs into a new design called driftsort. The influences a varied, but the core structure is derived from [glidesort](https://github.com/orlp/glidesort) by Orson Peters.
+Before working together on driftsort, the two authors had [competing desires](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/glidesort_perf_analysis/text.md) to build a `slice::sort` replacement. In 2023 they decided to work together, combining the best of both competing designs into a new design called driftsort. The influences are varied, but the core structure is derived from [glidesort](https://github.com/orlp/glidesort) by Orson Peters.
 
 Modern high-performance sort implementations combine various strategies to exploit input patterns and hardware capabilities. In effect this makes all of them hybrid algorithms. For this reason it is more appropriate to talk about sort implementations and their components instead of a singular "sort algorithm".
 
@@ -135,7 +135,7 @@ The already-sorted detection component will detect fully ascending and descendin
 
 > Smooth run-time scaling with input length.
 
-This point will be explored in more detail in the benchmark section, on some platforms there is a significant drop in throughput at the transition point from insertion sort to hybrid Merge-Quicksort due to implementation-specific and hardware-dependent effecst. But in terms of comparisons the scaling is generally speaking smooth.
+This point will be explored in more detail in the benchmark section, on some platforms there is a significant drop in throughput at the transition point from insertion sort to hybrid Merge-Quicksort due to implementation-specific and hardware-dependent effects. But in terms of comparisons the scaling is generally speaking smooth.
 
 Plotting mean comparisons performed divided by N - 1 yields:
 
@@ -422,7 +422,7 @@ release_lto_thin             | `String` | 2858                 | 30983          
 release_lto_thin_opt_level_s | `u64`    | 1827                 | 16601                  | 3890
 release_lto_thin_opt_level_s | `String` | 2497                 | 26392                  | 5493
 
-The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has driftsort only use an inlined insertion sort using < 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
+The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has driftsort only use an inlined insertion sort using less than 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 
 The current `slice::sort` is comparatively simple and subsequently has limited capabilities in terms of leveraging low-cardinality patterns as well as run-time efficiency. driftsort is similar in terms of effective capabilities to glidesort while only requiring ~2.5x the binary-size in contrast to ~13x for glidesort. By having a dedicated insertion sort for N <= 20, the impact on the i-cache is deemed minimal. And in cases where larger inputs are sorted, the additional binary-size cost manifests itself in significantly improved run-times. Further reductions in binary-size are possible, but would imply significant reductions in capabilities.
 
