@@ -73,13 +73,15 @@ uint32_t vqsort_f128_by(F128* data,
 
 // --- 1k ---
 
-void vqsort_1k(F128* data, size_t len) {
+void vqsort_1k(FFIOneKibiByte* data, size_t len) {
   printf("Not supported\n");
 }
 
-uint32_t vqsort_1k_by(F128* data,
+uint32_t vqsort_1k_by(FFIOneKibiByte* data,
                       size_t len,
-                      CompResult (*cmp_fn)(const F128&, const F128&, uint8_t*),
+                      CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                           const FFIOneKibiByte&,
+                                           uint8_t*),
                       uint8_t* ctx) {
   printf("Not supported\n");
   return 1;

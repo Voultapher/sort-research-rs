@@ -87,15 +87,15 @@ uint32_t qsort_unstable_f128_by(F128* data,
 
 // --- 1k ---
 
-void qsort_unstable_1k(F128* data, size_t len) {
+void qsort_unstable_1k(FFIOneKibiByte* data, size_t len) {
   // Value would have to be sorted by indirection.
   printf("Not supported\n");
 }
 
-uint32_t qsort_unstable_1k_by(F128* data,
+uint32_t qsort_unstable_1k_by(FFIOneKibiByte* data,
                               size_t len,
-                              CompResult (*cmp_fn)(const F128&,
-                                                   const F128&,
+                              CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                   const FFIOneKibiByte&,
                                                    uint8_t*),
                               uint8_t* ctx) {
   printf("Not supported\n");

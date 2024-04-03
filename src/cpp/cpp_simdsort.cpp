@@ -77,14 +77,14 @@ uint32_t simdsort_avx2_f128_by(F128* data,
 
 // --- 1k ---
 
-void simdsort_avx2_1k(F128* data, size_t len) {
+void simdsort_avx2_1k(FFIOneKibiByte* data, size_t len) {
   printf("Not supported\n");
 }
 
-uint32_t simdsort_avx2_1k_by(F128* data,
+uint32_t simdsort_avx2_1k_by(FFIOneKibiByte* data,
                              size_t len,
-                             CompResult (*cmp_fn)(const F128&,
-                                                  const F128&,
+                             CompResult (*cmp_fn)(const FFIOneKibiByte&,
+                                                  const FFIOneKibiByte&,
                                                   uint8_t*),
                              uint8_t* ctx) {
   printf("Not supported\n");
