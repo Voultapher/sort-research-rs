@@ -11,11 +11,11 @@ TL;DR: ipnsort improves upon `slice::sort_unstable` in a variety of ways.
 
 ---
 
-Bias disclosure: the authors of this analysis are the authors of ipnsort.
+Bias disclosure: the authors of this document are the authors of ipnsort.
 
 ## Design goals
 
-The primary goal was to develop a replacement for the current Rust standard library `slice::sort_unstable`.
+The primary goal is to develop a replacement for the current Rust standard library `slice::sort_unstable`.
 
 - **Correct**: Correctly sorted output if the user-defined comparison function implements a strict weak ordering.
 - **Safe**: Zero UB regardless of input and user-defined comparison function. This includes panic safety, observability of interior mutability, and safety when Ord is violated for any input.
@@ -38,7 +38,7 @@ The primary goal was to develop a replacement for the current Rust standard libr
 - **Binary-size**: Relatively small binary-size for types like `u64` and `String`. i-cache is a shared resource and the program will likely do more than just sort.
 - **Compile-time**: At least as fast to compile as the current `slice::sort_unstable` if hardware-parallelism is available and not much worse if not. Both debug and release configurations.
 - **In-place**: No heap allocations. And explicit stack usage should be limited to a couple kB.
-- **Debug performance**: Performance of un-optimized binaries should not be much worse than the current `slice::sort_unstable`.
+- **Debug performance**: Performance of un-optimized binaries may only be slightly worse than the current `slice::sort_unstable`.
 
 ## Design non-goals
 
@@ -71,7 +71,7 @@ To better understand ipnsort, we start with a component level overview of pdqsor
 The current `slice::sort_unstable` does some minor changes to pdqsort:
 
 - **Partial insertion sort**: Is changed to allow fully ascending and descending inputs to be sorted with only N comparisons, instead of N*2 like in pdqsort. However in doing so it creates a worst case with significantly more comparisons for append + sort use cases. More on that later.
-- **Quicksort**: Instead of always recursing into the left side, it recurses into the shorter side. This idea was first introduced in the 1993 paper [Engineering a Sort Function](https://cs.fit.edu/~pkc/classes/writing/samples/bentley93engineering.pdf) by Jon L. Bentley and M. Douglas Mcilroy. While predicting the exact point when the current `slice::sort_unstable` will switch from Quicksort recursion to heapsort is difficult to predict, because of the pattern breaker and ineffective partition counter interplay, it still enforces a recursion depth limit. Jon L. Bentley and M. Douglas Mcilroy introduce the shorter side recursion idea to counteract the worst case behavior of repeated ineffective partitioning. In essence this change makes no sense given the heapsort fallback.
+- **Quicksort**: Instead of always recursing into the left side, it recurses into the shorter side. This idea was first introduced in the 1993 paper [Engineering a Sort Function](https://cs.fit.edu/~pkc/classes/writing/samples/bentley93engineering.pdf) by Jon L. Bentley and M. Douglas Mcilroy. While predicting the exact point when the current `slice::sort_unstable` will switch from quicksort recursion to heapsort is difficult to predict, because of the pattern breaker and ineffective partition counter interplay, it still enforces a recursion depth limit. Jon L. Bentley and M. Douglas Mcilroy introduce the shorter side recursion idea to counteract the worst case behavior of repeated ineffective partitioning. In essence this change makes no sense given the heapsort fallback.
 
 ### ipnsort
 
@@ -119,7 +119,7 @@ Result: (rip)grepping the source code for "arch" yields no relevant match.
 
 ### Generic
 
-The ipnsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort_unstable`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The fact that the performance characteristics and the order in which comparison operators are called for `u64` vs `Cell<u64>` are noticeably different is novel, and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
+The ipnsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort_unstable`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The performance characteristics and the order in which comparison operators are called are noticeably different for `u64` vs `Cell<u64>`. This is novel and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
 
 Result: The interface remains the same.
 
@@ -127,7 +127,7 @@ Result: The interface remains the same.
 
 > Guaranteed O(N * log(N)) worst case comparisons.
 
-The same structure as the one found in [introsort](https://en.wikipedia.org/wiki/Introsort) is used by ipnsort to avoid the well-known O(N^2) worst-case of Quicksort. Once a recursion depth of 2 * log2(N) is reached, it switches to heapsort.
+The same structure as the one found in [introsort](https://en.wikipedia.org/wiki/Introsort) is used by ipnsort to avoid the well-known O(N^2) worst-case of quicksort. Once a recursion depth of 2 * log2(N) is reached, it switches to heapsort.
 
 > Guaranteed O(N) comparisons for fully ascending and descending inputs.
 
@@ -135,7 +135,7 @@ The already-sorted detection component will detect fully ascending and descendin
 
 > Smooth run-time scaling with input length.
 
-This point will be explored in more detail in the benchmark section, on some platforms there is a significant drop in throughput at the transition point from insertion sort to hybrid Merge-Quicksort due to implementation-specific and hardware-dependent effects. But in terms of comparisons the scaling is generally speaking smooth.
+This point will be explored in more detail in the benchmark section, on some platforms there is a significant drop in throughput at the transition point from insertion sort to hybrid merge-quicksort due to implementation-specific and hardware-dependent effects. But in terms of comparisons the scaling is generally speaking smooth.
 
 Plotting mean comparisons performed divided by N - 1 yields:
 
@@ -233,7 +233,7 @@ Observations:
 
 - The curve shapes are similar.
 - Both implementations regress throughput between length 17 and 24. This can be explained by them using an insertion sort for inputs length <= 20.
-- ipnsort is faster across all tested input length, including length <= 20. This effect has to do with i-cache misses. ipnsort tries to inline the small-input insertion sort and nothing else, outlining the core Quicksort loop. In contrast std_unstable has to load significantly more code to reach the small-sort inside the Quicksort loop, also incurring more branch misprediction along the way.
+- ipnsort is faster across all tested input length, including length <= 20. This effect has to do with i-cache misses. ipnsort tries to inline the small-input insertion sort and nothing else, outlining the core quicksort loop. In contrast std_unstable has to load significantly more code to reach the small-sort inside the quicksort loop, also incurring more branch misprediction along the way.
 - Both implementations reach peak throughput for inputs that fit inside the 512kB L2 d-cache. This effect is counteracted by the increased workload because of O(N x log(N)) algorithmic scaling as well as the increasingly dominant effect of main memory bandwidth.
 - ipnsort can leverage the significantly higher L1 and L2 d-cache bandwidth to a much higher degree than std_unstable. This is primarily enabled by fewer branch mis-predictions in the small-sort. Allowing it to exploit the instruction-level parallelism (ILP) capabilities of the micro-architecture to a greater degree.
 
