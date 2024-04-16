@@ -1,9 +1,7 @@
 # driftsort: an efficient, generic and robust stable sort implementation.
 
-# Work in progress please do not publish!
-
 Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp  
-Date: TODO (YYYY-MM-DD)
+Date: 2024-04-16 (YYYY-MM-DD)
 
 This document explains and verifies the design goals for an efficient, generic and robust stable sort implementation called driftsort by Orson Peters and Lukas Bergdoll ([source code](https://github.com/Voultapher/driftsort)).
 

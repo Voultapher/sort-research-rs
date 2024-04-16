@@ -1,9 +1,7 @@
 # ipnsort: an efficient, generic and robust unstable sort implementation.
 
-# Work in progress please do not publish!
-
 Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp  
-Date: TODO (YYYY-MM-DD)
+Date: 2024-04-16 (YYYY-MM-DD)
 
 This document explains and verifies the design goals for an efficient, generic and robust unstable sort implementation called ipnsort by Lukas Bergdoll and Orson Peters ([source code](https://github.com/Voultapher/sort-research-rs/tree/ipnsort-writeup/ipnsort)).
 
@@ -63,7 +61,6 @@ To better understand ipnsort, we start with a component level overview of pdqsor
 - **Ancestor pivot tracking**: Common element filtering allowing for O(N * log(K)) total comparisons where K is the number of distinct elements. Also great for Zipfian distributions.
 - **Partition**: Hoare partition with branchless block offset computation and cyclic permutation element swapping derived from [BlockQuicksort](https://arxiv.org/pdf/1604.06697.pdf) by Stefan Edelkamp and Armin Weiß.
 - **Equal partition**: Branchy Hoare partition for filtering out common elements.
-- **Pattern breaker**: Xorshift RNG element shuffling to avoid fallback.
 - **Heapsort**: Branchy Heapsort fallback triggered by excess number of ineffective partitions.
 
 ### Current `slice::sort_unstable`
@@ -72,6 +69,7 @@ The current `slice::sort_unstable` does some minor changes to pdqsort:
 
 - **Partial insertion sort**: Is changed to allow fully ascending and descending inputs to be sorted with only N comparisons, instead of N*2 like in pdqsort. However in doing so it creates a worst case with significantly more comparisons for append + sort use cases. More on that later.
 - **Quicksort**: Instead of always recursing into the left side, it recurses into the shorter side. This idea was first introduced in the 1993 paper [Engineering a Sort Function](https://cs.fit.edu/~pkc/classes/writing/samples/bentley93engineering.pdf) by Jon L. Bentley and M. Douglas Mcilroy. While predicting the exact point when the current `slice::sort_unstable` will switch from quicksort recursion to heapsort is difficult to predict, because of the pattern breaker and ineffective partition counter interplay, it still enforces a recursion depth limit. Jon L. Bentley and M. Douglas Mcilroy introduce the shorter side recursion idea to counteract the worst case behavior of repeated ineffective partitioning. In essence this change makes no sense given the heapsort fallback.
+- **Pattern breaker**: Xorshift RNG element shuffling to avoid fallback. As long the implementation is deterministic, attackers can trigger the fallback and cause a kind of DOS attack. Deterministic shuffling doesn't help avoid this.
 
 ### ipnsort
 
@@ -246,11 +244,11 @@ Comparing the relative symmetric speedup across all measured input lengths and p
 Observations:
 
 - ipnsort improves performance across nearly all pattern and length combinations.
-- Despite using the exact same algorithm and nearly identical implementation, ipnsort is considerably faster for N <= 20. This can be explained by the carful inlining and i-cache aware implementation.
+- Despite using the exact same algorithm and nearly identical implementation, ipnsort is considerably faster for N <= 20. This can be explained by the careful inlining and i-cache aware implementation.
 - random shows the largest relative improvement. This can be explained by the run-time percentage that is spend in the small-sort. As described [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/lomcyc_partition/text.md) in more detail, the new partition implementation contributes a ~1.2x overall improvement for `u64` on Zen 3. While the small-sort is ~2-3x times faster.
 - The run-time improvement diminishes with increasing input length, as main memory bandwidth becomes increasingly the dominant factor, which is the same for all implementations.
 - random_z1 shows a similar curve shape to random, but with a lower overall improvement. This can be explained by the comparatively larger percentage of the run-time spend in the partition vs small-sort, compared to random.
-- For N > 20 and < 1e5, ascending and descending throughput is improved, thanks to a the changes to the already sorted detection.
+- For N > 20 and < 1e5, ascending and descending throughput is improved, thanks to the changes to the already sorted detection.
 - random_s95 for N > 20 and < ~200, sees a small to large regression in throughput. This can be explained by the changes to partial insertion sort, which has a hard limit of 5 elements. random_s95 at length 100 is 95 first elements already sorted and the last 5 elements unsorted. This is an ideal situation for the partial insertion sort. Once the the unsorted number of elements at the end exceeds the fixed limit, the throughput curve approaches the shape of random.
 - random_p5 for N > 1e4, shows a [~1.2x regression for partition](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/lomcyc_partition/text.md#lomuto_branchless_cyclic_opt-vs-hoare_block) in isolation. Yet in total the small-sort compensates this regression, together with the changes to already sorted detection.
 - ascending and descending show a large improvement. This is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use very similar code for run detection and reversing, yet it can result in significant differences depending on compiler version and other factors. The same improvement does not occur on Firestorm or for older rustc versions.
@@ -511,8 +509,8 @@ Result: ipnsort improves debug performance both in terms of wall clock and total
 
 Lukas: A sort implementation is a bit like a battery. It's relatively easy to be good in one specific property, but being good in most aspects and bad in none is *a lot* harder. The work on ipnsort consumed more than a thousand hours of my personal time in 2022 and 2023, I'm happy to have achieved my ambitious goals and even managed to innovate some aspects.
 
-Orson: TODO
+Orson: Sorting has always caught my interest, but was always a solo endeavor. After talking to Lukas a year and a half ago we decided to join forces and create the best possible sorting algorithms for Rust together. We have argued about many things, explored many options and ultimately created something we can both be proud of, better than if we had done it individually.
 
 ## Acknowledgements
 
-None of this would have been possible without the work of all those that came before me. I stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, Igor van den Hoven and many others have been invaluable in building ipnsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements. Roland Bock as reviewer for the technical writing helped us communicate our work.
+None of this would have been possible without the work of all those that came before me. We stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, Igor van den Hoven and many others have been invaluable in building ipnsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements. Roland Bock as reviewer for the technical writing helped us communicate our work.
