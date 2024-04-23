@@ -155,6 +155,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "rust_tinysort")]
     bench_inst!(unstable::rust_tinysort);
 
+    #[cfg(feature = "rust_introsort")]
+    bench_inst!(unstable::rust_introsort);
+
     #[cfg(feature = "cpp_pdqsort")]
     bench_inst!(unstable::cpp_pdqsort);
 
