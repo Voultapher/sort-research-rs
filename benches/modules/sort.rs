@@ -140,6 +140,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "rust_tinysort")]
     bench_inst!(stable::rust_tinysort);
 
+    #[cfg(feature = "rust_grailsort")]
+    bench_inst!(stable::rust_grailsort);
+
     // --- Unstable sorts ---
 
     bench_inst!(unstable::rust_ipnsort);

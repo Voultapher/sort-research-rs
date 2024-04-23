@@ -12,6 +12,9 @@ pub mod rust_driftsort;
 #[cfg(feature = "rust_tinysort")]
 pub mod rust_tinysort;
 
+#[cfg(feature = "rust_grailsort")]
+pub mod rust_grailsort;
+
 // Call stdlib std::sort_stable sort via FFI.
 #[cfg(feature = "cpp_std_sys")]
 pub mod cpp_std_sys;

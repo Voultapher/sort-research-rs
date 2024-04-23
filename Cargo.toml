@@ -99,6 +99,7 @@ default = [
     # "rust_crumsort_rs",
     # "rust_tinysort",
     # "rust_introsort",
+    # "rust_grailsort",
 ]
 
 # Enable support for C++ std::sort and std::sort_stable.
@@ -197,6 +198,11 @@ rust_tinysort = ["tiny_sort"]
 # Enable introsort implemented in Rust by Viktor Dahl here https://github.com/veddan/rust-introsort
 rust_introsort = ["introsort"]
 
+# Enable grailsort implemented in Rust
+# https://github.com/HolyGrailSortProject/Rewritten-Grailsort/blob/master/Rust/src/grailsort.rs
+# Version: 6cb3174
+# Beware, this impl is quite buggy and doesn't even pass basic sort tests.
+rust_grailsort = []
 
 # Enable the sort evolution code.
 # Demonstrates various stages and optimizations of stable and unstable sorts.
