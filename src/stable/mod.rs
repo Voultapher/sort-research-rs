@@ -35,6 +35,10 @@ pub mod cpp_powersort;
 #[cfg(feature = "cpp_powersort")]
 pub mod cpp_powersort_4way;
 
+// Call wikisort via FFI.
+#[cfg(feature = "cpp_wikisort")]
+pub mod cpp_wikisort;
+
 // Call fluxsort sort via FFI.
 // Note, this sort is only stable if the the supplied comparison returns less, equal and more.
 #[cfg(feature = "c_fluxsort")]

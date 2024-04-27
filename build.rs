@@ -245,6 +245,22 @@ fn build_and_link_cpp_nanosort() {
 #[cfg(not(feature = "cpp_nanosort"))]
 fn build_and_link_cpp_nanosort() {}
 
+#[cfg(feature = "cpp_wikisort")]
+fn build_and_link_cpp_wikisort() {
+    build_and_link_cpp_sort(
+        "cpp_wikisort",
+        Some(|builder: &mut cc::Build| {
+            // clang yields better code-gen for random patterns, gcc for partially sorted ones.
+            builder.compiler(CLANG_PATH);
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "cpp_wikisort"))]
+fn build_and_link_cpp_wikisort() {}
+
 #[cfg(feature = "c_std_sys")]
 fn build_and_link_c_std_sys() {
     build_and_link_cpp_sort("c_std_sys", None);
@@ -357,6 +373,7 @@ fn main() {
     build_and_link_cpp_blockquicksort();
     build_and_link_cpp_gerbens_qsort();
     build_and_link_cpp_nanosort();
+    build_and_link_cpp_wikisort();
     build_and_link_c_std_sys();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();

@@ -86,6 +86,7 @@ default = [
     # "cpp_blockquicksort",
     # "cpp_gerbens_qsort",
     # "cpp_nanosort",
+    # "cpp_wikisort",
     # "c_std_sys",
     # "c_crumsort",
     # "c_fluxsort",
@@ -150,6 +151,10 @@ cpp_gerbens_qsort = []
 # Enable Arseny Kapoulkine's nanosort https://github.com/zeux/nanosort
 # Uses system C++ standard lib.
 cpp_nanosort = []
+
+# Enable Mike McFadden's WikiSort https://github.com/BonzaiThePenguin/WikiSort
+# Uses system C++ standard lib.
+cpp_wikisort = []
 
 # Enable support for C qsort.
 # Uses system C standard lib.

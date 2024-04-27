@@ -122,6 +122,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "cpp_powersort")]
     bench_inst!(stable::cpp_powersort_4way);
 
+    #[cfg(feature = "cpp_wikisort")]
+    bench_inst!(stable::cpp_wikisort);
+
     #[cfg(feature = "c_fluxsort")]
     bench_inst!(stable::c_fluxsort);
 
