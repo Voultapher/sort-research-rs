@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "afsort"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55ca087a33b5a5203e8f47ce92913b1abefa74023873b6080533c4fa7a2ddb4d"
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -591,6 +597,7 @@ dependencies = [
 name = "sort_research_rs"
 version = "0.1.0"
 dependencies = [
+ "afsort",
  "cc",
  "core_affinity",
  "criterion",

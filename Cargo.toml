@@ -26,6 +26,7 @@ glidesort = { version = "0.1.2", features = ["unstable"], optional = true }
 crumsort = { version = "0.1", optional = true }
 tiny_sort = { version = "1.0", optional = true }
 introsort = { version = "0.6", default-features = false, optional = true }
+afsort = { version = "0.3", default-features = false, optional = true }
 sort_test_tools = { path = "sort_test_tools", default-features = false }
 ipnsort = { path = "ipnsort", default-features = false }
 # driftsort = { path = "../driftsort", optional = true }
@@ -101,6 +102,7 @@ default = [
     # "rust_tinysort",
     # "rust_introsort",
     # "rust_grailsort",
+    # "rust_afsort",
 ]
 
 # Enable support for C++ std::sort and std::sort_stable.
@@ -202,6 +204,10 @@ rust_tinysort = ["tiny_sort"]
 
 # Enable introsort implemented in Rust by Viktor Dahl here https://github.com/veddan/rust-introsort
 rust_introsort = ["introsort"]
+
+# Enable american flag sort implemented in Rust by Anton Hägerstrand here
+# https://github.com/antonha/afsort
+rust_afsort = ["afsort"]
 
 # Enable grailsort implemented in Rust
 # https://github.com/HolyGrailSortProject/Rewritten-Grailsort/blob/master/Rust/src/grailsort.rs

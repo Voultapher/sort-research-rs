@@ -1,6 +1,9 @@
 #[cfg(feature = "rust_radsort")]
 pub mod rust_radsort;
 
+#[cfg(feature = "rust_afsort")]
+pub mod rust_afsort;
+
 // Call simdsort sort via FFI.
 #[cfg(feature = "cpp_simdsort")]
 pub mod cpp_simdsort;

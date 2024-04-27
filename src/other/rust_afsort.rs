@@ -1,25 +1,30 @@
 use std::cmp::Ordering;
 
-sort_impl!("rust_radsort_radix");
+use afsort::AFSortable;
 
-trait RadSort: Sized {
+sort_impl!("rust_afsort_radix");
+
+trait AFSort: Sized {
     fn sort(data: &mut [Self]);
 }
 
-impl<T> RadSort for T {
+impl<T> AFSort for T {
     default fn sort(_data: &mut [Self]) {
         panic!("Type not supported");
     }
 }
 
-impl<T: radsort::Key> RadSort for T {
+impl<T> AFSort for T
+where
+    [T]: AFSortable,
+{
     fn sort(data: &mut [Self]) {
-        radsort::sort(data);
+        data.af_sort_unstable();
     }
 }
 
 pub fn sort<T: Ord>(data: &mut [T]) {
-    RadSort::sort(data);
+    AFSort::sort(data);
 }
 
 pub fn sort_by<T, F: FnMut(&T, &T) -> Ordering>(_data: &mut [T], _compare: F) {

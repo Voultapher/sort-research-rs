@@ -202,6 +202,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "rust_radsort")]
     bench_inst!(other::rust_radsort);
 
+    #[cfg(feature = "rust_afsort")]
+    bench_inst!(other::rust_afsort);
+
     #[cfg(feature = "cpp_simdsort")]
     bench_inst!(other::cpp_simdsort);
 
