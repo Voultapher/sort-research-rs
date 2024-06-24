@@ -105,7 +105,6 @@ where
 /// 2. for every `i` in `2..runs.len()`: `runs[i - 2].len > runs[i - 1].len + runs[i].len`
 ///
 /// The invariants ensure that the total running time is *O*(*n* \* log(*n*)) worst-case.
-#[cfg(not(no_global_oom_handling))]
 fn merge_sort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -244,7 +243,6 @@ where
 /// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
 ///
 /// This is the integral subroutine of insertion sort.
-#[cfg(not(no_global_oom_handling))]
 fn insert_head<T, F>(v: &mut [T], is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -319,7 +317,6 @@ where
 ///
 /// The two slices must be non-empty and `mid` must be in bounds. Buffer `buf` must be long enough
 /// to hold a copy of the shorter slice. Also, `T` must not be a zero-sized type.
-#[cfg(not(no_global_oom_handling))]
 unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,

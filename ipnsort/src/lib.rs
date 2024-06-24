@@ -5,7 +5,6 @@
     auto_traits,
     negative_impls,
     specialization,
-    inline_const,
     core_intrinsics,
     sized_type_properties,
     const_mut_refs

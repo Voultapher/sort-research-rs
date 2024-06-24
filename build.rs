@@ -322,6 +322,7 @@ fn build_and_link_cpp_std_libcxx() {
             builder
                 .define("STD_LIB_LIBCXX", None)
                 .compiler(CLANG_PATH)
+                .flag("-march=native")
                 .cpp_set_stdlib("c++"); // Use libcxx
 
             Some("cpp_std_sort_libcxx".into())
