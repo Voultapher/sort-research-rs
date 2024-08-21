@@ -106,21 +106,12 @@ fn test_impl<T: Ord + Clone + Debug, S: Sort>(pattern_fn: impl Fn(usize) -> Vec<
 fn test_impl_custom(mut test_fn: impl FnMut(usize, fn(usize) -> Vec<i32>)) {
     let test_pattern_fns: Vec<fn(usize) -> Vec<i32>> = vec![
         patterns::random,
-        |size| patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32) as i32),
-        |size| patterns::random_uniform(size, 0..=1 as i32),
-        // |size| {
-        //     let (len_95p, len_5p) = split_len(size, 95.0);
-        //     let v: Vec<i32> = std::iter::repeat(0)
-        //         .take(len_95p)
-        //         .chain(patterns::random(len_5p))
-        //         .collect();
-
-        //     shuffle_vec(v)
-        // },
+        |len| patterns::random_uniform(len, 0..=(((len as f64).log2().round()) as i32) as i32),
+        |len| patterns::random_uniform(len, 0..=1 as i32),
         patterns::ascending,
         patterns::descending,
-        |size| patterns::saw_mixed(size, ((size as f64).log2().round()) as usize),
-        |size| patterns::saw_mixed(size, (size as f64 / 22.0).round() as usize),
+        |len| patterns::saw_mixed(len, ((len as f64).log2().round()) as usize),
+        |len| patterns::random_zipf(len, 1.0),
     ];
 
     for test_pattern_fn in test_pattern_fns {
@@ -206,8 +197,8 @@ pub fn random<S: Sort>() {
 }
 
 pub fn random_type_u64<S: Sort>() {
-    test_impl::<u64, S>(|size| {
-        patterns::random(size)
+    test_impl::<u64, S>(|len| {
+        patterns::random(len)
             .iter()
             .map(|val| -> u64 {
                 // Extends the value into the 64 bit range,
@@ -220,8 +211,8 @@ pub fn random_type_u64<S: Sort>() {
 }
 
 pub fn random_type_u128<S: Sort>() {
-    test_impl::<u128, S>(|size| {
-        patterns::random(size)
+    test_impl::<u128, S>(|len| {
+        patterns::random(len)
             .iter()
             .map(|val| -> u128 {
                 // Extends the value into the 128 bit range,
@@ -234,8 +225,8 @@ pub fn random_type_u128<S: Sort>() {
 }
 
 pub fn random_cell_i32<S: Sort>() {
-    test_impl::<Cell<i32>, S>(|size| {
-        patterns::random(size)
+    test_impl::<Cell<i32>, S>(|len| {
+        patterns::random(len)
             .into_iter()
             .map(|val| Cell::new(val))
             .collect()
@@ -243,9 +234,9 @@ pub fn random_cell_i32<S: Sort>() {
 }
 
 pub fn random_d4<S: Sort>() {
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_uniform(size, 0..4)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_uniform(len, 0..4)
         } else {
             Vec::new()
         }
@@ -253,9 +244,9 @@ pub fn random_d4<S: Sort>() {
 }
 
 pub fn random_d8<S: Sort>() {
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_uniform(size, 0..8)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_uniform(len, 0..8)
         } else {
             Vec::new()
         }
@@ -263,9 +254,9 @@ pub fn random_d8<S: Sort>() {
 }
 
 pub fn random_d16<S: Sort>() {
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_uniform(size, 0..16)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_uniform(len, 0..16)
         } else {
             Vec::new()
         }
@@ -273,9 +264,9 @@ pub fn random_d16<S: Sort>() {
 }
 
 pub fn random_d256<S: Sort>() {
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_uniform(size, 0..256)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_uniform(len, 0..256)
         } else {
             Vec::new()
         }
@@ -283,9 +274,9 @@ pub fn random_d256<S: Sort>() {
 }
 
 pub fn random_d1024<S: Sort>() {
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_uniform(size, 0..1024)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_uniform(len, 0..1024)
         } else {
             Vec::new()
         }
@@ -293,10 +284,9 @@ pub fn random_d1024<S: Sort>() {
 }
 
 pub fn random_z1<S: Sort>() {
-    // Great for debugging.
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_zipf(size, 1.0)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_zipf(len, 1.0)
         } else {
             Vec::new()
         }
@@ -304,10 +294,9 @@ pub fn random_z1<S: Sort>() {
 }
 
 pub fn random_z1_03<S: Sort>() {
-    // Great for debugging.
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_zipf(size, 1.03)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_zipf(len, 1.03)
         } else {
             Vec::new()
         }
@@ -315,10 +304,9 @@ pub fn random_z1_03<S: Sort>() {
 }
 
 pub fn random_z2<S: Sort>() {
-    // Great for debugging.
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_zipf(size, 2.0)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_zipf(len, 2.0)
         } else {
             Vec::new()
         }
@@ -326,10 +314,9 @@ pub fn random_z2<S: Sort>() {
 }
 
 pub fn random_s50<S: Sort>() {
-    // Great for debugging.
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_sorted(size, 50.0)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_sorted(len, 50.0)
         } else {
             Vec::new()
         }
@@ -337,10 +324,9 @@ pub fn random_s50<S: Sort>() {
 }
 
 pub fn random_s95<S: Sort>() {
-    // Great for debugging.
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_sorted(size, 95.0)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_sorted(len, 95.0)
         } else {
             Vec::new()
         }
@@ -349,9 +335,9 @@ pub fn random_s95<S: Sort>() {
 
 pub fn random_narrow<S: Sort>() {
     // Great for debugging.
-    test_impl::<i32, S>(|size| {
-        if size > 3 {
-            patterns::random_uniform(size, 0..=(((size as f64).log2().round()) as i32) * 100)
+    test_impl::<i32, S>(|len| {
+        if len > 3 {
+            patterns::random_uniform(len, 0..=(((len as f64).log2().round()) as i32) * 100)
         } else {
             Vec::new()
         }
@@ -359,7 +345,7 @@ pub fn random_narrow<S: Sort>() {
 }
 
 pub fn random_binary<S: Sort>() {
-    test_impl::<i32, S>(|size| patterns::random_uniform(size, 0..=1 as i32));
+    test_impl::<i32, S>(|len| patterns::random_uniform(len, 0..=1 as i32));
 }
 
 pub fn all_equal<S: Sort>() {
@@ -572,7 +558,7 @@ pub fn random_str<S: Sort>() {
 pub fn random_large_val<S: Sort>() {
     test_impl::<FFIOneKibiByte, S>(|test_len| {
         if test_len == TEST_SIZES[TEST_SIZES.len() - 1] {
-            // That takes too long skip.
+            // That takes too long, skip.
             return vec![];
         }
 
@@ -893,7 +879,7 @@ pub fn panic_retain_original_set_impl<S: Sort, T: Ord + Clone>(
         let res = panic::catch_unwind(AssertUnwindSafe(|| {
             <S as Sort>::sort_by(&mut test_data, |a, b| {
                 if comp_counter == panic_threshold {
-                    // Make the panic dependent on the test size and some random factor. We want to
+                    // Make the panic dependent on the test len and some random factor. We want to
                     // make sure that panicking may also happen when comparing elements a second
                     // time.
                     panic!();
@@ -984,7 +970,7 @@ fn panic_observable_is_less_impl<S: Sort, T: Ord + Clone>(
         let res = panic::catch_unwind(AssertUnwindSafe(|| {
             <S as Sort>::sort_by(&mut test_input, |a, b| {
                 if comp_count_global == panic_threshold {
-                    // Make the panic dependent on the test size and some random factor. We want to
+                    // Make the panic dependent on the test len and some random factor. We want to
                     // make sure that panicking may also happen when comparing elements a second
                     // time.
                     panic!();
@@ -1139,7 +1125,7 @@ fn violate_ord_retain_original_set_impl<S: Sort, T: Ord>(
     // B) < is transitive: a < b and b < c implies a < c. The same must hold for both == and >.
 
     // Make sure we get a good distribution of random orderings, that are repeatable with the seed.
-    // Just using random_uniform with the same size and range will always yield the same value.
+    // Just using random_uniform with the same len and range will always yield the same value.
     let random_orderings = patterns::random_uniform(5_000, 0..2);
 
     let get_random_0_1_or_2 = |random_idx: &mut usize| {
