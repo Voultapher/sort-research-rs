@@ -394,13 +394,13 @@ fn criterion_benchmark(c: &mut Criterion) {
 
             impl PartialOrd for ValWithMutex {
                 fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                    self.val.partial_cmp(&other.val)
+                    Some(self.cmp(other))
                 }
             }
 
             impl Ord for ValWithMutex {
                 fn cmp(&self, other: &Self) -> Ordering {
-                    self.partial_cmp(other).unwrap()
+                    self.val.cmp(&other.val)
                 }
             }
 

@@ -161,13 +161,13 @@ impl DynTrait for DynValB {
 
 impl PartialOrd for dyn DynTrait {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.get_val().partial_cmp(&other.get_val())
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for dyn DynTrait {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        self.get_val().cmp(&other.get_val())
     }
 }
 

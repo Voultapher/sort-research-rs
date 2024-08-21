@@ -65,17 +65,14 @@ impl Eq for FFIString {}
 
 impl PartialOrd for FFIString {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // SAFETY: See `as_str_unchecked`.
-        unsafe {
-            self.as_str_unchecked()
-                .partial_cmp(other.as_str_unchecked())
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for FFIString {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        // SAFETY: See `as_str_unchecked`.
+        unsafe { self.as_str_unchecked().cmp(other.as_str_unchecked()) }
     }
 }
 
@@ -127,13 +124,13 @@ impl FFIOneKibiByte {
 
 impl PartialOrd for FFIOneKibiByte {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.as_i64().partial_cmp(&other.as_i64())
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for FFIOneKibiByte {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        self.as_i64().cmp(&other.as_i64())
     }
 }
 
@@ -162,24 +159,22 @@ impl F128 {
 // This is kind of hacky, but we know we only have normal comparable floats in there.
 impl Eq for F128 {}
 
+impl PartialOrd for F128 {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 // Goal is similar code-gen between Rust and C++
 // - Rust https://godbolt.org/z/3YM3xenPP
 // - C++ https://godbolt.org/z/178M6j1zz
-impl PartialOrd for F128 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+impl Ord for F128 {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // Simulate expensive comparison function.
         let this_div = self.x / self.y;
         let other_div = other.x / other.y;
 
         // SAFETY: We checked in the ctor that both are normal.
-        let cmp_result = unsafe { this_div.partial_cmp(&other_div).unwrap_unchecked() };
-
-        Some(cmp_result)
-    }
-}
-
-impl Ord for F128 {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        unsafe { this_div.partial_cmp(&other_div).unwrap_unchecked() }
     }
 }
