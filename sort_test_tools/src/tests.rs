@@ -53,36 +53,35 @@ fn sort_comp<T: Ord + Clone + Debug, S: Sort>(v: &mut [T]) {
     let seed = get_or_init_random_seed::<S>();
 
     let is_small_test = v.len() <= 100;
-    let original_clone = v.to_vec();
+    let v_orig = v.to_vec();
 
-    let mut stdlib_sorted_vec = v.to_vec();
-    let stdlib_sorted = stdlib_sorted_vec.as_mut_slice();
-    stdlib_sorted.sort();
+    <S as Sort>::sort(v);
 
-    let testsort_sorted = v;
-    <S as Sort>::sort(testsort_sorted);
+    assert_eq!(v.len(), v_orig.len());
 
-    assert_eq!(stdlib_sorted.len(), testsort_sorted.len());
+    for window in v.windows(2) {
+        if window[0] > window[1] {
+            let mut stdlib_sorted_vec = v_orig.clone();
+            let stdlib_sorted = stdlib_sorted_vec.as_mut_slice();
+            stdlib_sorted.sort();
 
-    for (a, b) in stdlib_sorted.iter().zip(testsort_sorted.iter()) {
-        if a != b {
             if is_small_test {
-                eprintln!("Orginal:  {:?}", original_clone);
+                eprintln!("Orginal:  {:?}", v_orig);
                 eprintln!("Expected: {:?}", stdlib_sorted);
-                eprintln!("Got:      {:?}", testsort_sorted);
+                eprintln!("Got:      {:?}", v);
             } else {
                 if env::var("WRITE_LARGE_FAILURE").is_ok() {
                     // Large arrays output them as files.
                     let original_name = format!("original_{}.txt", seed);
                     let std_name = format!("stdlib_sorted_{}.txt", seed);
-                    let flux_name = format!("testsort_sorted_{}.txt", seed);
+                    let testsort_name = format!("testsort_sorted_{}.txt", seed);
 
-                    fs::write(&original_name, format!("{:?}", original_clone)).unwrap();
+                    fs::write(&original_name, format!("{:?}", v_orig)).unwrap();
                     fs::write(&std_name, format!("{:?}", stdlib_sorted)).unwrap();
-                    fs::write(&flux_name, format!("{:?}", testsort_sorted)).unwrap();
+                    fs::write(&testsort_name, format!("{:?}", v)).unwrap();
 
                     eprintln!(
-                        "Failed comparison, see files {original_name}, {std_name}, and {flux_name}"
+                        "Failed comparison, see files {original_name}, {std_name}, and {testsort_name}"
                     );
                 } else {
                     eprintln!(
