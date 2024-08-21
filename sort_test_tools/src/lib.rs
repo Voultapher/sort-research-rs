@@ -1,4 +1,4 @@
-#![feature(vec_into_raw_parts)]
+#![feature(vec_into_raw_parts, macro_metavar_expr_concat)]
 
 pub trait Sort {
     fn name() -> String;
