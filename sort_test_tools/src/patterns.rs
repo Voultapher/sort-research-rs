@@ -371,18 +371,18 @@ impl KeyedVecCache {
         let key_hash = hasher.finish();
 
         {
-            let mut keyed_caches_lock = self.keyed_caches.lock().unwrap();
-            let v_cached = keyed_caches_lock
-                .get_or_insert_with(Default::default)
-                .entry(key_hash)
-                .or_insert_with(Default::default);
+            let keyed_caches_lock = self.keyed_caches.lock().unwrap();
 
-            if v_cached.len() >= len {
-                // Cheap clone to return control to other threads as fast as possible.
-                let v_cached_arc_clone = v_cached.clone();
-                drop(keyed_caches_lock);
+            if let Some(keyed_caches) = keyed_caches_lock.as_ref() {
+                if let Some(v_cached) = keyed_caches.get(&key_hash) {
+                    if v_cached.len() >= len {
+                        // Cheap clone to return control to other threads as fast as possible.
+                        let v_cached_arc_clone = v_cached.clone();
+                        drop(keyed_caches_lock);
 
-                return v_cached_arc_clone[..len].to_vec();
+                        return v_cached_arc_clone[..len].to_vec();
+                    }
+                }
             }
 
             // Because it's a shared lock drop the lock now and re-acquire later, this might race
@@ -395,10 +395,9 @@ impl KeyedVecCache {
         {
             let mut keyed_caches_lock = self.keyed_caches.lock().unwrap();
             let v_cached = keyed_caches_lock
-                .as_mut()
-                .unwrap()
-                .get_mut(&key_hash)
-                .unwrap();
+                .get_or_insert_with(Default::default)
+                .entry(key_hash)
+                .or_insert_with(Default::default);
 
             // Only insert the generated value if no better value was inserted in the meantime by
             // another thread.
