@@ -317,7 +317,8 @@ impl VecCache {
         }
 
         // With a fixed seed, rand will produce the same values in sequence, and lock + memcpy
-        // is faster than re-generating them, so we cache previous requests.
+        // is faster than re-generating them, so we cache previous requests. This is mainly true
+        // for debug builds, release and miri see little benefit.
 
         let mut v_cached_lock = self.cache.lock().unwrap();
         let v_cached = v_cached_lock.get_or_insert_with(Default::default);
@@ -361,7 +362,7 @@ impl KeyedVecCache {
         let (seed_type, seed_value) = get_or_init_seed_type_and_value();
 
         // Do this early to avoid penalizing the benchmark use-case.
-        if false || seed_type == SeedType::RandomEachTime {
+        if seed_type == SeedType::RandomEachTime {
             return gen_fn(len, seed_value, key);
         }
 
