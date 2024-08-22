@@ -1087,7 +1087,7 @@ gen_sort_test_fns_with_default_patterns_3_ty!(
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! instantiate_sort_test_impl_inner {
+macro_rules! instantiate_sort_test_inner {
     ($sort_impl:ty, miri_yes, $test_fn_name:ident) => {
         #[test]
         fn $test_fn_name() {
@@ -1096,25 +1096,10 @@ macro_rules! instantiate_sort_test_impl_inner {
     };
     ($sort_impl:ty, miri_no, $test_fn_name:ident) => {
         #[test]
-        #[cfg(not(miri))]
+        #[cfg_attr(miri, ignore)]
         fn $test_fn_name() {
             sort_test_tools::tests::$test_fn_name::<$sort_impl>();
         }
-
-        #[test]
-        #[cfg(miri)]
-        #[ignore]
-        fn $test_fn_name() {}
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! instantiate_sort_test_impl {
-    ($sort_impl:ty, $([$miri_use:ident, $test_fn_name:ident]),*) => {
-        $(
-            sort_test_tools::instantiate_sort_test_impl_inner!($sort_impl, $miri_use, $test_fn_name);
-        )*
     };
 }
 
@@ -1128,10 +1113,13 @@ macro_rules! define_instantiate_sort_tests {
         #[macro_export]
         macro_rules! instantiate_sort_tests_gen {
             ($sort_impl:ty) => {
-                sort_test_tools::instantiate_sort_test_impl!(
-                    $sort_impl,
-                    $([$miri_use, $test_fn_name]),*
-                );
+                $(
+                    sort_test_tools::instantiate_sort_test_inner!(
+                        $sort_impl,
+                        $miri_use,
+                        $test_fn_name
+                    );
+                )*
             }
         }
     };
