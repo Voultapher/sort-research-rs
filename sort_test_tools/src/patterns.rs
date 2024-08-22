@@ -1,12 +1,10 @@
 use std::env;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use rand::prelude::*;
 
 use zipf::ZipfDistribution;
-
-use once_cell::sync::OnceCell;
 
 /// Provides a set of patterns useful for testing and benchmarking sorting algorithms.
 /// Currently limited to i32 values.
@@ -212,35 +210,54 @@ pub fn pipe_organ(size: usize) -> Vec<i32> {
     vals
 }
 
-static USE_FIXED_SEED: AtomicBool = AtomicBool::new(true);
+/// Overwrites the default behavior so that each call to a random derived pattern yields new random
+/// values.
+///
+/// By default `patterns::random(4)` will yield the same values per process invocation.
+/// For benchmarks it's advised to use call this function.
+pub fn use_random_seed_each_time() {
+    let (seed_type, _) = get_or_init_seed_type_and_value();
+    if seed_type == SeedType::ExternalOverride {
+        panic!("Using use_random_seed_each_time conflicts with the external seed override.");
+    }
 
-pub fn disable_fixed_seed() {
-    USE_FIXED_SEED.store(false, Ordering::Release);
+    *SEED_TYPE_AND_VALUE.lock().unwrap() = Some((SeedType::RandomEachTime, 0));
 }
 
 pub fn random_init_seed() -> u64 {
-    static OVERRIDE_SEED: OnceCell<Option<u64>> = OnceCell::new();
-
-    let override_seed = OVERRIDE_SEED.get_or_init(|| {
-        env::var("OVERRIDE_SEED")
-            .ok()
-            .map(|seed| u64::from_str(&seed).unwrap())
-    });
-
-    if let Some(seed) = override_seed {
-        return *seed;
-    }
-
-    // return 360013155987181959;
-    if USE_FIXED_SEED.load(Ordering::Acquire) {
-        static SEED: OnceCell<u64> = OnceCell::new();
-        *SEED.get_or_init(|| -> u64 { thread_rng().gen() })
-    } else {
-        thread_rng().gen()
-    }
+    get_or_init_seed_type_and_value().1
 }
 
 // --- Private ---
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum SeedType {
+    RandomEachTime,
+    RandomOncePerProcess,
+    ExternalOverride,
+}
+
+static SEED_TYPE_AND_VALUE: Mutex<Option<(SeedType, u64)>> = Mutex::new(None);
+
+fn get_or_init_seed_type_and_value() -> (SeedType, u64) {
+    let (seed_type, seed_val) = *SEED_TYPE_AND_VALUE.lock().unwrap().get_or_insert_with(|| {
+        if let Some(override_seed) = env::var("OVERRIDE_SEED")
+            .ok()
+            .map(|seed| u64::from_str(&seed).unwrap())
+        {
+            (SeedType::ExternalOverride, override_seed)
+        } else {
+            let per_process_seed = thread_rng().gen();
+            (SeedType::RandomOncePerProcess, per_process_seed)
+        }
+    });
+
+    if seed_type == SeedType::RandomEachTime {
+        (SeedType::RandomEachTime, thread_rng().gen())
+    } else {
+        (seed_type, seed_val)
+    }
+}
 
 fn new_seed() -> StdRng {
     // Random seed, but prints it for repeatability.

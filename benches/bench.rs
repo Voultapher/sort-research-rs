@@ -296,7 +296,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         22_367, 50_000, 100_000, 183_845, 400_000, 1_000_000, 2_000_000, 4_281_332, 10_000_000,
     ];
 
-    patterns::disable_fixed_seed();
+    patterns::use_random_seed_each_time();
     ensure_true_random();
 
     for test_len in test_sizes {
