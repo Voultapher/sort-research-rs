@@ -1,6 +1,9 @@
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::env;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use rand::prelude::*;
 
@@ -21,25 +24,33 @@ pub fn random(len: usize) -> Vec<i32> {
 
 pub fn random_uniform<R>(len: usize, range: R) -> Vec<i32>
 where
-    R: Into<rand::distributions::Uniform<i32>>,
+    R: Into<rand::distributions::Uniform<i32>> + Hash,
 {
     // :.:.:.::
-    let mut rng = rand::rngs::StdRng::from(new_seed());
 
-    // Abstracting over ranges in Rust :(
-    let dist: rand::distributions::Uniform<i32> = range.into();
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    (0..len).map(|_| dist.sample(&mut rng)).collect()
+    CACHE.copy_cached_or_gen(len, range, |len, seed, range| {
+        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
+
+        // Abstracting over ranges in Rust :(
+        let dist: rand::distributions::Uniform<i32> = range.into();
+        (0..len).map(|_| dist.sample(&mut rng)).collect()
+    })
 }
 
 pub fn random_zipf(len: usize, exponent: f64) -> Vec<i32> {
     // https://en.wikipedia.org/wiki/Zipf's_law
-    let mut rng = rand::rngs::StdRng::from(new_seed());
 
-    // Abstracting over ranges in Rust :(
-    let dist = ZipfDistribution::new(len, exponent).unwrap();
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    (0..len).map(|_| dist.sample(&mut rng) as i32).collect()
+    CACHE.copy_cached_or_gen(len, exponent.to_bits(), |len, seed, exponent_bits| {
+        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
+
+        // Abstracting over ranges in Rust :(
+        let dist = ZipfDistribution::new(len, f64::from_bits(exponent_bits)).unwrap();
+        (0..len).map(|_| dist.sample(&mut rng) as i32).collect()
+    })
 }
 
 pub fn random_sorted(len: usize, sorted_percent: f64) -> Vec<i32> {
@@ -52,23 +63,29 @@ pub fn random_sorted(len: usize, sorted_percent: f64) -> Vec<i32> {
     // sorted  |
     //     unsorted
 
-    // Simulate pre-existing sorted slice, where len - sorted_percent are the new unsorted values
-    // and part of the overall distribution.
-    let mut v = random_vec(len);
-    let sorted_len = ((len as f64) * (sorted_percent / 100.0)).round() as usize;
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    v[0..sorted_len].sort_unstable();
+    let spb = sorted_percent.to_bits();
+    CACHE.copy_cached_or_gen(len, spb, |len, _seed, spb| {
+        // Simulate pre-existing sorted slice, where len - sorted_percent are the new unsorted values
+        // and part of the overall distribution.
+        let sorted_percent = f64::from_bits(spb);
+        let mut v = random_vec(len);
+        let sorted_len = ((len as f64) * (sorted_percent / 100.0)).round() as usize;
 
-    v
+        v[0..sorted_len].sort_unstable();
+
+        v
+    })
 }
 
-pub fn random_random_size(max_size: usize) -> Vec<i32> {
+pub fn random_random_size(max_len: usize) -> Vec<i32> {
     //     .
     // : . : :
     // :.:::.::
-    // < len > is random from call to call, with max_size as maximum len.
+    // < len > is random from call to call, with max_len as maximum len.
 
-    let random_size = random_uniform(1, 0..=(max_size as i32));
+    let random_size = random_uniform(1, 0..=(max_len as i32));
     random(random_size[0] as usize)
 }
 
@@ -103,14 +120,18 @@ pub fn saw_ascending(len: usize, saw_count: usize) -> Vec<i32> {
         return Vec::new();
     }
 
-    let mut vals = random_vec(len);
-    let chunks_size = len / saw_count.max(1);
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    for chunk in vals.chunks_mut(chunks_size) {
-        chunk.sort_unstable();
-    }
+    CACHE.copy_cached_or_gen(len, saw_count, |len, _seed, saw_count| {
+        let mut vals = random_vec(len);
+        let chunks_size = len / saw_count.max(1);
 
-    vals
+        for chunk in vals.chunks_mut(chunks_size) {
+            chunk.sort_unstable();
+        }
+
+        vals
+    })
 }
 
 pub fn saw_descending(len: usize, saw_count: usize) -> Vec<i32> {
@@ -121,14 +142,18 @@ pub fn saw_descending(len: usize, saw_count: usize) -> Vec<i32> {
         return Vec::new();
     }
 
-    let mut vals = random_vec(len);
-    let chunks_size = len / saw_count.max(1);
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    for chunk in vals.chunks_mut(chunks_size) {
-        chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
-    }
+    CACHE.copy_cached_or_gen(len, saw_count, |len, _seed, saw_count| {
+        let mut vals = random_vec(len);
+        let chunks_size = len / saw_count.max(1);
 
-    vals
+        for chunk in vals.chunks_mut(chunks_size) {
+            chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
+        }
+
+        vals
+    })
 }
 
 pub fn saw_mixed(len: usize, saw_count: usize) -> Vec<i32> {
@@ -139,21 +164,25 @@ pub fn saw_mixed(len: usize, saw_count: usize) -> Vec<i32> {
         return Vec::new();
     }
 
-    let mut vals = random_vec(len);
-    let chunks_size = len / saw_count.max(1);
-    let saw_directions = random_uniform((len / chunks_size) + 1, 0..=1);
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    for (i, chunk) in vals.chunks_mut(chunks_size).enumerate() {
-        if saw_directions[i] == 0 {
-            chunk.sort_unstable();
-        } else if saw_directions[i] == 1 {
-            chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
-        } else {
-            unreachable!();
+    CACHE.copy_cached_or_gen(len, saw_count, |len, _seed, saw_count| {
+        let mut vals = random_vec(len);
+        let chunks_size = len / saw_count.max(1);
+        let saw_directions = random_uniform((len / chunks_size) + 1, 0..=1);
+
+        for (i, chunk) in vals.chunks_mut(chunks_size).enumerate() {
+            if saw_directions[i] == 0 {
+                chunk.sort_unstable();
+            } else if saw_directions[i] == 1 {
+                chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
+            } else {
+                unreachable!();
+            }
         }
-    }
 
-    vals
+        vals
+    })
 }
 
 pub fn saw_mixed_range(len: usize, range: std::ops::Range<usize>) -> Vec<i32> {
@@ -167,47 +196,55 @@ pub fn saw_mixed_range(len: usize, range: std::ops::Range<usize>) -> Vec<i32> {
         return Vec::new();
     }
 
-    let mut vals = random_vec(len);
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
 
-    let max_chunks = len / range.start;
-    let saw_directions = random_uniform(max_chunks + 1, 0..=1);
-    let chunk_sizes = random_uniform(max_chunks + 1, (range.start as i32)..(range.end as i32));
+    CACHE.copy_cached_or_gen(len, range, |len, _seed, range| {
+        let mut vals = random_vec(len);
 
-    let mut i = 0;
-    let mut l = 0;
-    while l < len {
-        let chunk_size = chunk_sizes[i] as usize;
-        let chunk_end = std::cmp::min(l + chunk_size, len);
-        let chunk = &mut vals[l..chunk_end];
+        let max_chunks = len / range.start;
+        let saw_directions = random_uniform(max_chunks + 1, 0..=1);
+        let chunk_sizes = random_uniform(max_chunks + 1, (range.start as i32)..(range.end as i32));
 
-        if saw_directions[i] == 0 {
-            chunk.sort_unstable();
-        } else if saw_directions[i] == 1 {
-            chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
-        } else {
-            unreachable!();
+        let mut i = 0;
+        let mut l = 0;
+        while l < len {
+            let chunk_size = chunk_sizes[i] as usize;
+            let chunk_end = std::cmp::min(l + chunk_size, len);
+            let chunk = &mut vals[l..chunk_end];
+
+            if saw_directions[i] == 0 {
+                chunk.sort_unstable();
+            } else if saw_directions[i] == 1 {
+                chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
+            } else {
+                unreachable!();
+            }
+
+            i += 1;
+            l += chunk_size;
         }
 
-        i += 1;
-        l += chunk_size;
-    }
-
-    vals
+        vals
+    })
 }
 
 pub fn pipe_organ(len: usize) -> Vec<i32> {
     //   .:.
     // .:::::.
 
-    let mut vals = random_vec(len);
+    static CACHE: VecCache = VecCache::new();
 
-    let first_half = &mut vals[0..(len / 2)];
-    first_half.sort_unstable();
+    CACHE.copy_cached_or_gen(len, |len, _seed| {
+        let mut vals = random_vec(len);
 
-    let second_half = &mut vals[(len / 2)..len];
-    second_half.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
+        let first_half = &mut vals[0..(len / 2)];
+        first_half.sort_unstable();
 
-    vals
+        let second_half = &mut vals[(len / 2)..len];
+        second_half.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
+
+        vals
+    })
 }
 
 /// Overwrites the default behavior so that each call to a random derived pattern yields new random
@@ -232,9 +269,9 @@ pub fn random_init_seed() -> u64 {
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum SeedType {
-    RandomEachTime,
     RandomOncePerProcess,
     ExternalOverride,
+    RandomEachTime,
 }
 
 static SEED_TYPE_AND_VALUE: Mutex<Option<(SeedType, u64)>> = Mutex::new(None);
@@ -259,13 +296,125 @@ fn get_or_init_seed_type_and_value() -> (SeedType, u64) {
     }
 }
 
-fn new_seed() -> StdRng {
-    // Random seed, but prints it for repeatability.
-    rand::SeedableRng::seed_from_u64(random_init_seed())
+struct VecCache {
+    cache: Mutex<Option<Arc<Vec<i32>>>>,
+}
+
+impl VecCache {
+    const fn new() -> Self {
+        Self {
+            cache: Mutex::new(None),
+        }
+    }
+
+    // Uses fn pointer to avoid accidental captures.
+    // Captured values need to be accounted for as part of the key, see KeyedVecCache.
+    fn copy_cached_or_gen(&self, len: usize, gen_fn: fn(usize, u64) -> Vec<i32>) -> Vec<i32> {
+        let (seed_type, seed_value) = get_or_init_seed_type_and_value();
+
+        if seed_type == SeedType::RandomEachTime {
+            return gen_fn(len, seed_value);
+        }
+
+        // With a fixed seed, rand will produce the same values in sequence, and lock + memcpy
+        // is faster than re-generating them, so we cache previous requests.
+
+        let mut v_cached_lock = self.cache.lock().unwrap();
+        let v_cached = v_cached_lock.get_or_insert_with(Default::default);
+
+        if v_cached.len() >= len {
+            // Cheap clone to return control to other threads as fast as possible.
+            let v_cached_clone = v_cached.clone();
+            drop(v_cached_lock);
+
+            return v_cached_clone[..len].to_vec();
+        }
+
+        // We hold the lock while generating the output, this works well when the amount of times
+        // other threads are stuck *and* would insert a larger len value is small.
+        let v_new = Arc::new(gen_fn(len, seed_value));
+        // Cheap clone to return control to other threads as fast as possible.
+        *v_cached = v_new.clone();
+        drop(v_cached_lock);
+
+        v_new.to_vec()
+    }
+}
+
+struct KeyedVecCache {
+    keyed_caches: Mutex<Option<HashMap<u64, Arc<Vec<i32>>>>>,
+}
+
+impl KeyedVecCache {
+    const fn new() -> Self {
+        Self {
+            keyed_caches: Mutex::new(None),
+        }
+    }
+
+    fn copy_cached_or_gen<K: Hash>(
+        &self,
+        len: usize,
+        key: K,
+        gen_fn: fn(usize, u64, K) -> Vec<i32>,
+    ) -> Vec<i32> {
+        let (seed_type, seed_value) = get_or_init_seed_type_and_value();
+
+        // Do this early to avoid penalizing the benchmark use-case.
+        if false || seed_type == SeedType::RandomEachTime {
+            return gen_fn(len, seed_value, key);
+        }
+
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let key_hash = hasher.finish();
+
+        {
+            let mut keyed_caches_lock = self.keyed_caches.lock().unwrap();
+            let v_cached = keyed_caches_lock
+                .get_or_insert_with(Default::default)
+                .entry(key_hash)
+                .or_insert_with(Default::default);
+
+            if v_cached.len() >= len {
+                // Cheap clone to return control to other threads as fast as possible.
+                let v_cached_arc_clone = v_cached.clone();
+                drop(keyed_caches_lock);
+
+                return v_cached_arc_clone[..len].to_vec();
+            }
+
+            // Because it's a shared lock drop the lock now and re-acquire later, this might race
+            // some work but that's ok.
+        }
+
+        let v_new = Arc::new(gen_fn(len, seed_value, key));
+        let v_new_clone = v_new.clone();
+
+        {
+            let mut keyed_caches_lock = self.keyed_caches.lock().unwrap();
+            let v_cached = keyed_caches_lock
+                .as_mut()
+                .unwrap()
+                .get_mut(&key_hash)
+                .unwrap();
+
+            // Only insert the generated value if no better value was inserted in the meantime by
+            // another thread.
+            if v_new_clone.len() > v_cached.len() {
+                *v_cached = v_new_clone;
+            }
+        }
+
+        v_new.to_vec()
+    }
 }
 
 fn random_vec(len: usize) -> Vec<i32> {
-    let mut rng = rand::rngs::StdRng::from(new_seed());
+    static CACHE: VecCache = VecCache::new();
 
-    (0..len).map(|_| rng.gen::<i32>()).collect()
+    CACHE.copy_cached_or_gen(len, |len, seed| {
+        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
+        (0..len).map(|_| rng.gen::<i32>()).collect()
+    })
 }

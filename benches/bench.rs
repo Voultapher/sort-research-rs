@@ -287,6 +287,14 @@ fn ensure_true_random() {
     // I had a bug, where the test logic for fixed seeds, made the benchmarks always use the same
     // numbers, and random wasn't random at all anymore.
     assert_ne!(random_vec_a, random_vec_b);
+
+    let random_uniform_vec_a = patterns::random_uniform(5, 0..1_000_000);
+    let random_uniform_vec_b = patterns::random_uniform(5, 0..1_000_000);
+    assert_ne!(random_uniform_vec_a, random_uniform_vec_b);
+
+    let random_zipf_vec_a = patterns::random_zipf(50, 1.0);
+    let random_zipf_vec_b = patterns::random_zipf(50, 1.0);
+    assert_ne!(random_zipf_vec_a, random_zipf_vec_b);
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
