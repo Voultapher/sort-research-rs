@@ -43,7 +43,7 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     }
 
     if test_len > 1_000_000 {
-        eprintln!("Test size too large: {test_len}");
+        eprintln!("Test length too large: {test_len}");
         return;
     }
 
@@ -71,7 +71,7 @@ fn bench_partition_impl<T: Ord + std::fmt::Debug, P: Partition>(
     let mut time_measurements = Vec::with_capacity(batched_runs);
     let mut side_effect = 0;
 
-    // Ensure that the tls scratch is initialized for this test size.
+    // Ensure that the tls scratch is initialized for this test length.
     black_box(
         sort_research_rs::other::partition::get_or_alloc_tls_scratch(
             std::alloc::Layout::array::<T>(test_len).unwrap(),

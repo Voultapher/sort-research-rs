@@ -11,15 +11,15 @@ use zipf::ZipfDistribution;
 
 // --- Public ---
 
-pub fn random(size: usize) -> Vec<i32> {
+pub fn random(len: usize) -> Vec<i32> {
     //     .
     // : . : :
     // :.:::.::
 
-    random_vec(size)
+    random_vec(len)
 }
 
-pub fn random_uniform<R>(size: usize, range: R) -> Vec<i32>
+pub fn random_uniform<R>(len: usize, range: R) -> Vec<i32>
 where
     R: Into<rand::distributions::Uniform<i32>>,
 {
@@ -29,20 +29,20 @@ where
     // Abstracting over ranges in Rust :(
     let dist: rand::distributions::Uniform<i32> = range.into();
 
-    (0..size).map(|_| dist.sample(&mut rng)).collect()
+    (0..len).map(|_| dist.sample(&mut rng)).collect()
 }
 
-pub fn random_zipf(size: usize, exponent: f64) -> Vec<i32> {
+pub fn random_zipf(len: usize, exponent: f64) -> Vec<i32> {
     // https://en.wikipedia.org/wiki/Zipf's_law
     let mut rng = rand::rngs::StdRng::from(new_seed());
 
     // Abstracting over ranges in Rust :(
-    let dist = ZipfDistribution::new(size, exponent).unwrap();
+    let dist = ZipfDistribution::new(len, exponent).unwrap();
 
-    (0..size).map(|_| dist.sample(&mut rng) as i32).collect()
+    (0..len).map(|_| dist.sample(&mut rng) as i32).collect()
 }
 
-pub fn random_sorted(size: usize, sorted_percent: f64) -> Vec<i32> {
+pub fn random_sorted(len: usize, sorted_percent: f64) -> Vec<i32> {
     //     .:
     //   .:::. :
     // .::::::.::
@@ -54,8 +54,8 @@ pub fn random_sorted(size: usize, sorted_percent: f64) -> Vec<i32> {
 
     // Simulate pre-existing sorted slice, where len - sorted_percent are the new unsorted values
     // and part of the overall distribution.
-    let mut v = random_vec(size);
-    let sorted_len = ((size as f64) * (sorted_percent / 100.0)).round() as usize;
+    let mut v = random_vec(len);
+    let sorted_len = ((len as f64) * (sorted_percent / 100.0)).round() as usize;
 
     v[0..sorted_len].sort_unstable();
 
@@ -66,45 +66,45 @@ pub fn random_random_size(max_size: usize) -> Vec<i32> {
     //     .
     // : . : :
     // :.:::.::
-    // < size > is random from call to call, with max_size as maximum size.
+    // < len > is random from call to call, with max_size as maximum len.
 
     let random_size = random_uniform(1, 0..=(max_size as i32));
     random(random_size[0] as usize)
 }
 
-pub fn all_equal(size: usize) -> Vec<i32> {
+pub fn all_equal(len: usize) -> Vec<i32> {
     // ......
     // ::::::
 
-    (0..size).map(|_| 66).collect::<Vec<_>>()
+    (0..len).map(|_| 66).collect::<Vec<_>>()
 }
 
-pub fn ascending(size: usize) -> Vec<i32> {
+pub fn ascending(len: usize) -> Vec<i32> {
     //     .:
     //   .:::
     // .:::::
 
-    (0..size as i32).collect::<Vec<_>>()
+    (0..len as i32).collect::<Vec<_>>()
 }
 
-pub fn descending(size: usize) -> Vec<i32> {
+pub fn descending(len: usize) -> Vec<i32> {
     // :.
     // :::.
     // :::::.
 
-    (0..size as i32).rev().collect::<Vec<_>>()
+    (0..len as i32).rev().collect::<Vec<_>>()
 }
 
-pub fn saw_ascending(size: usize, saw_count: usize) -> Vec<i32> {
+pub fn saw_ascending(len: usize, saw_count: usize) -> Vec<i32> {
     //   .:  .:
     // .:::.:::
 
-    if size == 0 {
+    if len == 0 {
         return Vec::new();
     }
 
-    let mut vals = random_vec(size);
-    let chunks_size = size / saw_count.max(1);
+    let mut vals = random_vec(len);
+    let chunks_size = len / saw_count.max(1);
 
     for chunk in vals.chunks_mut(chunks_size) {
         chunk.sort();
@@ -113,16 +113,16 @@ pub fn saw_ascending(size: usize, saw_count: usize) -> Vec<i32> {
     vals
 }
 
-pub fn saw_descending(size: usize, saw_count: usize) -> Vec<i32> {
+pub fn saw_descending(len: usize, saw_count: usize) -> Vec<i32> {
     // :.  :.
     // :::.:::.
 
-    if size == 0 {
+    if len == 0 {
         return Vec::new();
     }
 
-    let mut vals = random_vec(size);
-    let chunks_size = size / saw_count.max(1);
+    let mut vals = random_vec(len);
+    let chunks_size = len / saw_count.max(1);
 
     for chunk in vals.chunks_mut(chunks_size) {
         chunk.sort_by_key(|&e| std::cmp::Reverse(e));
@@ -131,17 +131,17 @@ pub fn saw_descending(size: usize, saw_count: usize) -> Vec<i32> {
     vals
 }
 
-pub fn saw_mixed(size: usize, saw_count: usize) -> Vec<i32> {
+pub fn saw_mixed(len: usize, saw_count: usize) -> Vec<i32> {
     // :.  :.    .::.    .:
     // :::.:::..::::::..:::
 
-    if size == 0 {
+    if len == 0 {
         return Vec::new();
     }
 
-    let mut vals = random_vec(size);
-    let chunks_size = size / saw_count.max(1);
-    let saw_directions = random_uniform((size / chunks_size) + 1, 0..=1);
+    let mut vals = random_vec(len);
+    let chunks_size = len / saw_count.max(1);
+    let saw_directions = random_uniform((len / chunks_size) + 1, 0..=1);
 
     for (i, chunk) in vals.chunks_mut(chunks_size).enumerate() {
         if saw_directions[i] == 0 {
@@ -156,28 +156,28 @@ pub fn saw_mixed(size: usize, saw_count: usize) -> Vec<i32> {
     vals
 }
 
-pub fn saw_mixed_range(size: usize, range: std::ops::Range<usize>) -> Vec<i32> {
+pub fn saw_mixed_range(len: usize, range: std::ops::Range<usize>) -> Vec<i32> {
     //     :.
     // :.  :::.    .::.      .:
     // :::.:::::..::::::..:.:::
 
     // ascending and descending randomly picked, with length in `range`.
 
-    if size == 0 {
+    if len == 0 {
         return Vec::new();
     }
 
-    let mut vals = random_vec(size);
+    let mut vals = random_vec(len);
 
-    let max_chunks = size / range.start;
+    let max_chunks = len / range.start;
     let saw_directions = random_uniform(max_chunks + 1, 0..=1);
     let chunk_sizes = random_uniform(max_chunks + 1, (range.start as i32)..(range.end as i32));
 
     let mut i = 0;
     let mut l = 0;
-    while l < size {
+    while l < len {
         let chunk_size = chunk_sizes[i] as usize;
-        let chunk_end = std::cmp::min(l + chunk_size, size);
+        let chunk_end = std::cmp::min(l + chunk_size, len);
         let chunk = &mut vals[l..chunk_end];
 
         if saw_directions[i] == 0 {
@@ -195,16 +195,16 @@ pub fn saw_mixed_range(size: usize, range: std::ops::Range<usize>) -> Vec<i32> {
     vals
 }
 
-pub fn pipe_organ(size: usize) -> Vec<i32> {
+pub fn pipe_organ(len: usize) -> Vec<i32> {
     //   .:.
     // .:::::.
 
-    let mut vals = random_vec(size);
+    let mut vals = random_vec(len);
 
-    let first_half = &mut vals[0..(size / 2)];
+    let first_half = &mut vals[0..(len / 2)];
     first_half.sort();
 
-    let second_half = &mut vals[(size / 2)..size];
+    let second_half = &mut vals[(len / 2)..len];
     second_half.sort_by_key(|&e| std::cmp::Reverse(e));
 
     vals
@@ -264,8 +264,8 @@ fn new_seed() -> StdRng {
     rand::SeedableRng::seed_from_u64(random_init_seed())
 }
 
-fn random_vec(size: usize) -> Vec<i32> {
+fn random_vec(len: usize) -> Vec<i32> {
     let mut rng = rand::rngs::StdRng::from(new_seed());
 
-    (0..size).map(|_| rng.gen::<i32>()).collect()
+    (0..len).map(|_| rng.gen::<i32>()).collect()
 }
