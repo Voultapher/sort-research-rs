@@ -107,7 +107,7 @@ pub fn saw_ascending(len: usize, saw_count: usize) -> Vec<i32> {
     let chunks_size = len / saw_count.max(1);
 
     for chunk in vals.chunks_mut(chunks_size) {
-        chunk.sort();
+        chunk.sort_unstable();
     }
 
     vals
@@ -125,7 +125,7 @@ pub fn saw_descending(len: usize, saw_count: usize) -> Vec<i32> {
     let chunks_size = len / saw_count.max(1);
 
     for chunk in vals.chunks_mut(chunks_size) {
-        chunk.sort_by_key(|&e| std::cmp::Reverse(e));
+        chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
     }
 
     vals
@@ -145,9 +145,9 @@ pub fn saw_mixed(len: usize, saw_count: usize) -> Vec<i32> {
 
     for (i, chunk) in vals.chunks_mut(chunks_size).enumerate() {
         if saw_directions[i] == 0 {
-            chunk.sort();
+            chunk.sort_unstable();
         } else if saw_directions[i] == 1 {
-            chunk.sort_by_key(|&e| std::cmp::Reverse(e));
+            chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
         } else {
             unreachable!();
         }
@@ -181,9 +181,9 @@ pub fn saw_mixed_range(len: usize, range: std::ops::Range<usize>) -> Vec<i32> {
         let chunk = &mut vals[l..chunk_end];
 
         if saw_directions[i] == 0 {
-            chunk.sort();
+            chunk.sort_unstable();
         } else if saw_directions[i] == 1 {
-            chunk.sort_by_key(|&e| std::cmp::Reverse(e));
+            chunk.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
         } else {
             unreachable!();
         }
@@ -202,10 +202,10 @@ pub fn pipe_organ(len: usize) -> Vec<i32> {
     let mut vals = random_vec(len);
 
     let first_half = &mut vals[0..(len / 2)];
-    first_half.sort();
+    first_half.sort_unstable();
 
     let second_half = &mut vals[(len / 2)..len];
-    second_half.sort_by_key(|&e| std::cmp::Reverse(e));
+    second_half.sort_unstable_by_key(|&e| std::cmp::Reverse(e));
 
     vals
 }
