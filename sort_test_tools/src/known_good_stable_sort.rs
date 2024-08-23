@@ -2,7 +2,7 @@
 // messages when the correctness tests fail, we can't use the stdlib sort functions because we are
 // testing them for correctness.
 //
-// Based on from https://github.com/voultapher/tiny-sort-rs stable_sort.
+// Based on https://github.com/voultapher/tiny-sort-rs.
 
 use core::mem;
 use core::ptr;

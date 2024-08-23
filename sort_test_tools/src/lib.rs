@@ -17,3 +17,4 @@ pub mod patterns;
 pub mod tests;
 
 mod known_good_stable_sort;
+mod zipf;

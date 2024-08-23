@@ -6,7 +6,6 @@ authors = ["Lukas Bergdoll <lukas.bergdoll@gmail.com>"]
 
 [dependencies]
 rand = "0.8"
-zipf = "7.0.0"
 
 [features]
 default = ["large_test_sizes"]

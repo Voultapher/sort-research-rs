@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use rand::prelude::*;
 
-use zipf::ZipfDistribution;
+use crate::zipf::ZipfDistribution;
 
 /// Provides a set of patterns useful for testing and benchmarking sorting algorithms.
 /// Currently limited to i32 values.

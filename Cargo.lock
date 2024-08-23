@@ -628,7 +628,6 @@ name = "sort_test_tools"
 version = "0.1.0"
 dependencies = [
  "rand",
- "zipf",
 ]
 
 [[package]]
