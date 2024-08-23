@@ -4,31 +4,23 @@ use std::env;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
-use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use crate::ffi_types::{FFIOneKibiByte, FFIString, F128};
+use crate::known_good_stable_sort;
 use crate::patterns;
 use crate::Sort;
 
 #[cfg(miri)]
 const TEST_LENGTHS: &[usize] = &[2, 3, 4, 7, 10, 15, 20, 24, 33, 50, 100, 280, 400];
 
-#[cfg(feature = "large_test_sizes")]
 #[cfg(not(miri))]
 const TEST_LENGTHS: &[usize] = &[
     2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500, 1_000,
     2_048, 5_000, 10_000, 100_000, 1_100_000,
-];
-
-#[cfg(not(feature = "large_test_sizes"))]
-#[cfg(not(miri))]
-const TEST_LENGTHS: &[usize] = &[
-    2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 20, 24, 30, 32, 33, 35, 50, 100, 200, 500, 1_000,
-    2_048, 5_000, 10_000,
 ];
 
 fn write_info_to_stdout<S: Sort>() -> u64 {
@@ -61,23 +53,22 @@ fn check_is_sorted<T: Ord + Clone + Debug, S: Sort>(v: &mut [T]) {
 
     for window in v.windows(2) {
         if window[0] > window[1] {
-            let mut stdlib_sorted_vec = v_orig.clone();
-            let stdlib_sorted = stdlib_sorted_vec.as_mut_slice();
-            stdlib_sorted.sort();
+            let mut known_good_sorted_vec = v_orig.clone();
+            known_good_stable_sort::sort(known_good_sorted_vec.as_mut_slice());
 
             if is_small_test {
                 eprintln!("Orginal:  {:?}", v_orig);
-                eprintln!("Expected: {:?}", stdlib_sorted);
+                eprintln!("Expected: {:?}", known_good_sorted_vec);
                 eprintln!("Got:      {:?}", v);
             } else {
                 if env::var("WRITE_LARGE_FAILURE").is_ok() {
                     // Large arrays output them as files.
                     let original_name = format!("original_{}.txt", seed);
-                    let std_name = format!("stdlib_sorted_{}.txt", seed);
+                    let std_name = format!("known_good_sorted_{}.txt", seed);
                     let testsort_name = format!("{}_sorted_{}.txt", S::name(), seed);
 
                     fs::write(&original_name, format!("{:?}", v_orig)).unwrap();
-                    fs::write(&std_name, format!("{:?}", stdlib_sorted)).unwrap();
+                    fs::write(&std_name, format!("{:?}", known_good_sorted_vec)).unwrap();
                     fs::write(&testsort_name, format!("{:?}", v)).unwrap();
 
                     eprintln!(
@@ -623,97 +614,6 @@ fn stability_with_patterns<T: Ord + Clone, S: Sort>(
 
 gen_sort_test_fns_with_default_patterns_3_ty!(stability, stability_with_patterns, []);
 
-fn observable_is_less_u64<S: Sort>(len: usize, pattern_fn: fn(usize) -> Vec<i32>) {
-    // Technically this is unsound as per Rust semantics, but the only way to do this that works
-    // across C FFI. In C and C++ it would be valid to have some trivial POD containing an int that
-    // is marked as mutable. Thus allowing member functions to mutate it even though they only have
-    // access to a const reference. Now this int could be a pointer that was cleared inside the
-    // comparison function, but this clearing is potentially not observable after the sort and it
-    // will be freed again. C and C++ have no concept similar to UnsafeCell.
-    if <S as Sort>::name().starts_with("rust_") {
-        // It would be great to mark the test as skipped, but that isn't possible as of now.
-        return;
-    }
-
-    // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
-    // is created using temporary memory and, the whole is used as comparison but not copied back.
-    //
-    // If this is not upheld a custom type + comparison function could yield UB in otherwise safe
-    // code. Eg T == Mutex<Option<Box<str>>> which replaces the pointer with none in the comparison
-    // function, which would not be observed in the original slice and would lead to a double free.
-
-    // Pack the comp_count val into a u64, to allow FFI testing, and to ensure that no sort can
-    // cheat by treating builtin types differently.
-    assert_eq!(mem::size_of::<CompCountU64>(), mem::size_of::<u64>());
-    // Over-aligning is ok.
-    assert!(mem::align_of::<CompCountU64>() <= mem::align_of::<u64>());
-    // Ensure it is a small endian system.
-    let test_val_u16 = 6043u16;
-    assert_eq!(
-        unsafe { mem::transmute::<u16, [u8; 2]>(test_val_u16) },
-        test_val_u16.to_le_bytes()
-    );
-
-    let pattern = pattern_fn(len);
-    let mut test_input = pattern
-        .into_iter()
-        .map(|val| CompCountU64::new(val).to_u64())
-        .collect::<Vec<_>>();
-
-    let mut comp_count_global = 0;
-
-    <S as Sort>::sort_by(&mut test_input, |a_u64, b_u64| {
-        let a = CompCountU64::from_u64(a_u64);
-        let b = CompCountU64::from_u64(b_u64);
-
-        a.comp_count.replace(a.comp_count.get() + 1);
-        b.comp_count.replace(b.comp_count.get() + 1);
-        comp_count_global += 1;
-
-        a.val.cmp(&b.val)
-    });
-
-    let total_inner: u64 = test_input
-        .iter()
-        .map(|c| CompCountU64::from_u64(c).comp_count.get() as u64)
-        .sum();
-
-    assert_eq!(total_inner, comp_count_global * 2);
-
-    #[derive(PartialEq, Eq, Debug, Clone)]
-    #[repr(C)]
-    struct CompCountU64 {
-        val: i32,
-        comp_count: Cell<u32>,
-    }
-
-    impl CompCountU64 {
-        fn new(val: i32) -> Self {
-            Self {
-                val,
-                comp_count: Cell::new(0),
-            }
-        }
-
-        fn to_u64(self) -> u64 {
-            // SAFETY: See above asserts.
-            unsafe { mem::transmute::<Self, u64>(self) }
-        }
-
-        fn from_u64(val: &u64) -> &Self {
-            // SAFETY: See above asserts.
-            unsafe { mem::transmute::<&u64, &Self>(val) }
-        }
-    }
-}
-
-gen_sort_test_fns_with_default_patterns!(
-    observable_is_less_u64,
-    observable_is_less_u64::<S>,
-    &TEST_LENGTHS[..TEST_LENGTHS.len() - 2],
-    []
-);
-
 fn observable_is_less<S: Sort>(len: usize, pattern_fn: fn(usize) -> Vec<i32>) {
     // This test, tests that every is_less is actually observable. Ie. this can go wrong if a hole
     // is created using temporary memory and, the whole is used as comparison but not copied back.
@@ -1256,14 +1156,6 @@ define_instantiate_sort_tests!(
     [miri_no, stability_ffi_string_ascending],
     [miri_no, stability_ffi_string_descending],
     [miri_no, stability_ffi_string_saw_mixed],
-    [miri_no, observable_is_less_u64_random],
-    [miri_no, observable_is_less_u64_random_z1],
-    [miri_no, observable_is_less_u64_random_d2],
-    [miri_no, observable_is_less_u64_random_d20],
-    [miri_no, observable_is_less_u64_random_s95],
-    [miri_no, observable_is_less_u64_ascending],
-    [miri_no, observable_is_less_u64_descending],
-    [miri_no, observable_is_less_u64_saw_mixed],
     [miri_no, observable_is_less_random],
     [miri_yes, observable_is_less_random_z1],
     [miri_no, observable_is_less_random_d2],

@@ -15,3 +15,5 @@ pub trait Sort {
 pub mod ffi_types;
 pub mod patterns;
 pub mod tests;
+
+mod known_good_stable_sort;
