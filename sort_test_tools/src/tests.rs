@@ -25,7 +25,7 @@ const TEST_LENGTHS: &[usize] = &[
 
 fn write_info_to_stdout<S: Sort>() -> u64 {
     static SEED_WRITTEN: Mutex<bool> = Mutex::new(false);
-    let seed = patterns::random_init_seed();
+    let seed = patterns::get_or_init_rand_seed();
 
     let mut seed_writer = SEED_WRITTEN.lock().unwrap();
     if !*seed_writer {
@@ -332,8 +332,8 @@ pub fn basic_impl<S: Sort>() {
 fn fixed_seed_impl<S: Sort>() {
     write_info_to_stdout::<S>();
 
-    let fixed_seed_a = patterns::random_init_seed();
-    let fixed_seed_b = patterns::random_init_seed();
+    let fixed_seed_a = patterns::get_or_init_rand_seed();
+    let fixed_seed_b = patterns::get_or_init_rand_seed();
 
     assert_eq!(fixed_seed_a, fixed_seed_b);
 }

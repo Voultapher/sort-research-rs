@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use rand::prelude::*;
 
@@ -247,54 +247,18 @@ pub fn pipe_organ(len: usize) -> Vec<i32> {
     })
 }
 
-/// Overwrites the default behavior so that each call to a random derived pattern yields new random
-/// values.
-///
-/// By default `patterns::random(4)` will yield the same values per process invocation.
-/// For benchmarks it's advised to use call this function.
-pub fn use_random_seed_each_time() {
-    let (seed_type, _) = get_or_init_seed_type_and_value();
-    if seed_type == SeedType::ExternalOverride {
-        panic!("Using use_random_seed_each_time conflicts with the external seed override.");
-    }
-
-    *SEED_TYPE_AND_VALUE.lock().unwrap() = Some((SeedType::RandomEachTime, 0));
-}
-
-pub fn random_init_seed() -> u64 {
-    get_or_init_seed_type_and_value().1
+pub fn get_or_init_rand_seed() -> u64 {
+    *SEED_VALUE.get_or_init(|| {
+        env::var("OVERRIDE_SEED")
+            .ok()
+            .map(|seed| u64::from_str(&seed).unwrap())
+            .unwrap_or_else(|| thread_rng().gen())
+    })
 }
 
 // --- Private ---
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum SeedType {
-    RandomOncePerProcess,
-    ExternalOverride,
-    RandomEachTime,
-}
-
-static SEED_TYPE_AND_VALUE: Mutex<Option<(SeedType, u64)>> = Mutex::new(None);
-
-fn get_or_init_seed_type_and_value() -> (SeedType, u64) {
-    let (seed_type, seed_val) = *SEED_TYPE_AND_VALUE.lock().unwrap().get_or_insert_with(|| {
-        if let Some(override_seed) = env::var("OVERRIDE_SEED")
-            .ok()
-            .map(|seed| u64::from_str(&seed).unwrap())
-        {
-            (SeedType::ExternalOverride, override_seed)
-        } else {
-            let per_process_seed = thread_rng().gen();
-            (SeedType::RandomOncePerProcess, per_process_seed)
-        }
-    });
-
-    if seed_type == SeedType::RandomEachTime {
-        (SeedType::RandomEachTime, thread_rng().gen())
-    } else {
-        (seed_type, seed_val)
-    }
-}
+static SEED_VALUE: OnceLock<u64> = OnceLock::new();
 
 struct VecCache {
     cache: Mutex<Option<Arc<Vec<i32>>>>,
@@ -310,11 +274,7 @@ impl VecCache {
     // Uses fn pointer to avoid accidental captures.
     // Captured values need to be accounted for as part of the key, see KeyedVecCache.
     fn copy_cached_or_gen(&self, len: usize, gen_fn: fn(usize, u64) -> Vec<i32>) -> Vec<i32> {
-        let (seed_type, seed_value) = get_or_init_seed_type_and_value();
-
-        if seed_type == SeedType::RandomEachTime {
-            return gen_fn(len, seed_value);
-        }
+        let seed_value = get_or_init_rand_seed();
 
         // With a fixed seed, rand will produce the same values in sequence, and lock + memcpy
         // is faster than re-generating them, so we cache previous requests. This is mainly true
@@ -381,12 +341,7 @@ impl KeyedVecCache {
         key: K,
         gen_fn: fn(usize, u64, K) -> Vec<i32>,
     ) -> Vec<i32> {
-        let (seed_type, seed_value) = get_or_init_seed_type_and_value();
-
-        // Do this early to avoid penalizing the benchmark use-case.
-        if seed_type == SeedType::RandomEachTime {
-            return gen_fn(len, seed_value, key);
-        }
+        let seed_value = get_or_init_rand_seed();
 
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
