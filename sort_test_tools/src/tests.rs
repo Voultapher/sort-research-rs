@@ -3,10 +3,8 @@ use std::cmp::Ordering;
 use std::env;
 use std::fmt::Debug;
 use std::fs;
-use std::io::{self, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
-use std::sync::Mutex;
 
 use crate::ffi_types::{FFIOneKibiByte, FFIString, F128};
 use crate::known_good_stable_sort;
@@ -22,26 +20,8 @@ const TEST_LENGTHS: &[usize] = &[
     2_048, 5_000, 10_000, 100_000, 1_100_000,
 ];
 
-fn write_info_to_stdout<S: Sort>() -> u64 {
-    static SEED_WRITTEN: Mutex<bool> = Mutex::new(false);
-    let seed = patterns::get_or_init_rand_seed();
-
-    let mut seed_writer = SEED_WRITTEN.lock().unwrap();
-    if !*seed_writer {
-        // Always write the seed before doing anything to ensure reproducibility of crashes.
-        io::stdout()
-            .write_all(format!("\nSeed: {seed}\nTesting: {}\n\n", <S as Sort>::name()).as_bytes())
-            .unwrap();
-        io::stdout().flush().unwrap();
-
-        *seed_writer = true;
-    }
-
-    seed
-}
-
 fn check_is_sorted<T: Ord + Clone + Debug, S: Sort>(v: &mut [T]) {
-    let seed = write_info_to_stdout::<S>();
+    let seed = patterns::get_or_init_rand_seed();
 
     let is_small_test = v.len() <= 100;
     let v_orig = v.to_vec();
@@ -231,8 +211,6 @@ macro_rules! gen_sort_test_fns {
         [$(($pattern_name:ident, $pattern_fn:expr)),* $(,)?] $(,)?
     ) => {
         $(fn ${concat($base_name, _, $pattern_name, _impl)}<S: Sort>() {
-            write_info_to_stdout::<S>();
-
             for test_len in $test_lengths {
                 $test_fn(*test_len, $pattern_fn);
             }
@@ -306,8 +284,6 @@ macro_rules! gen_sort_test_fns_with_default_patterns_3_ty {
 // --- TESTS ---
 
 pub fn basic_impl<S: Sort>() {
-    write_info_to_stdout::<S>();
-
     check_is_sorted::<i32, S>(&mut []);
     check_is_sorted::<(), S>(&mut []);
     check_is_sorted::<(), S>(&mut [()]);
@@ -323,8 +299,6 @@ pub fn basic_impl<S: Sort>() {
 }
 
 fn fixed_seed_impl<S: Sort>() {
-    write_info_to_stdout::<S>();
-
     let fixed_seed_a = patterns::get_or_init_rand_seed();
     let fixed_seed_b = patterns::get_or_init_rand_seed();
 
@@ -332,8 +306,6 @@ fn fixed_seed_impl<S: Sort>() {
 }
 
 fn fixed_seed_rand_vec_prefix_impl<S: Sort>() {
-    write_info_to_stdout::<S>();
-
     let vec_rand_len_5 = patterns::random(5);
     let vec_rand_len_7 = patterns::random(7);
 
@@ -341,8 +313,6 @@ fn fixed_seed_rand_vec_prefix_impl<S: Sort>() {
 }
 
 fn int_edge_impl<S: Sort>() {
-    write_info_to_stdout::<S>();
-
     // Ensure that the sort can handle integer edge cases.
     check_is_sorted::<i32, S>(&mut [i32::MIN, i32::MAX]);
     check_is_sorted::<i32, S>(&mut [i32::MAX, i32::MIN]);
@@ -380,8 +350,6 @@ fn int_edge_impl<S: Sort>() {
 }
 
 fn sort_vs_sort_by_impl<S: Sort>() {
-    write_info_to_stdout::<S>();
-
     // Ensure that sort and sort_by produce the same result.
     let mut input_normal = [800, 3, -801, 5, -801, -3, 60, 200, 50, 7, 10];
     let expected = [-801, -801, -3, 3, 5, 7, 10, 50, 60, 200, 800];
@@ -488,8 +456,6 @@ gen_sort_test_fns_with_default_patterns!(
 fn stability_legacy_impl<S: Sort>() {
     // This non pattern variant has proven to catch some bugs the pattern version of this function
     // doesn't catch, so it remains in conjunction with the other one.
-
-    write_info_to_stdout::<S>();
 
     if <S as Sort>::name().contains("unstable") {
         // It would be great to mark the test as skipped, but that isn't possible as of now.
