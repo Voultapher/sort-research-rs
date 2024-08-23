@@ -1,7 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::env;
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
@@ -342,8 +342,30 @@ impl VecCache {
     }
 }
 
+// Because we can't have generics in statics, we manually compute the hash before inserting into the
+// HashMap, so to avoid needless double hashing we configure the HashMap with an identity hash
+// function.
+#[derive(Default)]
+struct IdentityHasher(u64);
+
+impl Hasher for IdentityHasher {
+    fn write(&mut self, _bytes: &[u8]) {
+        unreachable!()
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write_u64(&mut self, i: u64) {
+        self.0 = i;
+    }
+}
+
+type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
+
 struct KeyedVecCache {
-    keyed_caches: Mutex<Option<HashMap<u64, Arc<Vec<i32>>>>>,
+    keyed_caches: Mutex<Option<HashMap<u64, Arc<Vec<i32>>, IdentityBuildHasher>>>,
 }
 
 impl KeyedVecCache {
