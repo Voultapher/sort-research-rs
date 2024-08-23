@@ -7,7 +7,6 @@ use std::io::{self, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::sync::Mutex;
-use std::sync::OnceLock;
 
 use crate::ffi_types::{FFIOneKibiByte, FFIString, F128};
 use crate::known_good_stable_sort;
@@ -205,12 +204,6 @@ fn calc_comps_required<T, S: Sort>(v: &mut [T], mut cmp_fn: impl FnMut(&T, &T) -
     });
 
     comp_counter
-}
-
-fn should_test_for_strong_exception_safety() -> bool {
-    static VAL: OnceLock<bool> = OnceLock::new();
-
-    *VAL.get_or_init(|| env::var("ONLY_CHECK_BASIC_EXCEPTION_SAFETY").is_err())
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -683,14 +676,10 @@ fn panic_retain_orig_set<T: Ord + Clone, S: Sort>(
 
     assert!(res.is_err());
 
-    if should_test_for_strong_exception_safety() {
-        // If the sum before and after don't match, it means the set of elements hasn't remained the
-        // same.
-        let sum_after: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
-        assert_eq!(sum_before, sum_after);
-    }
-    // Basic exception safety means we can continue without direct UB, which would most likely
-    // show up as double-free here.
+    // If the sum before and after don't match, it means the set of elements hasn't remained the
+    // same.
+    let sum_after: i64 = test_data.iter().map(|x| type_from_fn(x) as i64).sum();
+    assert_eq!(sum_before, sum_after);
 }
 
 gen_sort_test_fns_with_default_patterns_3_ty!(panic_retain_orig_set, panic_retain_orig_set, []);
