@@ -4,7 +4,6 @@ use std::env;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use rand::prelude::*;
 
@@ -263,6 +262,7 @@ pub fn get_or_init_rand_seed() -> u64 {
 
 static SEED_VALUE: OnceLock<u64> = OnceLock::new();
 
+#[cfg(not(miri))]
 fn rand_root_seed() -> u64 {
     // Other test code hashes `panic::Location::caller()` and constructs a seed from that, in these
     // tests we want to have a fuzzer like exploration of the test space, if we used the same caller
@@ -271,12 +271,20 @@ fn rand_root_seed() -> u64 {
     // Instead we use the seconds since UNIX epoch / 10, given CI log output this value should be
     // reasonably easy to re-construct.
 
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     let epoch_seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
     epoch_seconds / 10
+}
+
+#[cfg(miri)]
+fn rand_root_seed() -> u64 {
+    // Decided by fair D18446744073709551616 roll.
+    4512520638641916450
 }
 
 struct VecCache {
