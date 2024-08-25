@@ -8,6 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rand::prelude::*;
 
+use rand_xorshift::XorShiftRng;
+
 use crate::zipf::ZipfDistribution;
 
 /// Provides a set of patterns useful for testing and benchmarking sorting algorithms.
@@ -32,7 +34,7 @@ where
     static CACHE: KeyedVecCache = KeyedVecCache::new();
 
     CACHE.copy_cached_or_gen(len, range, |len, seed, range| {
-        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
+        let mut rng: XorShiftRng = rand::SeedableRng::seed_from_u64(seed);
 
         // Abstracting over ranges in Rust :(
         let dist: rand::distributions::Uniform<i32> = range.into();
@@ -46,7 +48,7 @@ pub fn random_zipf(len: usize, exponent: f64) -> Vec<i32> {
     static CACHE: KeyedVecCache = KeyedVecCache::new();
 
     CACHE.copy_cached_or_gen(len, exponent.to_bits(), |len, seed, exponent_bits| {
-        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
+        let mut rng: XorShiftRng = rand::SeedableRng::seed_from_u64(seed);
 
         // Abstracting over ranges in Rust :(
         let dist = ZipfDistribution::new(len, f64::from_bits(exponent_bits)).unwrap();
@@ -408,7 +410,7 @@ fn random_vec(len: usize) -> Vec<i32> {
     static CACHE: VecCache = VecCache::new();
 
     CACHE.copy_cached_or_gen(len, |len, seed| {
-        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
+        let mut rng: XorShiftRng = rand::SeedableRng::seed_from_u64(seed);
         (0..len).map(|_| rng.gen::<i32>()).collect()
     })
 }

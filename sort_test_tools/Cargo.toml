@@ -5,7 +5,8 @@ edition = "2021"
 authors = ["Lukas Bergdoll <lukas.bergdoll@gmail.com>"]
 
 [dependencies]
-rand = "0.8"
+rand = { version = "0.8.5", default-features = false }
+rand_xorshift = "0.3.0"
 
 [features]
 default = ["large_test_sizes"]
