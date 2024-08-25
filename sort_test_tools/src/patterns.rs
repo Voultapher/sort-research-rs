@@ -4,6 +4,7 @@ use std::env;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rand::prelude::*;
 
@@ -252,13 +253,29 @@ pub fn get_or_init_rand_seed() -> u64 {
         env::var("OVERRIDE_SEED")
             .ok()
             .map(|seed| u64::from_str(&seed).unwrap())
-            .unwrap_or_else(|| thread_rng().gen())
+            .unwrap_or_else(rand_root_seed)
     })
 }
 
 // --- Private ---
 
 static SEED_VALUE: OnceLock<u64> = OnceLock::new();
+
+fn rand_root_seed() -> u64 {
+    // Other test code hashes `panic::Location::caller()` and constructs a seed from that, in these
+    // tests we want to have a fuzzer like exploration of the test space, if we used the same caller
+    // based construction we would always test the same.
+    //
+    // Instead we use the seconds since UNIX epoch / 10, given CI log output this value should be
+    // reasonably easy to re-construct.
+
+    let epoch_seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    epoch_seconds / 10
+}
 
 struct VecCache {
     cache: Mutex<Option<Arc<Vec<i32>>>>,
