@@ -283,8 +283,9 @@ fn rand_root_seed() -> u64 {
 
 #[cfg(miri)]
 fn rand_root_seed() -> u64 {
-    // Decided by fair D18446744073709551616 roll.
-    4512520638641916450
+    // Miri is usually run with isolation with gives us repeatability but also permutations based on
+    // other code that runs before.
+    thread_rng().gen()
 }
 
 struct VecCache {
