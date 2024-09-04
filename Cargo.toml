@@ -93,6 +93,7 @@ default = [
     # "c_fluxsort",
     # "singeli_singelisort",
     # "golang_std",
+    # "rust_std_vendored",
     # "rust_wpwoodjr",
     # "rust_radsort",
     # "rust_dmsort",
@@ -176,6 +177,10 @@ singeli_singelisort = []
 
 # Enable golang slices.Sort and slices.SortStable.
 golang_std = []
+
+# Enable vendored versions of the the Rust standard library sort implementations.
+# Vendored mid 2022.
+rust_std_vendored = []
 
 # Enable rust_wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.

@@ -1,5 +1,9 @@
 pub mod rust_ipnsort;
+
 pub mod rust_std;
+
+#[cfg(feature = "rust_std_vendored")]
+pub mod rust_std_vendored;
 
 #[cfg(feature = "rust_dmsort")]
 pub mod rust_dmsort;

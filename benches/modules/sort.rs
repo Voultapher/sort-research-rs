@@ -107,6 +107,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
 
     bench_inst!(stable::rust_std);
 
+    #[cfg(feature = "rust_std_vendored")]
+    bench_inst!(stable::rust_std_vendored);
+
     #[cfg(feature = "cpp_std_sys")]
     bench_inst!(stable::cpp_std_sys);
 
@@ -151,6 +154,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     bench_inst!(unstable::rust_ipnsort);
 
     bench_inst!(unstable::rust_std);
+
+    #[cfg(feature = "rust_std_vendored")]
+    bench_inst!(unstable::rust_std_vendored);
 
     #[cfg(feature = "rust_dmsort")]
     bench_inst!(unstable::rust_dmsort);
