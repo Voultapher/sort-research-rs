@@ -109,8 +109,8 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, clip_mode, value
         x_axis_type="log",
         y_axis_label=f"Relative symmetric speedup | > 0, a x b | < 0, b x a | {CPU_INFO}",
         y_range=(-2.0, 2.0),
-        plot_width=1000,
-        plot_height=600,
+        width=1000,
+        height=600,
         tools="",
     )
     add_tools_to_plot(plot)
@@ -162,7 +162,8 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, clip_mode, value
             legend_label=legend_label,
         )
 
-        getattr(plot, symbol)(
+        plot.scatter(
+            marker=symbol,
             source=source,
             size=6,
             fill_color=None,
@@ -192,7 +193,7 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, clip_mode, value
             : tick_int - 1.0;
         return `${adjusted_tick_val.toFixed(1)}x`;
     """
-    plot.yaxis.formatter = models.FuncTickFormatter(code=format_code_js)
+    plot.yaxis.formatter = models.CustomJSTickFormatter(code=format_code_js)
 
     return plot_name, plot
 

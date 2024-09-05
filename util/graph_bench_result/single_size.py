@@ -126,8 +126,8 @@ def plot_single_size(ty, prediction_state, test_len, values):
         y_axis_label="Pattern",
         title=plot_name,
         tools="",
-        plot_width=800,
-        plot_height=600 + plot_height_extra,
+        width=800,
+        height=600 + plot_height_extra,
     )
 
     add_tools_to_plot(plot)
@@ -148,7 +148,7 @@ def plot_single_size(ty, prediction_state, test_len, values):
         x_offset=5,
         y_offset=-5,
         source=source,
-        render_mode="canvas",
+        # renderers="canvas",
         text_font_size="10pt",
     )
     plot.add_layout(labels)
