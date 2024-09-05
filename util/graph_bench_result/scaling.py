@@ -145,6 +145,8 @@ def plot_scaling(ty, prediction_state, pattern, values):
 
     plot.y_range = models.Range1d(start=0, end=y_range)
 
+    plot.toolbar.logo = None
+
     return plot_name, plot
 
 

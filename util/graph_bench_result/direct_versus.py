@@ -195,6 +195,8 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, clip_mode, value
     """
     plot.yaxis.formatter = models.CustomJSTickFormatter(code=format_code_js)
 
+    plot.toolbar.logo = None
+
     return plot_name, plot
 
 
