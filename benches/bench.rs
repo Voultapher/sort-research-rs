@@ -212,7 +212,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_z2", |len| patterns::random_zipf(len, 2.0)),
         ("random_z3", |len| patterns::random_zipf(len, 3.0)),
         ("random_z4", |len| patterns::random_zipf(len, 4.0)),
-        ("random_s5", |len| patterns::random_sorted(len, 95.0)),
         ("random_s5", |len| patterns::random_sorted(len, 5.0)),
         ("random_s10", |len| patterns::random_sorted(len, 10.0)),
         ("random_s30", |len| patterns::random_sorted(len, 30.0)),
