@@ -218,7 +218,6 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_s50", |len| patterns::random_sorted(len, 50.0)),
         ("random_s70", |len| patterns::random_sorted(len, 70.0)),
         ("random_s90", |len| patterns::random_sorted(len, 90.0)),
-        ("random_s95", |len| patterns::random_sorted(len, 95.0)),
         ("random_s99", |len| patterns::random_sorted(len, 99.0)),
     ];
 
