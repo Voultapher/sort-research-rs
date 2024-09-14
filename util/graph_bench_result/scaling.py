@@ -87,8 +87,8 @@ def plot_scaling(ty, prediction_state, pattern, values):
         x_axis_label="Input length (log)",
         x_axis_type="log",
         y_axis_label=f"Million elements per second | Higher is better | {CPU_INFO}",
-        plot_width=1000,
-        plot_height=600,
+        width=1000,
+        height=600,
         tools="",
     )
     add_tools_to_plot(plot)
@@ -122,7 +122,8 @@ def plot_scaling(ty, prediction_state, pattern, values):
             legend_label=sort_name,
         )
 
-        getattr(plot, symbol)(
+        plot.scatter(
+            marker=symbol,
             source=source,
             size=6,
             fill_color=None,
@@ -143,6 +144,8 @@ def plot_scaling(ty, prediction_state, pattern, values):
     plot.yaxis.ticker = y_ticker
 
     plot.y_range = models.Range1d(start=0, end=y_range)
+
+    plot.toolbar.logo = None
 
     return plot_name, plot
 

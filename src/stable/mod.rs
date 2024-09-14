@@ -1,5 +1,8 @@
 pub mod rust_std;
 
+#[cfg(feature = "rust_std_vendored")]
+pub mod rust_std_vendored;
+
 #[cfg(feature = "rust_wpwoodjr")]
 pub mod rust_wpwoodjr;
 

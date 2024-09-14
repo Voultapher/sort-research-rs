@@ -23,34 +23,6 @@ from util import (
 CPU_INFO = None
 
 
-# Needs to be shared instance :/
-TOOLS = None
-
-
-def init_tools():
-    global TOOLS
-    TOOLS = [
-        models.WheelZoomTool(),
-        models.BoxZoomTool(),
-        models.PanTool(),
-        models.HoverTool(
-            tooltips=[
-                ("Sort", "@y"),
-                ("Runtime", "@bench_times"),
-            ],
-        ),
-        models.ResetTool(),
-    ]
-
-
-def add_tools_to_plot(plot):
-    plot.add_tools(*TOOLS)
-
-    plot.toolbar.active_scroll = None
-    plot.toolbar.active_tap = None
-    plot.toolbar.active_drag = TOOLS[1]
-
-
 def find_time_scale(max_time_ns):
     if max_time_ns < 1_000:
         return 1, "ns"
@@ -126,11 +98,9 @@ def plot_single_size(ty, prediction_state, test_len, values):
         y_axis_label="Pattern",
         title=plot_name,
         tools="",
-        plot_width=800,
-        plot_height=600 + plot_height_extra,
+        width=800,
+        height=600 + plot_height_extra,
     )
-
-    add_tools_to_plot(plot)
 
     plot.hbar(
         y="y",
@@ -148,10 +118,12 @@ def plot_single_size(ty, prediction_state, test_len, values):
         x_offset=5,
         y_offset=-5,
         source=source,
-        render_mode="canvas",
+        # renderers="canvas",
         text_font_size="10pt",
     )
     plot.add_layout(labels)
+
+    plot.toolbar.logo = None
 
     plot.x_range.start = 0
     plot.ygrid.grid_line_color = None
@@ -165,8 +137,6 @@ def plot_sizes(groups):
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
             for test_len, val3 in val2.items():
-                init_tools()
-
                 plot_name, plot = plot_single_size(ty, prediction_state, test_len, val3)
 
                 html = file_html(plot, CDN, plot_name)

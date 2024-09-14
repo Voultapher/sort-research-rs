@@ -81,16 +81,18 @@ pub fn bench_fn<T: Ord + std::fmt::Debug>(
         BatchSize::SmallInput
     };
 
-    static NAME_OVERWRITE: OnceCell<Option<String>> = OnceCell::new();
+    static NAME_OVERWRITES: OnceCell<Option<String>> = OnceCell::new();
 
-    let name_overwrite = NAME_OVERWRITE.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
+    let name_overwrites = NAME_OVERWRITES.get_or_init(|| env::var("BENCH_NAME_OVERWRITE").ok());
 
     let mut bech_name_with_overwrite = bench_name;
-    if let Some(name) = name_overwrite {
-        let split_pos = name.find(':').unwrap();
-        let match_name = &name[..split_pos];
-        if bench_name == match_name {
-            bech_name_with_overwrite = &name[(split_pos + 1)..];
+    if let Some(names) = name_overwrites {
+        for name in names.split(',') {
+            let split_pos = name.find(':').unwrap();
+            let match_name = &name[..split_pos];
+            if bench_name == match_name {
+                bech_name_with_overwrite = &name[(split_pos + 1)..];
+            }
         }
     }
 

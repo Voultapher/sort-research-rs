@@ -3,11 +3,11 @@
 pub trait Sort {
     fn name() -> String;
 
-    fn sort<T>(arr: &mut [T])
+    fn sort<T>(v: &mut [T])
     where
         T: Ord;
 
-    fn sort_by<T, F>(arr: &mut [T], compare: F)
+    fn sort_by<T, F>(v: &mut [T], compare: F)
     where
         F: FnMut(&T, &T) -> std::cmp::Ordering;
 }

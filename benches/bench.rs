@@ -381,6 +381,162 @@ fn criterion_benchmark(c: &mut Criterion) {
             });
         }
 
+        #[cfg(feature = "bench_type_f32")]
+        {
+            #[derive(Debug)]
+            #[repr(transparent)]
+            struct F32NonNanCmp(f32);
+
+            impl F32NonNanCmp {
+                fn new(val: i32) -> Self {
+                    let val_f32 = f32::from_bits(shift_i32_to_u32(val));
+                    let val_non_nan_f32 = if val_f32.is_nan() { 0.0 } else { val_f32 };
+                    Self(val_non_nan_f32)
+                }
+            }
+
+            impl PartialEq for F32NonNanCmp {
+                fn eq(&self, other: &Self) -> bool {
+                    self.cmp(other) == cmp::Ordering::Equal
+                }
+            }
+
+            impl Eq for F32NonNanCmp {}
+
+            impl PartialOrd for F32NonNanCmp {
+                fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+                    Some(self.cmp(other))
+                }
+            }
+
+            impl Ord for F32NonNanCmp {
+                fn cmp(&self, other: &Self) -> cmp::Ordering {
+                    self.0.partial_cmp(&other.0).unwrap()
+                    // self.0.partial_cmp(&other.0).unwrap_or(cmp::Ordering::Equal)
+                    // unsafe { self.0.partial_cmp(&other.0).unwrap_unchecked() }
+                }
+            }
+
+            bench_patterns(c, test_len, "f32", |values| -> Vec<F32NonNanCmp> {
+                values.into_iter().map(F32NonNanCmp::new).collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_f64")]
+        {
+            #[derive(Debug)]
+            #[repr(transparent)]
+            struct F64NonNanCmp(f64);
+
+            impl F64NonNanCmp {
+                fn new(val: i32) -> Self {
+                    let val_f64 = f64::from_bits(extend_i32_to_u64(val));
+                    let val_non_nan_f32 = if val_f64.is_nan() { 0.0 } else { val_f64 };
+                    Self(val_non_nan_f32)
+                }
+            }
+
+            impl PartialEq for F64NonNanCmp {
+                fn eq(&self, other: &Self) -> bool {
+                    self.cmp(other) == cmp::Ordering::Equal
+                }
+            }
+
+            impl Eq for F64NonNanCmp {}
+
+            impl PartialOrd for F64NonNanCmp {
+                fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+                    Some(self.cmp(other))
+                }
+            }
+
+            impl Ord for F64NonNanCmp {
+                fn cmp(&self, other: &Self) -> cmp::Ordering {
+                    self.0.partial_cmp(&other.0).unwrap()
+                    // self.0.partial_cmp(&other.0).unwrap_or(cmp::Ordering::Equal)
+                    // unsafe { self.0.partial_cmp(&other.0).unwrap_unchecked() }
+                }
+            }
+
+            bench_patterns(c, test_len, "f64", |values| -> Vec<F64NonNanCmp> {
+                values.into_iter().map(F64NonNanCmp::new).collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_f32_total")]
+        {
+            #[derive(Debug)]
+            #[repr(transparent)]
+            struct F32TotalCmp(f32);
+
+            impl F32TotalCmp {
+                fn new(val: i32) -> Self {
+                    Self(f32::from_bits(shift_i32_to_u32(val)))
+                }
+            }
+
+            impl PartialEq for F32TotalCmp {
+                fn eq(&self, other: &Self) -> bool {
+                    self.cmp(other) == cmp::Ordering::Equal
+                }
+            }
+
+            impl Eq for F32TotalCmp {}
+
+            impl PartialOrd for F32TotalCmp {
+                fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+                    Some(self.cmp(other))
+                }
+            }
+
+            impl Ord for F32TotalCmp {
+                fn cmp(&self, other: &Self) -> cmp::Ordering {
+                    self.0.total_cmp(&other.0)
+                }
+            }
+
+            bench_patterns(c, test_len, "f32_total", |values| -> Vec<F32TotalCmp> {
+                values.into_iter().map(F32TotalCmp::new).collect()
+            });
+        }
+
+        #[cfg(feature = "bench_type_f64_total")]
+        {
+            #[derive(Debug)]
+            #[repr(transparent)]
+            struct F64TotalCmp(f64);
+
+            impl F64TotalCmp {
+                fn new(val: i32) -> Self {
+                    Self(f64::from_bits(extend_i32_to_u64(val)))
+                }
+            }
+
+            impl PartialEq for F64TotalCmp {
+                fn eq(&self, other: &Self) -> bool {
+                    self.cmp(other) == cmp::Ordering::Equal
+                }
+            }
+
+            impl Eq for F64TotalCmp {}
+
+            impl PartialOrd for F64TotalCmp {
+                fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+                    Some(self.cmp(other))
+                }
+            }
+
+            impl Ord for F64TotalCmp {
+                fn cmp(&self, other: &Self) -> cmp::Ordering {
+                    self.0.total_cmp(&other.0)
+                }
+            }
+
+            bench_patterns(c, test_len, "f64_total", |values| -> Vec<F64TotalCmp> {
+                values.into_iter().map(F64TotalCmp::new).collect()
+            });
+        }
+
         #[cfg(feature = "bench_type_val_with_mutex")]
         {
             use std::cmp::Ordering;

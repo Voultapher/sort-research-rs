@@ -74,6 +74,10 @@ default = [
     # "bench_type_u16",
     # "bench_type_u32",
     # "bench_type_u128",
+    # "bench_type_f32",
+    # "bench_type_f64",
+    # "bench_type_f32_total",
+    # "bench_type_f64_total",
 
     # "cpp_std_sys",
     # "cpp_std_libcxx",
@@ -93,6 +97,7 @@ default = [
     # "c_fluxsort",
     # "singeli_singelisort",
     # "golang_std",
+    # "rust_std_vendored",
     # "rust_wpwoodjr",
     # "rust_radsort",
     # "rust_dmsort",
@@ -177,6 +182,10 @@ singeli_singelisort = []
 # Enable golang slices.Sort and slices.SortStable.
 golang_std = []
 
+# Enable vendored versions of the the Rust standard library sort implementations.
+# Vendored mid 2022.
+rust_std_vendored = []
+
 # Enable rust_wpwoodjr sort.
 # No additional requirements, but disabled by default to keep things lean.
 rust_wpwoodjr = []
@@ -259,5 +268,17 @@ bench_type_u32 = []
 
 # Enable the "u128" type for benchmarks
 bench_type_u128 = []
+
+# Enable the "f32" type for benchmarks
+bench_type_f32 = []
+
+# Enable the "f64" type for benchmarks
+bench_type_f64 = []
+
+# Enable the "f32_total" type for benchmarks
+bench_type_f32_total = []
+
+# Enable the "f64_total" type for benchmarks
+bench_type_f64_total = []
 
 large_test_sizes = ["sort_test_tools/large_test_sizes"]

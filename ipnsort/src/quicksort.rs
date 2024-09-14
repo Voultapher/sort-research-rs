@@ -2,6 +2,7 @@ use core::intrinsics;
 use core::mem::{self, ManuallyDrop};
 use core::ptr;
 
+use crate::heapsort;
 use crate::smallsort::UnstableSmallSortTypeImpl;
 
 /// Sorts `v` recursively.
@@ -29,10 +30,7 @@ pub(crate) fn quicksort<'a, T, F>(
         // If too many bad pivot choices were made, simply fall back to heapsort in order to
         // guarantee `O(N x log(N))` worst-case.
         if limit == 0 {
-            // SAFETY: We assume the `small_sort` threshold is at least 1.
-            unsafe {
-                crate::heapsort::heapsort(v, is_less);
-            }
+            heapsort::heapsort(v, is_less);
             return;
         }
 
