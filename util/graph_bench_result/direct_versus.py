@@ -9,6 +9,7 @@ import statistics
 import sys
 
 from itertools import chain
+from collections import defaultdict
 
 from bokeh import models
 from bokeh.plotting import figure, ColumnDataSource
@@ -200,12 +201,41 @@ def plot_versus(sort_name_a, sort_name_b, ty, prediction_state, clip_mode, value
     return plot_name, plot
 
 
+def lens_filtered(sort_name, values):
+    """Returns {pattern: lenghts} dict filtered for sort_name."""
+    patterns = natsorted(
+        list(set(chain.from_iterable([val.keys() for val in values.values()])))
+    )
+
+    res = defaultdict(list)
+
+    for pattern in patterns:
+        for test_len, val in sorted(values.items(), key=lambda x: x[0]):
+            if test_len < 1:
+                continue
+
+            for pattern_x, val2 in val.items():
+                if pattern_x != pattern:
+                    continue
+
+                if val2.get(sort_name) is not None:
+                    res[pattern].append(test_len)
+
+
+    return res
+
+
 def plot_types(sort_name_a, sort_name_b, groups):
     clip_modes = {"full": "", "clipped": "-clipped"}
 
     for ty, val1 in groups.items():
         for prediction_state, val2 in val1.items():
             for clip_mode, name_suffix in clip_modes.items():
+                lens_a = lens_filtered(sort_name_a, val2)
+                lens_b = lens_filtered(sort_name_b, val2)
+                if not (lens_a == lens_b and len(lens_a) != 0):
+                    continue
+
                 init_tools()
 
                 plot_name, plot = plot_versus(

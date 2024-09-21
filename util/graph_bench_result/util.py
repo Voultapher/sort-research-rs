@@ -221,6 +221,7 @@ def build_implementation_meta_info():
         "cpp_std_gnu_stable": (palette[1], "square"),
         "cpp_std_msvc_stable": (palette[1], "square"),
         "rust_std_stable": (palette[4], "square"),
+        "rust_std_vendored_stable": (palette[4], "square"),
         "rust_glidesort_stable": (palette[3], "triangle"),
         "rust_driftsort_stable": (palette[7], "square"),
         "cpp_std_libcxx_stable": (palette[4], "square"),
@@ -236,6 +237,7 @@ def build_implementation_meta_info():
         "cpp_std_gnu_unstable": (palette[1], "square"),
         "cpp_std_msvc_unstable": (palette[1], "square"),
         "rust_std_unstable": (palette[4], "square"),
+        "rust_std_vendored_unstable": (palette[4], "square"),
         "cpp_pdqsort_unstable": (palette[3], "square"),
         "cpp_std_libcxx_unstable": (palette[4], "square"),
         "rust_ipn_unstable": (palette[5], "square"),
@@ -243,6 +245,7 @@ def build_implementation_meta_info():
         "cpp_ips4o_unstable": (palette[6], "square"),
         "cpp_blockquicksort": (palette[7], "square"),
         "rust_tinyheapsort_unstable": (palette[7], "square"),
+        "rust_crumsort_rs_unstable": (palette[6], "square"),
         # There are more sorts but they don't really fit the graph or colors at
         # the same time
         "rust_radsort_radix": (palette[4], "square"),
