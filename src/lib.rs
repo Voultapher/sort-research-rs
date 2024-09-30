@@ -1,4 +1,4 @@
-#![allow(incomplete_features, internal_features)]
+#![allow(incomplete_features, internal_features, stable_features)]
 #![feature(
     maybe_uninit_uninit_array,
     maybe_uninit_slice,
