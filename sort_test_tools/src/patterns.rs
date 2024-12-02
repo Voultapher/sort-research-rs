@@ -79,6 +79,33 @@ pub fn random_sorted(len: usize, sorted_percent: f64) -> Vec<i32> {
     })
 }
 
+pub fn random_merge(len: usize, first_run_percent: f64) -> Vec<i32> {
+    //     .:
+    //   .:::.  :
+    // .::::::.::
+    // [----][--]
+    //  ^      ^
+    //  |      |
+    // sorted  |
+    //     sorted
+
+    static CACHE: KeyedVecCache = KeyedVecCache::new();
+
+    let frp = first_run_percent.to_bits();
+    CACHE.copy_cached_or_gen(len, frp, |len, _seed, frp| {
+        // Simulate pre-existing sorted slice, where len - first_run_percent are the new unsorted
+        // values and part of the overall distribution.
+        let first_run_percent = f64::from_bits(frp);
+        let mut v = random_vec(len);
+        let first_run_len = ((len as f64) * (first_run_percent / 100.0)).round() as usize;
+
+        v[0..first_run_len].sort_unstable();
+        v[first_run_len..].sort_unstable();
+
+        v
+    })
+}
+
 pub fn random_random_size(max_len: usize) -> Vec<i32> {
     //     .
     // : . : :

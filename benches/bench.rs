@@ -219,6 +219,14 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_s70", |len| patterns::random_sorted(len, 70.0)),
         ("random_s90", |len| patterns::random_sorted(len, 90.0)),
         ("random_s99", |len| patterns::random_sorted(len, 99.0)),
+        ("random_m5", |len| patterns::random_merge(len, 5.0)),
+        ("random_m10", |len| patterns::random_merge(len, 10.0)),
+        ("random_m30", |len| patterns::random_merge(len, 30.0)),
+        ("random_m50", |len| patterns::random_merge(len, 50.0)),
+        ("random_m70", |len| patterns::random_merge(len, 70.0)),
+        ("random_m90", |len| patterns::random_merge(len, 90.0)),
+        ("random_m95", |len| patterns::random_merge(len, 99.0)),
+        ("random_m99", |len| patterns::random_merge(len, 99.0)),
     ];
 
     if env::var("EXTRA_PATTERNS").is_ok() {
