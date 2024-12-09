@@ -121,8 +121,8 @@ uint32_t powersort_stable_f128_by(F128* data,
 // --- 1k ---
 
 void powersort_stable_1k(FFIOneKibiByte* data, size_t len) {
-    powersort<FFIOneKiloByteCpp*>{}.sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
-                                         reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
+    powersort<FFIOneKibiByteCpp*>{}.sort(reinterpret_cast<FFIOneKibiByteCpp*>(data),
+                                         reinterpret_cast<FFIOneKibiByteCpp*>(data) + len);
 }
 
 uint32_t powersort_stable_1k_by(FFIOneKibiByte* data,
@@ -131,7 +131,7 @@ uint32_t powersort_stable_1k_by(FFIOneKibiByte* data,
                                                      const FFIOneKibiByte&,
                                                      uint8_t*),
                                 uint8_t* ctx) {
-    return sort_by_impl<FFIOneKibiByte, powersort>(reinterpret_cast<FFIOneKiloByteCpp*>(data), len,
+    return sort_by_impl<FFIOneKibiByte, powersort>(reinterpret_cast<FFIOneKibiByteCpp*>(data), len,
                                                    cmp_fn, ctx);
 }
 
@@ -203,8 +203,8 @@ uint32_t powersort_4way_stable_f128_by(F128* data,
 // --- 1k ---
 
 void powersort_4way_stable_1k(FFIOneKibiByte* data, size_t len) {
-    powersort_4way<FFIOneKiloByteCpp*>{}.sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
-                                              reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
+    powersort_4way<FFIOneKibiByteCpp*>{}.sort(reinterpret_cast<FFIOneKibiByteCpp*>(data),
+                                              reinterpret_cast<FFIOneKibiByteCpp*>(data) + len);
 }
 
 uint32_t powersort_4way_stable_1k_by(FFIOneKibiByte* data,
@@ -213,7 +213,7 @@ uint32_t powersort_4way_stable_1k_by(FFIOneKibiByte* data,
                                                           const FFIOneKibiByte&,
                                                           uint8_t*),
                                      uint8_t* ctx) {
-    return sort_by_impl<FFIOneKibiByte, powersort_4way>(reinterpret_cast<FFIOneKiloByteCpp*>(data),
+    return sort_by_impl<FFIOneKibiByte, powersort_4way>(reinterpret_cast<FFIOneKibiByteCpp*>(data),
                                                         len, cmp_fn, ctx);
 }
 }  // extern "C"

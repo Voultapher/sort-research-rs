@@ -102,22 +102,22 @@ struct F128Cpp : public F128 {
     }
 };
 
-struct FFIOneKiloByteCpp : public FFIOneKibiByte {
+struct FFIOneKibiByteCpp : public FFIOneKibiByte {
     int64_t as_i64() const noexcept { return values[11] + values[55] + values[77]; }
 
-    bool operator<(const FFIOneKiloByteCpp& other) const noexcept {
+    bool operator<(const FFIOneKibiByteCpp& other) const noexcept {
         return as_i64() < other.as_i64();
     }
-    bool operator<=(const FFIOneKiloByteCpp& other) const noexcept {
+    bool operator<=(const FFIOneKibiByteCpp& other) const noexcept {
         return as_i64() <= other.as_i64();
     }
-    bool operator>(const FFIOneKiloByteCpp& other) const noexcept {
+    bool operator>(const FFIOneKibiByteCpp& other) const noexcept {
         return as_i64() > other.as_i64();
     }
-    bool operator>=(const FFIOneKiloByteCpp& other) const noexcept {
+    bool operator>=(const FFIOneKibiByteCpp& other) const noexcept {
         return as_i64() >= other.as_i64();
     }
-    bool operator==(const FFIOneKiloByteCpp& other) const noexcept {
+    bool operator==(const FFIOneKibiByteCpp& other) const noexcept {
         return as_i64() == other.as_i64();
     }
 };

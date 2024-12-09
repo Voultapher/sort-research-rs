@@ -79,8 +79,8 @@ uint32_t wikisort_stable_f128_by(F128* data,
 // --- 1k ---
 
 void wikisort_stable_1k(FFIOneKibiByte* data, size_t len) {
-    Wiki::Sort(reinterpret_cast<FFIOneKiloByteCpp*>(data),
-               reinterpret_cast<FFIOneKiloByteCpp*>(data) + len);
+    Wiki::Sort(reinterpret_cast<FFIOneKibiByteCpp*>(data),
+               reinterpret_cast<FFIOneKibiByteCpp*>(data) + len);
 }
 
 uint32_t wikisort_stable_1k_by(FFIOneKibiByte* data,
@@ -89,6 +89,6 @@ uint32_t wikisort_stable_1k_by(FFIOneKibiByte* data,
                                                     const FFIOneKibiByte&,
                                                     uint8_t*),
                                uint8_t* ctx) {
-    return sort_by_impl(reinterpret_cast<FFIOneKiloByteCpp*>(data), len, cmp_fn, ctx);
+    return sort_by_impl(reinterpret_cast<FFIOneKibiByteCpp*>(data), len, cmp_fn, ctx);
 }
 }  // extern "C"
