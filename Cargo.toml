@@ -94,6 +94,7 @@ default = [
     # "cpp_wikisort",
     # "c_std_sys",
     # "c_llvm_libc",
+    # "c_idisort",
     # "c_crumsort",
     # "c_fluxsort",
     # "singeli_singelisort",
@@ -171,6 +172,10 @@ c_std_sys = []
 # Enable support for C qsort based on the vendored LLVM libc implementation 4646cab.
 # Uses system C++ standard lib.
 c_llvm_libc = []
+
+# Enable support for C idisort by Lukas Bergdoll based on ipnsort.
+# Uses system C++ standard lib.
+c_idisort = []
 
 # Enable crumsort by Igor van den Hoven.
 # Uses system C++ standard lib.

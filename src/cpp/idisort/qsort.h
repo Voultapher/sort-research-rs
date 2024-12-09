@@ -13,19 +13,15 @@
 
 #include "stddef.h"
 
-namespace LIBC_NAMESPACE_DECL {
+namespace idisort {
     // Never inline to mimic hidden implementation in .cpp in real lib.
     ___INLINE_NEVER void qsort(void* array,
                                size_t array_size,
                                size_t elem_size,
                                int (*compare)(const void*, const void*)) {
-        if (array == nullptr || array_size == 0 || elem_size == 0)
-            return;
-        internal::Comparator c(compare);
-
-        auto arr = internal::Array(reinterpret_cast<uint8_t*>(array), array_size, elem_size, c);
-
-        internal::sort(arr);
+        internal::unstable_sort(
+            array, array_size, elem_size,
+            [compare](const void* a, const void* b) noexcept -> bool { return compare(a, b) < 0; });
     }
 }
 

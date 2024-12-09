@@ -191,6 +191,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "c_llvm_libc")]
     bench_inst!(unstable::c_llvm_libc);
 
+    #[cfg(feature = "c_idisort")]
+    bench_inst!(unstable::c_idisort);
+
     #[cfg(feature = "c_crumsort")]
     bench_inst!(unstable::c_crumsort);
 

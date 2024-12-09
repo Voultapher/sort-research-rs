@@ -45,6 +45,11 @@ pub mod c_std_sys;
 #[cfg(feature = "c_llvm_libc")]
 pub mod c_llvm_libc;
 
+// Call idisort via FFI.
+#[cfg(feature = "c_idisort")]
+pub mod c_idisort;
+
+
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
 pub mod c_crumsort;

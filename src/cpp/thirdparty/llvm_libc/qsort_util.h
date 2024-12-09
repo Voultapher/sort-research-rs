@@ -23,6 +23,14 @@
 #error "LIBC_QSORT_IMPL is not recognized."
 #endif
 
+#if defined(__GNUC__)
+#define ___INLINE_ALWAYS __attribute__((always_inline))
+#define ___INLINE_NEVER __attribute__((noinline))
+#else
+#define ___INLINE_ALWAYS inline
+#define ___INLINE_NEVER
+#endif
+
 namespace LIBC_NAMESPACE_DECL {
     namespace internal {
 
