@@ -176,8 +176,8 @@ CMPFUNC* make_compare_fn_c(CompResult (*cmp_fn)(const T&, const T&, uint8_t*), u
     ctx_local = ctx;
 
     return [](const void* a_ptr, const void* b_ptr) -> int {
-        const T a = *static_cast<const T*>(a_ptr);
-        const T b = *static_cast<const T*>(b_ptr);
+        const T& a = *static_cast<const T*>(a_ptr);
+        const T& b = *static_cast<const T*>(b_ptr);
 
         const auto comp_result = cmp_fn_local(a, b, ctx_local);
 
@@ -191,47 +191,25 @@ CMPFUNC* make_compare_fn_c(CompResult (*cmp_fn)(const T&, const T&, uint8_t*), u
 
 template <typename T>
 int int_cmp_func(const void* a_ptr, const void* b_ptr) {
-    const T a = *static_cast<const T*>(a_ptr);
-    const T b = *static_cast<const T*>(b_ptr);
+    const T& a = *static_cast<const T*>(a_ptr);
+    const T& b = *static_cast<const T*>(b_ptr);
 
     // Yeah I know everyone does a - b, but that invokes UB.
+    //
     // if (a < b) {
     //   return -1;
     // } else if (a > b) {
     //   return 1;
     // }
     // return 0;
+    //
+    // Alternative branchless version, that optimizes particularly well with
+    // clang. gcc sees a 2x speedup for random inputs with this.
+    // https://godbolt.org/z/EfYxd7rqP
 
-    // This optimizes particularly well with clang.
-    // gcc sees a 2x speedup for random inputs with this.
-    // https://godbolt.org/z/ETdbYoMTK
-
-    // Alternative branchless version.
     const bool is_less = a < b;
     const bool is_more = a > b;
-    return (is_less * -1) + (is_more * 1);
+    return (static_cast<int>(is_less) * -1) + (static_cast<int>(is_more) * 1);
 }
-
-// This is broken, crumsort and fluxsort break the individual F128 values.
-//
-// static constexpr bool F128_SUPPORT = sizeof(F128) == sizeof(long double) &&
-//                                      alignof(F128) <= alignof(max_align_t);
-
-// int f128_c_cmp_func(const void* a_ptr, const void* b_ptr) {
-//   const F128Cpp a = *static_cast<const F128Cpp*>(a_ptr);
-//   const F128Cpp b = *static_cast<const F128Cpp*>(b_ptr);
-
-//   printf("a.x: %f, a.y: %f\n", a.x, a.y);
-//   printf("b.x: %f, b.y: %f\n", b.x, b.y);
-//   const int is_less = a < b;
-//   printf("Is less: %d\n", is_less);
-
-//   if (a < b) {
-//     return -1;
-//   } else if (a > b) {
-//     return 1;
-//   }
-//   return 0;
-// }
 
 #endif
