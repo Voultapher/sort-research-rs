@@ -41,6 +41,10 @@ pub mod cpp_nanosort;
 #[cfg(feature = "c_std_sys")]
 pub mod c_std_sys;
 
+// Call vendored LLVM libc qsort sort via FFI.
+#[cfg(feature = "c_llvm_libc")]
+pub mod c_llvm_libc;
+
 // Call crumsort sort via FFI.
 #[cfg(feature = "c_crumsort")]
 pub mod c_crumsort;
