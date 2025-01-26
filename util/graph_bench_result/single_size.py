@@ -24,16 +24,16 @@ CPU_INFO = None
 
 
 def find_time_scale(max_time_ns):
-    if max_time_ns < 1_000:
+    if max_time_ns < 10_000:
         return 1, "ns"
 
-    if max_time_ns < 1_000_000:
+    if max_time_ns < 10_000_000:
         return 1000, "us"
 
-    if max_time_ns < 1_000_000_000:
+    if max_time_ns < 10_000_000_000:
         return 1_000_000, "ms"
 
-    if max_time_ns < 1_000_000_000_000:
+    if max_time_ns < 10_000_000_000_000:
         return 1_000_000_000, "s"
 
     raise Exception("time scale not supported")

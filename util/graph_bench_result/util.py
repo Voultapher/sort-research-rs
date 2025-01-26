@@ -236,7 +236,7 @@ def build_implementation_meta_info():
         "cpp_std_sys_unstable": (palette[1], "square"),
         "cpp_std_gnu_unstable": (palette[1], "square"),
         "cpp_std_msvc_unstable": (palette[1], "square"),
-        "rust_std_unstable": (palette[4], "square"),
+        "rust_std_unstable": (palette[5], "circle"),
         "rust_std_vendored_unstable": (palette[4], "square"),
         "cpp_pdqsort_unstable": (palette[3], "square"),
         "cpp_std_libcxx_unstable": (palette[4], "square"),
@@ -260,6 +260,10 @@ def build_implementation_meta_info():
         "lomuto_branchless": (palette[5], "circle"),
         "lomuto_branchless_cyclic": (palette[6], "square_cross"),
         "lomuto_branchless_cyclic_opt": (palette[7], "triangle"),
+
+        "c_gnu_libc_unstable": (palette[3], "diamond"),
+        "c_idisort_unstable": (palette[6], "triangle"),
+        "c_llvm_libc_unstable": (palette[7], "square_cross"),
     }
 
     return meta_info
