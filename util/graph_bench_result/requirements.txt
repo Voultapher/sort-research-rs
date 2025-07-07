@@ -5,7 +5,7 @@ MarkupSafe==2.1.5
 natsort==8.4.0
 numpy==2.1.1
 packaging==24.1
-pandas==2.2.2
+pandas==2.3.0
 pillow==10.4.0
 python-dateutil==2.9.0.post0
 pytz==2024.1
