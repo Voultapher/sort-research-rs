@@ -649,10 +649,7 @@ fn observable_is_less_u64<S: Sort>(len: usize, pattern_fn: fn(usize) -> Vec<i32>
     assert!(mem::align_of::<CompCountU64>() <= mem::align_of::<u64>());
     // Ensure it is a small endian system.
     let test_val_u16 = 6043u16;
-    assert_eq!(
-        unsafe { mem::transmute::<u16, [u8; 2]>(test_val_u16) },
-        test_val_u16.to_le_bytes()
-    );
+    assert_eq!(test_val_u16.to_ne_bytes(), test_val_u16.to_le_bytes());
 
     let pattern = pattern_fn(len);
     let mut test_input = pattern
