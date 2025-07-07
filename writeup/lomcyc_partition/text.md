@@ -50,7 +50,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
     // alias because of type system rules. The left side element `left` can only be incremented once
     // per iteration, so it is <= `right` which makes it in-bounds as a transitive property. From
-    // this also follows that the call to `sub_ptr` at the end is safe.
+    // this also follows that the call to `offset_from_unsigned` at the end is safe.
     unsafe {
         let mut left = v_base;
 
@@ -64,7 +64,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             }
         }
 
-        left.sub_ptr(v_base)
+        left.offset_from_unsigned(v_base)
     }
 }
 ```
@@ -179,7 +179,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
     // alias because of type system rules. The left side element `left` can only be incremented once
     // per iteration, so it is <= `right` which makes it in-bounds as a transitive property. From
-    // this also follows that the call to `sub_ptr` at the end is safe.
+    // this also follows that the call to `offset_from_unsigned` at the end is safe.
     unsafe {
         let mut left = v_base;
 
@@ -191,7 +191,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             left = left.add(right_is_lt as usize);
         }
 
-        left.sub_ptr(v_base)
+        left.offset_from_unsigned(v_base)
     }
 }
 ```
@@ -337,7 +337,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             ptr::copy(gap.pos, new_left_dst, 1);
         }
 
-        lt_count += gap.pos.sub_ptr(v_base);
+        lt_count += gap.pos.offset_from_unsigned(v_base);
 
         lt_count
 
@@ -514,7 +514,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
         let gap_value_is_lt = is_less(&*left, pivot);
         left = left.add(gap_value_is_lt as usize);
 
-        let lt_count = left.sub_ptr(v_base);
+        let lt_count = left.offset_from_unsigned(v_base);
         lt_count
     }
 }

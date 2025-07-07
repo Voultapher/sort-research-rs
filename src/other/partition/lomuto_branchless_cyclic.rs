@@ -81,7 +81,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             loop_body!();
         }
 
-        lt_count += gap.pos.sub_ptr(v_base);
+        lt_count += gap.pos.offset_from_unsigned(v_base);
 
         lt_count
 

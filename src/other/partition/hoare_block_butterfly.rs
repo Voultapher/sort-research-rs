@@ -207,15 +207,15 @@ macro_rules! cyclic_permutation_swap_loop {
                 left_ptr = $next_left;
                 dbg_print_2!(
                     "{} -> {} | ",
-                    left_ptr.sub_ptr(base_ptr),
-                    right_ptr.sub_ptr(base_ptr)
+                    left_ptr.offset_from_unsigned(base_ptr),
+                    right_ptr.offset_from_unsigned(base_ptr)
                 );
                 ptr::copy_nonoverlapping(left_ptr, right_ptr, 1);
                 right_ptr = $next_right;
                 dbg_print_2!(
                     "{} -> {}\n",
-                    right_ptr.sub_ptr(base_ptr),
-                    left_ptr.sub_ptr(base_ptr)
+                    right_ptr.offset_from_unsigned(base_ptr),
+                    left_ptr.offset_from_unsigned(base_ptr)
                 );
                 ptr::copy_nonoverlapping(right_ptr, left_ptr, 1);
             }
@@ -408,7 +408,7 @@ unsafe fn fill_offset_block_down<const BLOCK: usize, T>(
 
     // dbg_print!(
     //     "{:?}\n",
-    //     &*ptr::slice_from_raw_parts(offset_out_ptr, offset_out_ptr.sub_ptr(offset_base_ptr))
+    //     &*ptr::slice_from_raw_parts(offset_out_ptr, offset_out_ptr.offset_from_unsigned(offset_base_ptr))
     // );
 
     // (offset_base_ptr, offset_out_ptr)
@@ -538,8 +538,8 @@ where
             }
 
             let swap_count = cmp::min(
-                l_offset_end_ptr.sub_ptr(l_offset_start_ptr),
-                r_offset_end_ptr.sub_ptr(r_offset_start_ptr),
+                l_offset_end_ptr.offset_from_unsigned(l_offset_start_ptr),
+                r_offset_end_ptr.offset_from_unsigned(r_offset_start_ptr),
             );
 
             // type DebugT = i32;
@@ -581,14 +581,14 @@ where
 
             // dbg_print!(
             //     "l_ptr offset: {} r_ptr offset: {}",
-            //     l_ptr.sub_ptr(arr_ptr),
-            //     r_ptr.sub_ptr(arr_ptr)
+            //     l_ptr.offset_from_unsigned(arr_ptr),
+            //     r_ptr.offset_from_unsigned(arr_ptr)
             // );
         }
 
         let l_adjusted_ptr = l_ptr;
         let r_end_ptr = r_ptr.add(BLOCK);
-        let un_partitioned_count = r_end_ptr.sub_ptr(l_adjusted_ptr);
+        let un_partitioned_count = r_end_ptr.offset_from_unsigned(l_adjusted_ptr);
 
         // TODO usage, fuse with small partitions.
 
@@ -691,7 +691,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     });
 
     // SAFETY: block_partition is assumed to return a sub-slice of v.
-    let lt_block_count = unsafe { remaining_v.as_ptr().sub_ptr(arr_ptr) };
+    let lt_block_count = unsafe { remaining_v.as_ptr().offset_from_unsigned(arr_ptr) };
 
     lt_block_count + <T as Partition>::small_partition(remaining_v, pivot, is_less)
 }

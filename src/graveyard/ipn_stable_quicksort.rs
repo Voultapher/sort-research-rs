@@ -342,7 +342,7 @@ where
     fn width<T>(l: *const T, r: *const T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        unsafe { r.sub_ptr(l) }
+        unsafe { r.offset_from_unsigned(l) }
     }
 
     loop {
@@ -538,7 +538,7 @@ where
 //     // SAFETY: swap now contains all elements that belong on the left side of the pivot. All
 //     // comparisons have been done if is_less would have panicked v would have stayed untouched.
 //     unsafe {
-//         let l_elems = swap_ptr_l.sub_ptr(buf);
+//         let l_elems = swap_ptr_l.offset_from_unsigned(buf);
 
 //         // Now that buf has the correct order overwrite arr_ptr.
 //         ptr::copy_nonoverlapping(buf, arr_ptr, len);
@@ -613,7 +613,7 @@ where
         // SAFETY: swap now contains all elements, `swap[..l_count]` has the elements that are not
         // equal and swap[l_count..]` all the elements that are equal but reversed. All comparisons
         // have been done now, if is_less would have panicked v would have stayed untouched.
-        let l_count = swap_ptr_l.sub_ptr(buf);
+        let l_count = swap_ptr_l.offset_from_unsigned(buf);
         let r_count = len - l_count;
 
         // Copy pivot_val into it's correct position.
@@ -1405,7 +1405,7 @@ where
         fn drop(&mut self) {
             // `T` is not a zero-sized type, and these are pointers into a slice's elements.
             unsafe {
-                let len = self.end.sub_ptr(self.start);
+                let len = self.end.offset_from_unsigned(self.start);
                 ptr::copy_nonoverlapping(self.start, self.dest, len);
             }
         }

@@ -43,6 +43,6 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             left = left.add(1);
         }
 
-        left.sub_ptr(v_base)
+        left.offset_from_unsigned(v_base)
     }
 }

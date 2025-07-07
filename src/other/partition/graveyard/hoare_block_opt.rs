@@ -135,7 +135,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
     fn width<T>(l: *const T, r: *const T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        unsafe { r.sub_ptr(l) }
+        unsafe { r.offset_from_unsigned(l) }
     }
 
     loop {

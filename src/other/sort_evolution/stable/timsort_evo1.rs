@@ -307,7 +307,7 @@ where
         fn drop(&mut self) {
             // `T` is not a zero-sized type, and these are pointers into a slice's elements.
             unsafe {
-                let len = self.end.sub_ptr(self.start);
+                let len = self.end.offset_from_unsigned(self.start);
                 ptr::copy_nonoverlapping(self.start, self.dest, len);
             }
         }

@@ -39,7 +39,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
 
     // SAFETY: The bounded loop ensures that `right` is always in-bounds. `v` and `pivot` can't
     // alias because of type system rules. `left` is guaranteed somewhere between `v_base` and
-    // `right` making it also in-bounds and the call to `sub_ptr` at the end safe.
+    // `right` making it also in-bounds and the call to `offset_from_unsigned` at the end safe.
     unsafe {
         let mut lt_count = 0;
         let mut right = v_base;

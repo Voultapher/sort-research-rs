@@ -153,7 +153,8 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
                         fill_swap_ptr_block(BLOCK, l_ptr, ge_ptr_buffer_ptr_base, &mut |elem| {
                             !is_less(elem, pivot)
                         });
-                    lt_count += BLOCK - ge_ptr_buffer_ptr.sub_ptr(ge_ptr_buffer_ptr_base);
+                    lt_count +=
+                        BLOCK - ge_ptr_buffer_ptr.offset_from_unsigned(ge_ptr_buffer_ptr_base);
                 }
 
                 let is_refill_r = lt_ptr_buffer_ptr_base == lt_ptr_buffer_ptr;
@@ -165,12 +166,12 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
                         lt_ptr_buffer_ptr_base,
                         &mut |elem| is_less(elem, pivot),
                     );
-                    lt_count += lt_ptr_buffer_ptr.sub_ptr(lt_ptr_buffer_ptr_base);
+                    lt_count += lt_ptr_buffer_ptr.offset_from_unsigned(lt_ptr_buffer_ptr_base);
                 }
 
                 let swap_count = cmp::min(
-                    ge_ptr_buffer_ptr.sub_ptr(ge_ptr_buffer_ptr_base),
-                    lt_ptr_buffer_ptr.sub_ptr(lt_ptr_buffer_ptr_base),
+                    ge_ptr_buffer_ptr.offset_from_unsigned(ge_ptr_buffer_ptr_base),
+                    lt_ptr_buffer_ptr.offset_from_unsigned(lt_ptr_buffer_ptr_base),
                 );
 
                 swap_between_blocks(ge_ptr_buffer_ptr_base, lt_ptr_buffer_ptr_base, swap_count);
@@ -183,7 +184,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             }
         }
 
-        // let remaining = r_ptr.sub_ptr(l_ptr);
+        // let remaining = r_ptr.offset_from_unsigned(l_ptr);
         // dbg!(remaining);
 
         lt_count.saturating_sub(BLOCK) // FIXME

@@ -211,8 +211,8 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
                 }
 
                 let swap_count = cmp::min(
-                    l_offset_end_ptr.sub_ptr(l_offset_start_ptr),
-                    r_offset_end_ptr.sub_ptr(r_offset_start_ptr),
+                    l_offset_end_ptr.offset_from_unsigned(l_offset_start_ptr),
+                    r_offset_end_ptr.offset_from_unsigned(r_offset_start_ptr),
                 );
 
                 // TODO try out version that is manually unrolled to two.
@@ -232,10 +232,10 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
             }
 
             // TODO use leftover block info.
-            remaining_len = r_ptr.add(BLOCK).sub_ptr(l_ptr);
+            remaining_len = r_ptr.add(BLOCK).offset_from_unsigned(l_ptr);
         }
 
-        let outer_lt_count = l_ptr.sub_ptr(arr_ptr);
+        let outer_lt_count = l_ptr.offset_from_unsigned(arr_ptr);
 
         let inner_lt_count = <crate::other::partition::lomuto_branchless_cyclic::PartitionImpl as crate::other::partition::Partition>::partition_by(&mut *ptr::slice_from_raw_parts_mut(arr_ptr, remaining_len), pivot, is_less);
 

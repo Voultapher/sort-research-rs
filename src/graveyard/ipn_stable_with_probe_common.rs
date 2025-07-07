@@ -822,7 +822,7 @@ where
         fn drop(&mut self) {
             // SAFETY: `T` is not a zero-sized type, and these are pointers into a slice's elements.
             unsafe {
-                let len = self.end.sub_ptr(self.start);
+                let len = self.end.offset_from_unsigned(self.start);
                 ptr::copy_nonoverlapping(self.start, self.dest, len);
             }
         }
@@ -1162,8 +1162,8 @@ where
                     panic_on_ord_violation();
                 }
 
-                let buf_rest_len = t_ptr_data.sub_ptr(ptr_data) + 1;
-                let copy_len = t_ptr_left.sub_ptr(ptr_left) + 1;
+                let buf_rest_len = t_ptr_data.offset_from_unsigned(ptr_data) + 1;
+                let copy_len = t_ptr_left.offset_from_unsigned(ptr_left) + 1;
                 assert!(copy_len == buf_rest_len);
                 ptr::copy_nonoverlapping(ptr_left, ptr_data, copy_len);
                 ptr_left = ptr_left.add(copy_len);
@@ -1173,8 +1173,8 @@ where
                     panic_on_ord_violation();
                 }
 
-                let buf_rest_len = t_ptr_data.sub_ptr(ptr_data) + 1;
-                let copy_len = t_ptr_right.sub_ptr(ptr_right) + 1;
+                let buf_rest_len = t_ptr_data.offset_from_unsigned(ptr_data) + 1;
+                let copy_len = t_ptr_right.offset_from_unsigned(ptr_right) + 1;
                 assert!(copy_len == buf_rest_len);
                 ptr::copy_nonoverlapping(ptr_right, ptr_data, copy_len);
                 ptr_right = ptr_right.add(copy_len);
@@ -1422,7 +1422,7 @@ where
         // SAFETY: swap now contains all elements, `swap[..l_count]` has the elements that are not
         // equal and swap[l_count..]` all the elements that are equal but reversed. All comparisons
         // have been done now, if is_less would have panicked v would have stayed untouched.
-        let l_count = swap_ptr_l.sub_ptr(buf);
+        let l_count = swap_ptr_l.offset_from_unsigned(buf);
         let r_count = len - l_count;
 
         // Copy pivot_val into it's correct position.

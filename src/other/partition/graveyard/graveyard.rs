@@ -341,8 +341,8 @@ fn xx() {
     // comparisons have been done if is_less would have panicked v would have stayed untouched.
     unsafe {
         let arr_ptr = v.as_mut_ptr();
-        let l_elems = swap_ptr.sub_ptr(swap.as_ptr() as *const T);
-        let r_elems = offsets_ptr.sub_ptr(offsets_r.as_ptr() as *const u8);
+        let l_elems = swap_ptr.offset_from_unsigned(swap.as_ptr() as *const T);
+        let r_elems = offsets_ptr.offset_from_unsigned(offsets_r.as_ptr() as *const u8);
 
         let offsets_base_ptr = offsets_r.as_ptr() as *const u8;
 
@@ -537,7 +537,7 @@ where
     fn width<T>(l: *mut T, r: *mut T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        unsafe { r.sub_ptr(l) }
+        unsafe { r.offset_from_unsigned(l) }
     }
 
     loop {
@@ -811,7 +811,7 @@ where
     fn width<T>(l: *const T, r: *const T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        unsafe { r.sub_ptr(l) }
+        unsafe { r.offset_from_unsigned(l) }
     }
 
     // TODO check smaller sizes right now this uses BLOCK * 16 * 8 * 2 stack space.
@@ -1107,8 +1107,8 @@ where
         }
 
         // Swap now contains [l_values_a, r_values_a, l_values_b, r_values_b]
-        let is_l_count_a = swap_ptr_l_a.sub_ptr(swap_ptr);
-        let is_l_count_b = swap_ptr_l_b.sub_ptr(swap_ptr) - len_div_2;
+        let is_l_count_a = swap_ptr_l_a.offset_from_unsigned(swap_ptr);
+        let is_l_count_b = swap_ptr_l_b.offset_from_unsigned(swap_ptr) - len_div_2;
 
         let mut is_l_count = is_l_count_a + is_l_count_b;
 
@@ -1216,8 +1216,8 @@ where
     unsafe {
         loop {
             // TODO intrinsics unlikely.
-            // dbg!(i, r_ptr.sub_ptr(arr_ptr));
-            let block_size = cmp::min(BLOCK_SIZE, r_ptr.sub_ptr(base_ptr));
+            // dbg!(i, r_ptr.offset_from_unsigned(arr_ptr));
+            let block_size = cmp::min(BLOCK_SIZE, r_ptr.offset_from_unsigned(base_ptr));
 
             // for i in 0..BLOCK_SIZE {
             //     ptr::copy_nonoverlapping(&999, scratch_ptr.add(i) as *mut DebugT, 1);
@@ -1326,7 +1326,7 @@ where
             }
         }
 
-        base_ptr.sub_ptr(arr_ptr)
+        base_ptr.offset_from_unsigned(arr_ptr)
     }
 }
 
@@ -1456,9 +1456,9 @@ where
 //         mem::forget(tmp);
 //         // println!(
 //         //     "l_ge_ptr: {} l_lt_fill_ptr: {} r_unknown_ptr: {}",
-//         //     l_ge_ptr.sub_ptr(l_ptr),
-//         //     l_lt_fill_ptr.sub_ptr(l_ptr),
-//         //     r_ptr.add(BLOCK).sub_ptr(r_unknown_ptr)
+//         //     l_ge_ptr.offset_from_unsigned(l_ptr),
+//         //     l_lt_fill_ptr.offset_from_unsigned(l_ptr),
+//         //     r_ptr.add(BLOCK).offset_from_unsigned(r_unknown_ptr)
 //         // );
 
 //         l_bitmap = clear_lowest_bit(l_bitmap);
@@ -1624,7 +1624,7 @@ where
     fn width<T>(l: *mut T, r: *mut T) -> usize {
         debug_assert!(r.addr() >= l.addr());
 
-        unsafe { r.sub_ptr(l) }
+        unsafe { r.offset_from_unsigned(l) }
     }
 
     loop {
@@ -2320,7 +2320,7 @@ const OFFSET_SENTINEL: u8 = u8::MAX;
 //         // let c = simd::u8x16::from(cmp_result);
 //         // let scatter_mask_limited = ptr::slice_from_raw_parts(
 //         //     scatter_mask.as_ptr() as *mut u8,
-//         //     scatter_mask_ptr.sub_ptr(scatter_mask.as_ptr() as *mut u8),
+//         //     scatter_mask_ptr.offset_from_unsigned(scatter_mask.as_ptr() as *mut u8),
 //         // );
 
 //         // println!("{:?}", is_offset.assume_init_ref());
@@ -2331,7 +2331,7 @@ const OFFSET_SENTINEL: u8 = u8::MAX;
 //         block += BLOCK_SIZE;
 //     }
 
-//     (offsets, offsets_ptr.sub_ptr(offsets.as_ptr() as *mut u8))
+//     (offsets, offsets_ptr.offset_from_unsigned(offsets.as_ptr() as *mut u8))
 // }
 
 /// Check 128 elements of v and return array of offsets that return true for check(elem, pivot)
@@ -2359,7 +2359,7 @@ where
         offsets_ptr = offsets_ptr.add(check(v.get_unchecked(i), pivot) as usize);
     }
 
-    (offsets_ptr, offsets_ptr.sub_ptr(offsets_base_ptr))
+    (offsets_ptr, offsets_ptr.offset_from_unsigned(offsets_base_ptr))
 }
 
 fn analyze_packed_offset(val: u64) -> (u64, usize) {
@@ -2668,10 +2668,10 @@ where
         // let mut lt_idx_buffer = MaybeUninit::<[u8; BLOCK * 2]>::uninit();
         // let mut lt_idx_ptr = lt_idx_buffer.as_mut_ptr() as *mut u8;
 
-        // let remainder = r_end_ptr.sub_ptr(l_ptr);
+        // let remainder = r_end_ptr.offset_from_unsigned(l_ptr);
         // // dbg!(remainder);
         // debug_assert!(remainder < (BLOCK * 2));
-        // return l_ptr.sub_ptr(arr_ptr);
+        // return l_ptr.offset_from_unsigned(arr_ptr);
 
         // macro_rules! set_idx_ptrs(
         //     ($i:expr) => {
@@ -2704,10 +2704,10 @@ where
         // }
 
         // let ge_idx_base_ptr = ge_idx_buffer.as_ptr() as *const u8;
-        // let ge_count = ge_idx_ptr.sub_ptr(ge_idx_base_ptr);
+        // let ge_count = ge_idx_ptr.offset_from_unsigned(ge_idx_base_ptr);
 
         // let lt_idx_base_ptr = lt_idx_buffer.as_ptr() as *const u8;
-        // let lt_count = lt_idx_ptr.sub_ptr(lt_idx_base_ptr);
+        // let lt_count = lt_idx_ptr.offset_from_unsigned(lt_idx_base_ptr);
 
         // let swap_count = cmp::min(ge_count, lt_count);
 
@@ -2741,10 +2741,10 @@ where
         //     ptr::swap_nonoverlapping(l_ptr.add(l_ge_idx), l_ptr.add(r_lt_idx), 1);
         // }
 
-        // let remaining = r_ptr.sub_ptr(l_ptr);
+        // let remaining = r_ptr.offset_from_unsigned(l_ptr);
         // dbg!(remaining);
 
-        l_ptr.sub_ptr(arr_ptr)
+        l_ptr.offset_from_unsigned(arr_ptr)
     }
 }
 
@@ -2884,8 +2884,8 @@ where
     unsafe {
         loop {
             // TODO intrinsics unlikely.
-            // dbg!(i, r_ptr.sub_ptr(arr_ptr));
-            let block_size = cmp::min(BLOCK_SIZE, r_ptr.sub_ptr(base_ptr));
+            // dbg!(i, r_ptr.offset_from_unsigned(arr_ptr));
+            let block_size = cmp::min(BLOCK_SIZE, r_ptr.offset_from_unsigned(base_ptr));
 
             // for i in 0..BLOCK_SIZE {
             //     ptr::copy_nonoverlapping(&999, scratch_lt_ptr.add(i) as *mut DebugT, 1);
@@ -2967,7 +2967,7 @@ where
             let orig_base_ptr = base_ptr;
             // dbg!(lt_count_up, ge_count_up, lt_count, ge_count);
 
-            // let base_diff = base_ptr.sub_ptr(arr_ptr);
+            // let base_diff = base_ptr.offset_from_unsigned(arr_ptr);
             // println!("base now: {} -> {}", base_diff, base_diff + lt_count);
 
             base_ptr = base_ptr.add(lt_count);
@@ -2978,13 +2978,13 @@ where
             if block_size == BLOCK_SIZE {
                 // Only necessary if there will be future blocks that we look at.
                 // Otherwise the two scratch buffers hold all the necessary information.
-                let save_count = cmp::min(ge_count, r_ptr.sub_ptr(base_ptr));
+                let save_count = cmp::min(ge_count, r_ptr.offset_from_unsigned(base_ptr));
                 ptr::copy_nonoverlapping(orig_r_ptr.sub(save_count), base_ptr, save_count);
             }
 
             // Copy the less than (lt) elements to the start of base_ptr.
             // let x = lt_out_base_ptr_up.sub(lt_count_down);
-            // let base_diff = base_ptr.sub_ptr(arr_ptr);
+            // let base_diff = base_ptr.offset_from_unsigned(arr_ptr);
             // assert!(
             //     orig_base_ptr.add(lt_count) <= arr_ptr.add(len) && x >= scratch_lt_ptr,
             //     "{len} {base_diff} {lt_count} arr_ptr: {:?} pivot: {}",
@@ -3025,7 +3025,7 @@ where
             }
         }
 
-        base_ptr.sub_ptr(arr_ptr)
+        base_ptr.offset_from_unsigned(arr_ptr)
     }
 }
 
@@ -3093,8 +3093,8 @@ where
             elem_ptr_b = elem_ptr_b.add(1);
         }
 
-        let is_less_count_a = fill_ptr_a.sub_ptr(arr_ptr);
-        let is_less_count_b = fill_ptr_b.sub_ptr(arr_ptr) - len_div_n;
+        let is_less_count_a = fill_ptr_a.offset_from_unsigned(arr_ptr);
+        let is_less_count_b = fill_ptr_b.offset_from_unsigned(arr_ptr) - len_div_n;
 
         ptr::swap_nonoverlapping(
             arr_ptr.add(is_less_count_a),
@@ -3109,7 +3109,7 @@ where
             fill_ptr = fill_ptr.add(elem_is_less as usize);
         }
 
-        fill_ptr.sub_ptr(arr_ptr)
+        fill_ptr.offset_from_unsigned(arr_ptr)
     }
 }
 
@@ -3193,10 +3193,10 @@ where
             elem_ptr_d = elem_ptr_d.add(1);
         }
 
-        let is_less_count_a = fill_ptr_a.sub_ptr(arr_ptr);
-        let is_less_count_b = fill_ptr_b.sub_ptr(arr_ptr) - len_div_n;
-        let is_less_count_c = fill_ptr_c.sub_ptr(arr_ptr) - (len_div_n * 2);
-        let is_less_count_d = fill_ptr_d.sub_ptr(arr_ptr) - (len_div_n * 3);
+        let is_less_count_a = fill_ptr_a.offset_from_unsigned(arr_ptr);
+        let is_less_count_b = fill_ptr_b.offset_from_unsigned(arr_ptr) - len_div_n;
+        let is_less_count_c = fill_ptr_c.offset_from_unsigned(arr_ptr) - (len_div_n * 2);
+        let is_less_count_d = fill_ptr_d.offset_from_unsigned(arr_ptr) - (len_div_n * 3);
 
         let mut is_less_count = is_less_count_a;
 
@@ -3228,6 +3228,6 @@ where
             fill_ptr = fill_ptr.add(elem_is_less as usize);
         }
 
-        fill_ptr.sub_ptr(arr_ptr)
+        fill_ptr.offset_from_unsigned(arr_ptr)
     }
 }

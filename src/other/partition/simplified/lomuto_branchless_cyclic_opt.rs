@@ -65,7 +65,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
         let gap_value_is_lt = is_less(&*left, pivot);
         left = left.add(gap_value_is_lt as usize);
 
-        let lt_count = left.sub_ptr(v_base);
+        let lt_count = left.offset_from_unsigned(v_base);
         lt_count
     }
 }

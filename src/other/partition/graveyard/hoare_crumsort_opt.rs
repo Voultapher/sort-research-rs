@@ -54,7 +54,7 @@ where
 
     let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO
-        unsafe { (a_ptr.sub_ptr(arr_ptr) - elem_i) <= ROTATION_ELEMS }
+        unsafe { (a_ptr.offset_from_unsigned(arr_ptr) - elem_i) <= ROTATION_ELEMS }
     };
 
     let mut swap = MaybeUninit::<[T; SWAP_SIZE]>::uninit();

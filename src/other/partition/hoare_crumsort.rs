@@ -71,7 +71,7 @@ where
         // Now that swap has the correct order overwrite arr_ptr.
         ptr::copy_nonoverlapping(swap_ptr, arr_ptr, len);
 
-        swap_ptr_l.sub_ptr(swap_ptr)
+        swap_ptr_l.offset_from_unsigned(swap_ptr)
     }
 }
 
@@ -86,7 +86,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
 
     let advance_left = |a_ptr: *const T, arr_ptr: *const T, elem_i: usize| -> bool {
         // SAFETY: TODO
-        unsafe { (a_ptr.sub_ptr(arr_ptr) - elem_i) <= ROTATION_ELEMS }
+        unsafe { (a_ptr.offset_from_unsigned(arr_ptr) - elem_i) <= ROTATION_ELEMS }
     };
 
     let mut swap = MaybeUninit::<[T; ROTATION_ELEMS * 2]>::uninit();

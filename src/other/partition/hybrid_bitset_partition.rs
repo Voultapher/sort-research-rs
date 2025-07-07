@@ -190,16 +190,16 @@ macro_rules! instantiate_block_partition {
                     r_ptr = r_ptr.sub((r_bitmap == 0) as usize * BLOCK);
                     // println!(
                     //     "l_ptr: {} r_ptr: {}",
-                    //     l_ptr.sub_ptr(arr_ptr),
-                    //     r_ptr.sub_ptr(arr_ptr)
+                    //     l_ptr.offset_from_unsigned(arr_ptr),
+                    //     r_ptr.offset_from_unsigned(arr_ptr)
                     // );
                 }
 
                 let r_end_ptr = r_ptr.add(BLOCK);
 
                 BlockPartitionResult {
-                    lt_count: l_ptr.sub_ptr(arr_ptr),
-                    un_partitioned_count: r_end_ptr.sub_ptr(l_ptr),
+                    lt_count: l_ptr.offset_from_unsigned(arr_ptr),
+                    un_partitioned_count: r_end_ptr.offset_from_unsigned(l_ptr),
                     l_bitmap,
                     r_bitmap,
                 }
@@ -583,7 +583,7 @@ pub fn use_bitmap_info<T>(v: &mut [T], block_partition_result: BlockPartitionRes
             // dbg!(un_partitioned_count);
             // dbg!(new_un_partitioned_count);
 
-            // println!("l_adjusted_ptr: {}", l_adjusted_ptr.sub_ptr(l_ptr));
+            // println!("l_adjusted_ptr: {}", l_adjusted_ptr.offset_from_unsigned(l_ptr));
 
             let swap_count;
             let l_swap_ptr;
@@ -612,8 +612,8 @@ pub fn use_bitmap_info<T>(v: &mut [T], block_partition_result: BlockPartitionRes
             //     "l_swap_ptr val: {} r_swap_ptr val: {} l_swap_ptr offset: {} r_swap_ptr offset: {}, swap_count: {}",
             //     *(l_swap_ptr as *const DebugT),
             //     *(r_swap_ptr as *const DebugT),
-            //     l_swap_ptr.sub_ptr(v.as_ptr()),
-            //     r_swap_ptr.sub_ptr(v.as_ptr()),
+            //     l_swap_ptr.offset_from_unsigned(v.as_ptr()),
+            //     r_swap_ptr.offset_from_unsigned(v.as_ptr()),
             //     swap_count
             // );
 
@@ -635,8 +635,8 @@ pub fn use_bitmap_info<T>(v: &mut [T], block_partition_result: BlockPartitionRes
         //     println!(
         //         "v.len(): {} new_start_ptr offset: {} l_ptr offset: {}",
         //         v.len(),
-        //         new_start_ptr.sub_ptr(v.as_ptr()),
-        //         l_ptr.sub_ptr(v.as_ptr())
+        //         new_start_ptr.offset_from_unsigned(v.as_ptr()),
+        //         l_ptr.offset_from_unsigned(v.as_ptr())
         //     );
 
         //     debug_assert!(new_start_ptr >= v.as_ptr());
@@ -650,7 +650,7 @@ pub fn use_bitmap_info<T>(v: &mut [T], block_partition_result: BlockPartitionRes
     // // specified in the trait documentation.
     // let (lt_block_count, small_partition_slice) = unsafe {
     //     (
-    //         left_ptr.sub_ptr(arr_ptr),
+    //         left_ptr.offset_from_unsigned(arr_ptr),
     //         &mut *ptr::slice_from_raw_parts_mut(left_ptr, small_partition_len),
     //     )
     // };
@@ -744,7 +744,7 @@ fn partition<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], pivot: &T, is_less: &mut 
         let block_partition_result = <T as Partition>::block_partition(local_v, pivot, is_less);
         local_v = use_bitmap_info(local_v, block_partition_result);
         // SAFETY: block_partition and use_bitmap_info are expected to work correctly and use_bitmap_info is expected to return a slice that is within `v`.
-        lt_block_count = unsafe { local_v.as_ptr().sub_ptr(arr_ptr) };
+        lt_block_count = unsafe { local_v.as_ptr().offset_from_unsigned(arr_ptr) };
     }
 
     lt_block_count + <T as Partition>::small_partition(local_v, pivot, is_less)
