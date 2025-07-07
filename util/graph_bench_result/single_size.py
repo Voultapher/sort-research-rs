@@ -57,6 +57,8 @@ def plot_single_size(ty, prediction_state, test_len, values):
     y = []
     bench_times = []
     colors = []
+    hatch_pattern = []
+    fill_alpha = []
     sort_names = set()
 
     for pattern, val in reversed(natsorted(values.items())):
@@ -64,12 +66,13 @@ def plot_single_size(ty, prediction_state, test_len, values):
             val.items(), key=lambda x: x[1], reverse=True
         ):
             sort_names.add(sort_name)
-            is_new_sort = sort_name.endswith("_new")
 
+            is_new_sort = sort_name.endswith("_new")
             effective_sort_name = (
                 sort_name.partition("_new")[0] if is_new_sort else sort_name
             )
-            # TODO change coloring with effective_sort_name
+            hatch_pattern.append("/" if is_new_sort else None)
+            fill_alpha.append(0.8 if is_new_sort else 1.0)
 
             y.append((pattern, sort_name))
             bench_times.append(bench_times_ns / time_div)
@@ -84,6 +87,8 @@ def plot_single_size(ty, prediction_state, test_len, values):
             "bench_times": bench_times,
             "bench_times_text": bench_times_text,
             "colors": colors,
+            "hatch_pattern": hatch_pattern,
+            "fill_alpha": fill_alpha,
         }
     )
 
@@ -109,6 +114,8 @@ def plot_single_size(ty, prediction_state, test_len, values):
         source=source,
         fill_color="colors",
         line_color="black",
+        hatch_pattern="hatch_pattern",
+        fill_alpha="fill_alpha",
     )
 
     labels = LabelSet(
