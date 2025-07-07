@@ -48,6 +48,11 @@ fn random_x_percent(len: usize, percent: f64) -> Vec<i32> {
     shuffle_vec(v)
 }
 
+fn random_sorted_not_last(len: usize, last_n_unsorted: usize) -> Vec<i32> {
+    let sorted_precent = (1.0 - (last_n_unsorted as f64 / len as f64)) * 100.0;
+    patterns::random_sorted(len, sorted_precent)
+}
+
 fn bench_patterns<T: Ord + std::fmt::Debug>(
     c: &mut Criterion,
     test_len: usize,
@@ -219,6 +224,10 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
         ("random_s70", |len| patterns::random_sorted(len, 70.0)),
         ("random_s90", |len| patterns::random_sorted(len, 90.0)),
         ("random_s99", |len| patterns::random_sorted(len, 99.0)),
+        ("random_snl_1", |len| random_sorted_not_last(len, 1)),
+        ("random_snl_2", |len| random_sorted_not_last(len, 2)),
+        ("random_snl_5", |len| random_sorted_not_last(len, 5)),
+        ("random_snl_10", |len| random_sorted_not_last(len, 10)),
         ("random_m5", |len| patterns::random_merge(len, 5.0)),
         ("random_m10", |len| patterns::random_merge(len, 10.0)),
         ("random_m30", |len| patterns::random_merge(len, 30.0)),
