@@ -27,7 +27,6 @@ where
 ////////////////////////////////////////////////////////////////////////////////
 
 #[inline]
-#[cfg(not(no_global_oom_handling))]
 fn stable_sort<T, F>(v: &mut [T], mut compare: F)
 where
     F: FnMut(&T, &T) -> Ordering,
@@ -193,7 +192,6 @@ where
 /// Never inline this function to avoid code bloat. It still optimizes nicely and has practically no
 /// performance impact.
 #[inline(never)]
-#[cfg(not(no_global_oom_handling))]
 unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,

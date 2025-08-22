@@ -26,7 +26,6 @@ where
 ////////////////////////////////////////////////////////////////////////////////
 
 #[inline]
-#[cfg(not(no_global_oom_handling))]
 fn unstable_sort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,

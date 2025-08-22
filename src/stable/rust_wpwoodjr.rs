@@ -100,7 +100,6 @@ where
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]` becomes sorted.
 ///
 /// This is the integral subroutine of insertion sort.
-#[cfg(not(no_global_oom_handling))]
 // benchmarking indicated that inlining makes a substantial improvement, yet only requires a couple of hundred bytes
 #[inline(always)]
 fn insert_end<T, F>(v: &mut [T], is_less: &mut F)
@@ -178,7 +177,6 @@ where
 /// The two slices must be non-empty and `mid` must be in bounds. Buffer `buf` must be long enough
 /// to hold a copy of the shorter slice.
 #[allow(unused_unsafe)]
-#[cfg(not(no_global_oom_handling))]
 unsafe fn merge<T, F>(v: &mut [T], mid: usize, buf: *mut T, is_less: &mut F)
 where
     F: FnMut(&T, &T) -> bool,
@@ -303,7 +301,6 @@ where
 /// 2) Small slices sort using a fast insertion sort, then merge
 ///
 /// The total running time is *O*(*n* \* log(*n*)) worst-case.
-#[cfg(not(no_global_oom_handling))]
 fn merge_sort<T, F>(v: &mut [T], mut is_less: F)
 where
     F: FnMut(&T, &T) -> bool,
