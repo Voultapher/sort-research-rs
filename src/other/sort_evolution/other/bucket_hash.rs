@@ -22,13 +22,17 @@ fn bucket_sort<T: Clone + Ord + Hash>(v: &mut [T]) {
 
     let mut buckets = FxHashMap::<T, usize>::default();
 
-    for elem in v.iter() {
-        if let Some(entry) = buckets.get_mut(elem) {
-            *entry += 1;
-        } else {
-            buckets.insert(elem.clone(), 1);
-        }
+    for elem in v.iter().cloned() {
+        *buckets.entry(elem).or_insert(0) += 1;
     }
+
+    // for elem in v.iter() {
+    //     if let Some(entry) = buckets.get_mut(elem) {
+    //         *entry += 1;
+    //     } else {
+    //         buckets.insert(elem.clone(), 1);
+    //     }
+    // }
 
     let mut buckets_sorted = buckets.into_iter().collect::<Vec<_>>();
     buckets_sorted.sort_unstable_by(|a, b| a.0.cmp(&b.0));

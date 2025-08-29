@@ -20,13 +20,17 @@ fn bucket_sort<T: Clone + Ord>(v: &mut [T]) {
 
     let mut buckets = BTreeMap::<T, usize>::new();
 
-    for elem in v.iter() {
-        if let Some(entry) = buckets.get_mut(elem) {
-            *entry += 1;
-        } else {
-            buckets.insert(elem.clone(), 1);
-        }
+    for elem in v.iter().cloned() {
+        *buckets.entry(elem).or_insert(0) += 1;
     }
+
+    // for elem in v.iter() {
+    //     if let Some(entry) = buckets.get_mut(elem) {
+    //         *entry += 1;
+    //     } else {
+    //         buckets.insert(elem.clone(), 1);
+    //     }
+    // }
 
     let mut offset = 0;
     for (elem, count) in buckets {
