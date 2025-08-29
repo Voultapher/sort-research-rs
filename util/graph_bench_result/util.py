@@ -215,43 +215,52 @@ def build_implementation_meta_info():
     # regardless of the set of tested sorts.
     # This avoids color swapping between different graphs.
     meta_info = {
-        # Stable
-        "c_fluxsort_stable": (palette[0], "square"),
-        "cpp_std_sys_stable": (palette[1], "square"),
-        "cpp_std_gnu_stable": (palette[1], "square"),
-        "cpp_std_msvc_stable": (palette[1], "square"),
-        "rust_std_stable": (palette[4], "square"),
-        "rust_std_vendored_stable": (palette[4], "square"),
-        "rust_glidesort_stable": (palette[3], "triangle"),
-        "rust_driftsort_stable": (palette[7], "square"),
-        "cpp_std_libcxx_stable": (palette[4], "square"),
-        "rust_ipn_stable": (palette[5], "square"),
-        "cpp_powersort_stable": (palette[6], "square"),
-        "cpp_powersort_4way_stable": (palette[7], "square"),
-        "rust_wpwoodjr_stable": (palette[7], "square"),
-        "rust_tinymergesort_stable": (palette[7], "square"),
-        "rust_driftsort_stable": (palette[6], "circle"),
-        # Unstable
         "c_crumsort_unstable": (palette[0], "square"),
-        "cpp_std_sys_unstable": (palette[1], "square"),
-        "cpp_std_gnu_unstable": (palette[1], "square"),
-        "cpp_std_msvc_unstable": (palette[1], "square"),
-        "rust_std_unstable": (palette[5], "circle"),
-        "rust_std_vendored_unstable": (palette[4], "square"),
+        "c_fluxsort_stable": (palette[0], "square"),
+        "c_gnu_libc_unstable": (palette[3], "diamond"),
+        "c_idisort_unstable": (palette[6], "triangle"),
+        "c_llvm_libc_unstable": (palette[7], "square_cross"),
+        "c_std_sys_unstable": (palette[1], "square_pin"),
+
+        "cpp_blockquicksort_unstable": (palette[7], "square"),
+        "cpp_intel_avx512": (palette[7], "square"),
+        "cpp_ips4o_unstable": (palette[6], "square"),
         "cpp_pdqsort_unstable": (palette[3], "square"),
+        "cpp_powersort_4way_stable": (palette[7], "square"),
+        "cpp_powersort_stable": (palette[6], "square"),
+        "cpp_std_gnu_stable": (palette[1], "square"),
+        "cpp_std_gnu_unstable": (palette[1], "square"),
+        "cpp_std_libcxx_stable": (palette[4], "square"),
         "cpp_std_libcxx_unstable": (palette[4], "square"),
+        "cpp_std_msvc_stable": (palette[1], "square"),
+        "cpp_std_msvc_unstable": (palette[1], "square"),
+        "cpp_std_sys_stable": (palette[1], "square"),
+        "cpp_std_sys_unstable": (palette[1], "square"),
+        "cpp_vqsort": (palette[6], "square"),
+
+        "rust_crumsort_rs_unstable": (palette[6], "square"),
+        "rust_driftsort_stable": (palette[7], "square"),
+        "rust_glidesort_stable": (palette[3], "triangle"),
+        "rust_ipn_stable": (palette[5], "square"),
         "rust_ipn_unstable": (palette[5], "square"),
         "rust_ipnsort_unstable": (palette[5], "circle"),
-        "cpp_ips4o_unstable": (palette[6], "square"),
-        "cpp_blockquicksort": (palette[7], "square"),
-        "rust_tinyheapsort_unstable": (palette[7], "square"),
-        "rust_crumsort_rs_unstable": (palette[6], "square"),
-        # There are more sorts but they don't really fit the graph or colors at
-        # the same time
         "rust_radsort_radix": (palette[4], "square"),
-        "cpp_vqsort": (palette[6], "square"),
-        "cpp_intel_avx512": (palette[7], "square"),
+        "rust_std_stable": (palette[4], "square"),
+        "rust_std_unstable": (palette[5], "circle"),
+        "rust_std_vendored_stable": (palette[4], "square"),
+        "rust_std_vendored_unstable": (palette[4], "square"),
+        "rust_tinyheapsort_unstable": (palette[7], "square"),
+        "rust_tinymergesort_stable": (palette[7], "square"),
+        "rust_wpwoodjr_stable": (palette[7], "square"),
+
         "singeli_singelisort": (palette[3], "square"),
+
+        "bucket_btree": (palette[3], "diamond"),
+        "bucket_hash": (palette[0], "triangle"),
+        "bucket_match": (palette[6], "square_cross"),
+        "bucket_branchless": (palette[4], "square_cross"),
+        "bucket_phf": (palette[7], "square_pin"),
+
         # For partition bench
         "hoare_branchy": (palette[1], "diamond"),
         "hoare_block": (palette[4], "plus"),
@@ -261,9 +270,6 @@ def build_implementation_meta_info():
         "lomuto_branchless_cyclic": (palette[6], "square_cross"),
         "lomuto_branchless_cyclic_opt": (palette[7], "triangle"),
 
-        "c_gnu_libc_unstable": (palette[3], "diamond"),
-        "c_idisort_unstable": (palette[6], "triangle"),
-        "c_llvm_libc_unstable": (palette[7], "square_cross"),
     }
 
     return meta_info
