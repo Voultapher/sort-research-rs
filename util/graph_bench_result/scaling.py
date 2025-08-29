@@ -104,10 +104,15 @@ def plot_scaling(ty, prediction_state, pattern, values):
         effective_sort_name = (
             sort_name.partition("_new")[0] if is_new_sort else sort_name
         )
-        line_dash = "dashed" if is_new_sort else "solid"
 
         x, y = extract_line(ty, sort_name, pattern, values)
-        color, symbol = IMPL_META_INFO[effective_sort_name]
+        color, symbol, line_dash = IMPL_META_INFO[effective_sort_name]
+
+        effective_line_dash = "dashed" if is_new_sort else line_dash
+
+        if len(y) == 0:
+            print(f"No data points for {plot_name}")
+            return plot_name, plot
 
         y_max = max(y_max, max(y))
 
@@ -118,7 +123,7 @@ def plot_scaling(ty, prediction_state, pattern, values):
             source=source,
             line_width=1.5,
             color=color,
-            line_dash=line_dash,
+            line_dash=effective_line_dash,
             legend_label=sort_name,
         )
 
@@ -176,6 +181,7 @@ def plot_patterns(groups):
 
 if __name__ == "__main__":
     groups = parse_bench_results(sys.argv[1:])
+    # print(groups)
 
     name = base_name()
     CPU_INFO = get_cpu_info(name)

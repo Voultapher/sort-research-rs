@@ -76,7 +76,7 @@ def plot_single_size(ty, prediction_state, test_len, values):
 
             y.append((pattern, sort_name))
             bench_times.append(bench_times_ns / time_div)
-            color, _shape = IMPL_META_INFO[effective_sort_name]
+            color, _shape, _line_dash = IMPL_META_INFO[effective_sort_name]
             colors.append(color)
 
     bench_times_text = [format_time(x) for x in bench_times]
