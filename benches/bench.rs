@@ -151,6 +151,15 @@ fn bench_patterns<T: Ord + std::fmt::Debug>(
 
             shuffle_vec(v)
         }),
+        ("95p_d4_5p_random", |len| {
+            let (len_95p, len_5p) = split_len(len, 95.0);
+            let v: Vec<i32> = patterns::random_uniform(len_95p, 0..4)
+                .into_iter()
+                .chain(patterns::random(len_5p))
+                .collect();
+
+            shuffle_vec(v)
+        }),
         ("99p_zero_1p_random", |len| {
             let (len_99p, len_1p) = split_len(len, 99.0);
             let v: Vec<i32> = std::iter::repeat(0)
