@@ -3,6 +3,7 @@
 This directory contains the written results of the research performed as part of
 this project.
 
+* [The unreasonable effectiveness of modern sort algorithms](unreasonable/text.md)
 * [ipnsort: an efficient, generic and robust unstable sort implementation.](ipnsort_introduction/text.md)
 * [driftsort: an efficient, generic and robust stable sort implementation.](driftsort_introduction/text.md)
 * [Fast, small, robust: pick three. Introducing a novel branchless partition implementation.](lomcyc_partition/text.md)

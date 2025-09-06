@@ -23,6 +23,7 @@ variables. See for example benches/bench.rs.
 
 ## Research results
 
+* [The unreasonable effectiveness of modern sort algorithms](writeup/unreasonable/text.md)
 * [ipnsort: an efficient, generic and robust unstable sort implementation.](writeup/ipnsort_introduction/text.md)
 * [driftsort: an efficient, generic and robust stable sort implementation.](writeup/driftsort_introduction/text.md)
 * [Fast, small, robust: pick three. Introducing a novel branchless partition implementation.](writeup/lomcyc_partition/text.md)
