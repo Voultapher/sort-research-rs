@@ -10,8 +10,8 @@ general-purpose hybrid sort algorithms.
 
 ---
 
-Bias disclosure: the author of this document is the author of ipnsort and
-co-author of driftsort.
+Bias disclosure: the author of this document is the co-author of ipnsort and
+driftsort.
 
 ## Scenario
 
@@ -63,15 +63,15 @@ correctly.
 
 Plotting throughput on the Y axis derived from the time to sort N values as
 shown on the X axis in log steps. A value of ~145 million elements per second at
-input length 1_000 (10^3 or 1e4) implies that it took on median ~6.9us to sort the
-1_000 elements.
+input length 1_000 (10^3 or 1e3) implies that it took on median ~6.9us to sort
+the 1_000 elements.
 
 These are cold and not hot benchmarks, L1i - but not L1d - and the
 branch-target-buffer (BTB) are flushed before each measurement and the input is
 random for each iteration. This measures one-off calls to sort as part of a
 larger program and not throughput in the classical sense as typical hot
 micro-benchmarks would. The differences between hot and cold benchmarks is
-negligible past an input length of 1e4.
+negligible past an input length of 1e3.
 
 Measured throughput starts low as L1i, BTB and uop cache misses dominate as well
 as the cost of memory allocation. For larger inputs fixed costs are amortized
@@ -341,7 +341,27 @@ For L3 sized inputs bucket_phf can do ~1.7 billion elements per second, implying
 the CPU spends ~2.9 cycles per element. At this point anything else done with
 the data will likely be the bottleneck, not sorting.
 
+It's possible to improve throughput further with automatic or manual
+vectorization.
+
 ## Comparison to generic algorithms
+
+### `slice::sort_unstable`
+
+Sorting stability is not required in this scenario, so the appropriate standard
+library function is `slice::sort_unstable`.
+
+<img src="assets/scaling-d4-comp.webp" width=960 />
+
+For L3 sized inputs rust_std_stable can do ~660 million elements per second,
+implying the CPU spends ~7.4 cycles per element. It does so without knowing
+anything about the input before processing it and is only able to establish a
+less than relationship between two elements.
+
+Since rust_std_stable does more memory accesses than the hash map approach it is
+affected more intensely by the increased latency of DRAM.
+
+### Various generic algorithms
 
 Generic sort implementations are found in most language standard libraries,
 often with an allocating stable and in-place unstable variant.
@@ -402,14 +422,15 @@ accounting for 5% of the data has values distributed in the entire `u64` range.
 ## Author's conclusion and opinion
 
 It's absolutely possible to beat even the best sort implementations with domain
-specific knowledge, carful benchmarking and an understanding of CPU
+specific knowledge, careful benchmarking and an understanding of CPU
 micro-architectures. At the same time, assumptions will become invalid, mistakes
 can creep in silently and good sort implementations can be surprisingly fast
-even without prior domain knowledge. If you have access to a high-quality modern
-sort implementation, think twice about replacing it with something home-grown.
+even without prior domain knowledge. If you have access to a high-quality sort
+implementation, think twice about replacing it with something home-grown.
 
 ## Acknowledgements
 
 The title is an homage to Eugene Wigner's 1960 paper "The Unreasonable
-Effectiveness of Mathematics in the Natural Sciences". TODO
+Effectiveness of Mathematics in the Natural Sciences". Orson Peters helped as a
+technical reviewer. TODO
 
