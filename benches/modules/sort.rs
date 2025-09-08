@@ -245,6 +245,7 @@ pub fn bench<T: Ord + std::fmt::Debug>(
         bench_inst!(other::sort_evolution::other::bucket_match);
         bench_inst!(other::sort_evolution::other::bucket_branchless);
         bench_inst!(other::sort_evolution::other::bucket_phf);
+        bench_inst!(other::sort_evolution::other::bucket_vectorized);
     }
 
     #[cfg(feature = "small_sort")]

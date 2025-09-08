@@ -53,3 +53,4 @@ pub mod bucket_btree;
 pub mod bucket_hash;
 pub mod bucket_match;
 pub mod bucket_phf;
+pub mod bucket_vectorized;
