@@ -11,7 +11,7 @@ general-purpose hybrid sort algorithms.
 ---
 
 Bias disclosure: the author of this document is the co-author of ipnsort and
-driftsort.
+driftsort which are the implementations used by the Rust standard library.
 
 ## Scenario
 
@@ -129,7 +129,7 @@ sorting step is O(K * log(K)) where K is the number of distinct elements in `v`.
 The hash map approach is significantly faster than the binary tree. This will
 vary with the used hash function and data structure implementations.
 
-An effect that was visible before but is more pronounced now, is that for the
+An effect that was visible before but is more pronounced here, is that for the
 measured inputs larger than `8B * 2e6 = 16MB` throughput decreases for both
 approaches. This is indicative of pipeline stalls caused by the high latency
 inherent to large off-chip memory (DRAM). Specifically the CPU was not able to
@@ -139,7 +139,9 @@ increasing amount of time waiting instead of working.
 ### Match
 
 ```rust
-macro_rules! fixed_bucket_value {
+// These are the only four expected values in the data to sort.
+macro_rules! bucket_value {
+    // Static lookup
     (0) => {
         4611686016279904256
     };
@@ -152,12 +154,13 @@ macro_rules! fixed_bucket_value {
     (3) => {
         4611686022722355197
     };
+    // Dynamic lookup
     ($idx:expr) => {
         match $idx {
-            0 => fixed_bucket_value!(0),
-            1 => fixed_bucket_value!(1),
-            2 => fixed_bucket_value!(2),
-            3 => fixed_bucket_value!(3),
+            0 => bucket_value!(0),
+            1 => bucket_value!(1),
+            2 => bucket_value!(2),
+            3 => bucket_value!(3),
             _ => unreachable!(),
         }
     };
@@ -168,17 +171,17 @@ fn bucket_sort(v: &mut [u64]) {
 
     for val in v.iter() {
         match val {
-            fixed_bucket_value!(0) => counts[0] += 1,
-            fixed_bucket_value!(1) => counts[1] += 1,
-            fixed_bucket_value!(2) => counts[2] += 1,
-            fixed_bucket_value!(3) => counts[3] += 1,
-            _ => unreachable!("{val}"),
+            bucket_value!(0) => counts[0] += 1,
+            bucket_value!(1) => counts[1] += 1,
+            bucket_value!(2) => counts[2] += 1,
+            bucket_value!(3) => counts[3] += 1,
+            _ => unreachable!("Unexpected value: {val}"),
         }
     }
 
     let mut offset = 0;
     for (i, count) in counts.iter().enumerate() {
-        v[offset..offset + count].fill(fixed_bucket_value!(i));
+        v[offset..offset + count].fill(bucket_value!(i));
         offset += count;
     }
 }
@@ -216,11 +219,11 @@ analysis is attached for optional closer inspection.
 <details>
 
 ```asm
-        movabs  r11, 4611686020574871549 ; fixed_bucket_value!(2) - 1
-        movabs  rbx, 4611686016279904256 ; fixed_bucket_value!(0)
-        movabs  r14, 4611686018427387903 ; fixed_bucket_value!(1)
-        movabs  r15, 4611686020574871550 ; fixed_bucket_value!(2)
-        movabs  r12, 4611686022722355197 ; fixed_bucket_value!(3)
+        movabs  r11, 4611686020574871549 ; bucket_value!(2) - 1
+        movabs  rbx, 4611686016279904256 ; bucket_value!(0)
+        movabs  r14, 4611686018427387903 ; bucket_value!(1)
+        movabs  r15, 4611686020574871550 ; bucket_value!(2)
+        movabs  r12, 4611686022722355197 ; bucket_value!(3)
         xor     eax, eax ; counts[3] aliased to rax
         xor     ecx, ecx ; counts[2] aliased to rcx
         xor     r9d, r9d ; counts[1] aliased to r9
@@ -278,15 +281,15 @@ fn bucket_sort(v: &mut [u64]) {
     let mut counts = [0; 4];
 
     for val in v.iter() {
-        counts[0] += (*val == fixed_bucket_value!(0)) as usize;
-        counts[1] += (*val == fixed_bucket_value!(1)) as usize;
-        counts[2] += (*val == fixed_bucket_value!(2)) as usize;
-        counts[3] += (*val == fixed_bucket_value!(3)) as usize;
+        counts[0] += (*val == bucket_value!(0)) as usize;
+        counts[1] += (*val == bucket_value!(1)) as usize;
+        counts[2] += (*val == bucket_value!(2)) as usize;
+        counts[3] += (*val == bucket_value!(3)) as usize;
     }
 
     let mut offset = 0;
     for (i, count) in counts.iter().enumerate() {
-        v[offset..offset + count].fill(fixed_bucket_value!(i));
+        v[offset..offset + count].fill(bucket_value!(i));
         offset += count;
     }
 }
@@ -323,7 +326,7 @@ fn bucket_sort(v: &mut [u64]) {
 
     let mut offset = 0;
     for (i, count) in counts.iter().enumerate() {
-        v[offset..offset + count].fill(fixed_bucket_value!(i));
+        v[offset..offset + count].fill(bucket_value!(i));
         offset += count;
     }
 }
@@ -343,6 +346,24 @@ the data will likely be the bottleneck, not sorting.
 
 It's possible to improve throughput further with automatic or manual
 vectorization.
+
+## Robustness
+
+Domain optimized algorithms are susceptible to changes in the data they process.
+For example the values might change or a new data source adds data with
+different characteristics. It's also possible that the assumptions made don't
+generalize to all existing uses of the software.
+
+In a changed scenario where 5% of the data is fully random, the behavior would
+change in the following way:
+
+| Name       | Effect                         |
+|------------| -------------------------------|
+| BTree      | Loss of efficiency (2x)        |
+| Hash       | Loss of efficiency (2x)        |
+| Match      | Panic                          |
+| Branchless | Incorrect output, silent       |
+| Phf        | Incorrect output, silent       |
 
 ## Comparison to generic algorithms
 
@@ -403,22 +424,6 @@ Crumsort works around this by having users define the comparison function via a
 macro before including the implementation header. However this limits each
 compilation module to one comparison function.
 
-### Changed scenario
-
-Properties change, domain optimized algorithms are susceptible to changes in the
-data they process. Instead of the same 4 distinct values, a new data source
-accounting for 5% of the data has values distributed in the entire `u64` range.
-
-| Name       | Effect of changed scenario |
-|------------| ---------------------------|
-| BTree      | Loss of efficiency         |
-| Hash       | Loss of efficiency         |
-| Match      | Panic                      |
-| Branchless | Incorrect output, silent   |
-| Phf        | Incorrect output, silent   |
-
-<img src="assets/scaling-p5.webp" width=960 />
-
 ## Author's conclusion and opinion
 
 It's absolutely possible to beat even the best sort implementations with domain
@@ -431,6 +436,6 @@ implementation, think twice about replacing it with something home-grown.
 ## Acknowledgements
 
 The title is an homage to Eugene Wigner's 1960 paper "The Unreasonable
-Effectiveness of Mathematics in the Natural Sciences". Orson Peters helped as a
-technical reviewer. TODO
+Effectiveness of Mathematics in the Natural Sciences". Orson Peters and Roland
+Bock helped as a technical reviewers.
 
