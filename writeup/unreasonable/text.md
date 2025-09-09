@@ -1,9 +1,7 @@
 # The unreasonable effectiveness of modern sort algorithms
 
-**Work in progress, please do not publish!**
-
-Authors: Lukas Bergdoll @Voultapher  
-Date: TODO (YYYY-MM-DD)
+Author: Lukas Bergdoll @Voultapher  
+Date: 2025-09-09 (YYYY-MM-DD)
 
 This is a comparison of domain-specific sort algorithms vs modern
 general-purpose hybrid sort algorithms.
