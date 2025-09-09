@@ -3,7 +3,7 @@
 Author: Lukas Bergdoll @Voultapher  
 Date: 2025-09-09 (YYYY-MM-DD)
 
-This is a comparison of domain-specific sort algorithms vs modern
+This is a comparison of domain-specific sort algorithms to modern
 general-purpose hybrid sort algorithms.
 
 ---
@@ -438,6 +438,7 @@ implementation, think twice about replacing it with something home-grown.
 ## Acknowledgements
 
 The title is an homage to Eugene Wigner's 1960 paper "The Unreasonable
-Effectiveness of Mathematics in the Natural Sciences". Orson Peters and Roland
-Bock helped as a technical reviewers.
+Effectiveness of Mathematics in the Natural Sciences".
+
+Orson Peters and Roland Bock helped as a technical reviewers.
 
