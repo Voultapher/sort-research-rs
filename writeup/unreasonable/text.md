@@ -54,7 +54,7 @@ fn bucket_sort(v: &mut [u64]) {
 ```
 
 This approach uses a `BTreeMap` to count the occurrences of each value and since
-binary trees are sorted by construction, the iteration at the end will be sorted
+B-trees are sorted by construction, the iteration at the end will be sorted
 correctly.
 
 <img src="assets/scaling-bucket-only-1.webp" width=960 />
@@ -117,15 +117,16 @@ fn bucket_sort(v: &mut [u64]) {
 }
 ```
 
-Hash maps offer similar key value mapping functionality to binary trees and
-given a fast hashing function can be faster than binary trees. However they give
-up the ordered property, which means an additional sorting step is required. The
-sorting step is O(K * log(K)) where K is the number of distinct elements in `v`.
+Hash maps offer similar key value mapping functionality to `BTreeMap` and given
+a fast hashing function can be faster than B-trees. However they give up the
+ordered property, which means an additional sorting step is required. The
+sorting step is O(K * log(K)) where K is the number of distinct elements in
+`v`.
 
 <img src="assets/scaling-bucket-only-2.webp" width=960 />
 
-The hash map approach is significantly faster than the binary tree. This will
-vary with the used hash function and data structure implementations.
+The hash map approach is significantly faster than the B-tree. This will vary
+with the used hash function and data structure implementations.
 
 An effect that was visible before but is more pronounced here, is that for the
 measured inputs larger than `8B * 2e6 = 16MB` throughput decreases for both
