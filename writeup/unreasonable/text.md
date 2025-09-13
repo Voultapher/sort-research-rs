@@ -403,11 +403,6 @@ The details about what versions are being tested are found
 Phf, branchless and match bucket sorting results are omitted from this graph to
 limit visual overload and range compression.
 
-For L3 sized inputs rust_std_unstable can do ~660 million elements per second,
-implying the CPU spends ~7.4 cycles per element. It does so without knowing
-anything about the input before processing it and only being able to establish a
-less than relationship between two elements.
-
 The peculiar shape of the rust_std_stable results stands out. Additional testing
 with other pdqsort derived stable quicksorts, fluxsort and glidesort shows
 similar results. Despite all three using somewhat different partitioning
