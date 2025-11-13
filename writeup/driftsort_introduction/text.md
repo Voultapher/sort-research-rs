@@ -1,6 +1,6 @@
 # driftsort: an efficient, generic and robust stable sort implementation.
 
-Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp  
+Authors: Lukas Bergdoll @Voultapher and Orson Peters @orlp
 Date: 2024-04-16 (YYYY-MM-DD)
 
 This document explains and verifies the design goals for an efficient, generic and robust stable sort implementation called driftsort by Orson Peters and Lukas Bergdoll ([source code](https://github.com/Voultapher/driftsort)).
@@ -35,13 +35,13 @@ The primary goal is to develop a replacement for the current Rust standard libra
   - Leverage existing ascending and descending runs in the input.
 - **Binary-size**: Relatively small binary-size for types like `u64` and `String`. i-cache is a shared resource and the program will likely do more than just sort.
 - **Compile-time**: At least as fast to compile as the current `slice::sort` if hardware-parallelism is available and not much worse if not. Both debug and release configurations.
-- **N / 2 auxiliary memory**: Heap usage should be limited to N / 2, and explicit stack usage should be limited to a less than ten kB.
+- **N / 2 auxiliary memory**: Heap usage should be limited to N / 2, and explicit stack usage should be limited to less than ten kB.
 - **Debug performance**: Performance of un-optimized binaries may only be slightly worse than the current `slice::sort`.
 
 ## Design non-goals
 
 - **Fastest non-generic integer sort**: The stated design goals are incompatible with this goal. Generally the existing advice that `slice::sort_unstable` is faster for integers, unless they contain long already sorted parts, still holds with [ipnsort](https://github.com/Voultapher/sort-research-rs/tree/main/ipnsort). In addition, once the sort implementation has a run-time of multiple milliseconds or more, using multithreading becomes beneficial, which is out of the scope of `slice::sort`.
-- **Tiny binary-size**: Implementation complexity and binary-size are related, for projects that care about binary-size and or compile-time above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
+- **Tiny binary-size**: Implementation complexity and binary-size are related, for projects that care about binary-size and/or compile-time above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 - **Varied compilers**: Only rustc using LLVM was tested and designed for.
 
 ## High level overview
@@ -90,15 +90,15 @@ As part of the tailor-made [test suite](https://github.com/Voultapher/sort-resea
 
 driftsort is a hybrid sort algorithm, which allows the individual components to be more easily reasoned about, which reduces the risk of hidden correctness bugs. The only component that could be regarded as employing novel ideas on an algorithmic level would be the lazy merging. However it is essentially the same as eager merging, where quicksort is used to create runs.
 
-Result: The test suits pass.
+Result: The test suites pass.
 
 ### Safe
 
-Like the current `slice::sort` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort` allows for arbitrary logic in the user-defined comparison function, which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability, and/or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and or return the input in a dangerous partially initialized state. Even implementations written using purely safe abstractions are only guaranteed to avoid direct UB, and are still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementations can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
+Like the current `slice::sort` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort` allows for arbitrary logic in the user-defined comparison function, which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability, and/or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and/or return the input in a dangerous partially initialized state. Even implementations written using purely safe abstractions are only guaranteed to avoid direct UB, and are still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementations can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
 
 The bespoke test suite involves tests that trigger all these scenarios for various types, pattern and input sizes. In addition, care was taken to isolate `unsafe` abstractions where possible, localize `unsafe` invariants to small scopes, with each `unsafe` block accompanied by a `SAFETY:` comment explaining the assumptions. In addition some components were model checked with [kani](https://github.com/model-checking/kani), checking the full gamut of possible comparison result and input combinations. The implementations have also been fuzzed with libfuzzer and AFL, however the employed harnesses did assume simple comparisons. In addition the test suite is also run with [miri](https://github.com/rust-lang/miri) both under Stacked borrows and Tree borrows.
 
-Result: The test suits pass both normally and when run with miri.
+Result: The test suites pass both normally and when run with miri.
 
 ### Stable
 
@@ -114,7 +114,7 @@ Result: (rip)grepping the source code for "arch" yields no relevant match.
 
 ### Generic
 
-The driftsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The performance characteristics and the order in which comparison operators are called are noticeably different for `u64` vs `Cell<u64>`. This is novel and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
+The driftsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and/or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The performance characteristics and the order in which comparison operators are called are noticeably different for `u64` vs `Cell<u64>`. This is novel and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
 
 Result: The interface remains the same.
 
@@ -124,7 +124,7 @@ Result: The interface remains the same.
 
 The same structure as the one found in [introsort](https://en.wikipedia.org/wiki/Introsort) is used by driftsort to avoid the well-known O(N^2) worst-case of quicksort. Once a recursion depth of 2 * log2(N) is reached, it switches to a different algorithm.
 
-However, in the case of driftsort the algorithm it switches to mergesort. This ensures it will never call quicksort again, only using the guaranteed O(N * log(N)) mergesort routines.
+However, in the case of driftsort the algorithm it switches to is mergesort. This ensures it will never call quicksort again, only using the guaranteed O(N * log(N)) mergesort routines.
 
 > Guaranteed O(N) comparisons for fully ascending and descending inputs.
 
@@ -142,7 +142,7 @@ Plotting mean comparisons performed divided by N - 1 yields:
 
 Observations:
 
-- driftsort and std_stable, share hitting a worst case for insertion sort in the descending pattern, with the strongest measured log scaling outlier at length 17.
+- driftsort and std_stable share hitting a worst case for insertion sort in the descending pattern, with the strongest measured log scaling outlier at length 17.
 - glidesort uses its core small-sort for N < 20, which has a best, average and worst case of O(N * log(N)).
 - For N > 20 driftsort and glidesort have similar scaling curves.
 - The changes in the min-run length heuristic allow driftsort to take advantage of random_d20 earlier than glidesort.
@@ -246,7 +246,7 @@ Comparing the relative symmetric speedup across all measured input lengths and p
 
 Observations:
 
-- random shows a fairly flat ~2.4x throughput improvement for N > 1e4 and <= 1e6. This is can be explained by a similar amount of conceptual comparison work that needs to be done, where driftsort is more efficient at performing the same workload.
+- random shows a fairly flat ~2.4x throughput improvement for N > 1e4 and <= 1e6. This can be explained by a similar amount of conceptual comparison work that needs to be done, where driftsort is more efficient at performing the same workload.
 - random_z1 follows a similar curve shape to random, however it has a steeper slope, which is explained by the increasing algorithmic advantage it has thanks to common element filtering.
 - random_d20 and random_p5 leave the charted area thanks to the large algorithmic reduction in work.
 - For N > 1e3 ascending and descending show a small regression. This is not a sign of measurement noise, as the result persists and is repeatable. The causes for this effect are not well understood by the authors. Both implementations use exactly the same code for run detection and reversing, yet it can result in significant differences depending on compiler version, allocation length and other factors. The same regression does not occur on Firestorm.
@@ -269,7 +269,7 @@ Signed 32-bit integer with values in full `i32` range.
 Observations:
 
 - Overall very similar to `u64`.
-- ascending shows a large regression for N > 1e3 despite performing exactly the same number of comparisons and using the same run detection code. For N > 20 and < 1e3 the 4KiB stack allocation reverse this effect. Again, this effect does not reproduce on Firestorm.
+- ascending shows a large regression for N > 1e3 despite performing exactly the same number of comparisons and using the same run detection code. For N > 20 and < 1e3 the 4KiB stack allocation reverses this effect. Again, this effect does not reproduce on Firestorm.
 - The relative throughput regression because of the auxiliary memory allocation heuristic happens for N > 2e6 instead of 1e6. This is consistent with the upper limit for full buffer allocation at 8MB. `i32` is 4 bytes, whereas `u64` is 8 bytes.
 
 ##### string
@@ -339,7 +339,7 @@ impl PartialOrd for FFIOneKibiByte {
 
 Observations:
 
-- The 1k type poses a unique to challenge to sort implementations. The most expensive part is, not the control structure like it is for integers, or the comparison as for strings, but rather the act of making copies of the value. Copying the values is a crucial part of swapping elements for any comparison based sort implementation.
+- The 1k type poses a unique challenge to sort implementations. The most expensive part is, not the control structure like it is for integers, or the comparison as for strings, but rather the act of making copies of the value. Copying the values is a crucial part of swapping elements for any comparison based sort implementation.
 - The spikes line up with the corresponding patterns that see large algorithmic advantages. However they quickly run into 8MB full buffer allocation limit.
 
 ##### f128
@@ -419,7 +419,7 @@ release_lto_thin             | `String` | 2858                 | 30983          
 release_lto_thin_opt_level_s | `u64`    | 1827                 | 16601                  | 3890
 release_lto_thin_opt_level_s | `String` | 2497                 | 26392                  | 5493
 
-The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has driftsort only use an inlined insertion sort using less than 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
+The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has driftsort only use an inlined insertion sort using less than 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and/or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 
 The current `slice::sort` is comparatively simple and subsequently has limited capabilities in terms of leveraging low-cardinality patterns as well as run-time efficiency. driftsort is similar in terms of effective capabilities to glidesort while only requiring ~2.5x the binary-size in contrast to ~13x for glidesort. By having a dedicated insertion sort for N <= 20, the impact on the i-cache is deemed minimal. And in cases where larger inputs are sorted, the additional binary-size cost manifests itself in significantly improved run-times. Further reductions in binary-size are possible, but would imply significant reductions in capabilities.
 
@@ -465,7 +465,7 @@ $ hyperfine --min-runs 5 --prepare 'cargo clean' 'cargo build --release'
   Range (min … max):    6.575 s …  6.751 s    5 runs
 ```
 
-The primary reported time is the wall clock, how much time it took overall. The User time represents the elapsed time across all used threads, and the System time represents the time spent in the kernel. driftsort carefully splits its implementation into multiple modules, mostly avoiding run-time penalities for intra-module-only LTO builds. This allows rustc to parallelize and make use of multi-threading capabilities. In contrast the current `slice::sort` is contained in a single module, and subsequently spends nearly all its time on the same thread, making poor use of multi-threading capabilities. glidesort is also split across multiple modules, but in part due to its significantly larger size and a general lack of compile-time optimization focus, is an order of magnitude more expensive to compile.
+The primary reported time is the wall clock, how much time it took overall. The User time represents the elapsed time across all used threads, and the System time represents the time spent in the kernel. driftsort carefully splits its implementation into multiple modules, mostly avoiding run-time penalties for intra-module-only LTO builds. This allows rustc to parallelize and make use of multi-threading capabilities. In contrast the current `slice::sort` is contained in a single module, and subsequently spends nearly all its time on the same thread, making poor use of multi-threading capabilities. glidesort is also split across multiple modules, but in part due to its significantly larger size and a general lack of compile-time optimization focus, is an order of magnitude more expensive to compile.
 
 Result: If the system has multi-threading capabilities and time available during compilation, compiling driftsort is faster than the current `slice::sort` for debug builds and on par for release builds. If not, the time spent is significantly longer.
 
@@ -477,7 +477,7 @@ Result: driftsort maintains this property for large inputs, while prioritizing r
 
 ### Debug performance
 
-While the run-time of optimized builds is generally more important than that of debug builds, it too can have significant impacts on users. Many CI systems run tests for debug builds, and a for example 10x regression for debug builds in a foundational component like `slice::sort` could significantly impact such scenarios. To measure the impact the sort-research-rs test suite execution time is measured.
+While the run-time of optimized builds is generally more important than that of debug builds, it too can have significant impacts on users. Many CI systems run tests for debug builds, and, for example, a 10x regression for debug builds in a foundational component like `slice::sort` could significantly impact such scenarios. To measure the impact, the sort-research-rs test suite execution time is measured.
 
 Current `slice::sort`:
 
@@ -512,13 +512,13 @@ Result: driftsort shows no major change in wall or user time compared to `slice:
 ### Reasons that speak against adoption
 
 - The implementation contains significant amounts of new `unsafe` code. Despite extensive testing, fuzzing, partial model checking and code review, it's possible that users could encounter novel UB in their programs.
-- On machines without multi-threading capabilities and or lacking free multi-threading resources, debug and release builds can suffer significant compile-time regressions.
+- On machines without multi-threading capabilities and/or lacking free multi-threading resources, debug and release builds can suffer significant compile-time regressions.
 - driftsort significantly increases binary-size for all tested types, with all tested compiler settings.
 
 ### Reasons that speak for adoption
 
 - In addition to the continued [intuitive exception safety](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md#exception-safety) guarantee, driftsort has a high chance of detecting strict weak ordering violations and reporting them to users via a panic, regardless of build configuration. This surfaces logic bugs earlier and more directly than the current implementation.
-- The authors went to great length to test and verify the memory safety of the implementation.
+- The authors went to great lengths to test and verify the memory safety of the implementation.
 - On machines with available multi-threading resources debug builds can see compile-time improvements.
 - driftsort greatly improves the run-time performance for the majority of tested micro-architectures, input length, type and pattern combinations with speedups breaking the order-of-magnitude barrier for some realistic and non-trivial combinations.
 
