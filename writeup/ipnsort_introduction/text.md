@@ -41,7 +41,7 @@ The primary goal is to develop a replacement for the current Rust standard libra
 ## Design non-goals
 
 - **Fastest non-generic integer sort**: The staked design goals in combination are incompatible with this goal. The authors are aware of simple ways to improve integer performance by 10-20% if some of the design goals are ignored. For best in-class performance [vqsort](https://github.com/google/highway/tree/master/hwy/contrib/sort) by Mark Blacher, Joachim Giesen, Peter Sanders and Jan Wassenberg, can be used, assuming AVX2+ and Clang. For very small types `mem::size_of::<T>() <= mem::size_of::<16>()` a good counting or radix sort is almost certainly faster. More info here [10~17x faster than what? A performance analysis of Intel's x86-simd-sort (AVX-512)](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/intel_avx512/text.md). In addition, once the sort implementation has a run-time of multiple milliseconds or more, using multithreading becomes beneficial, which is out of the scope of `slice::sort_unstable`.
-- **Tiny binary-size**: Implementation complexity and binary-size are related, for projects that care about binary-size and or compile-time above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
+- **Tiny binary-size**: Implementation complexity and binary-size are related, for projects that care about binary-size and/or compile-time above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 - **Varied compilers**: Only rustc using LLVM was tested and designed for.
 
 ## High level overview
@@ -97,7 +97,7 @@ Result: The test suits pass.
 
 ### Safe
 
-Like the current `slice::sort_unstable` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort_unstable` allows for arbitrary logic in the user-defined comparison function, which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability, and/or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and or return the input in a dangerous partially initialized state. Even implementations written using purely safe abstractions are only guaranteed to avoid direct UB, and are still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementations can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
+Like the current `slice::sort_unstable` the driftsort implementation contains significant amounts of `unsafe` for reasons of reliable code-gen, as well as run-time, compile-time, and binary-size efficiency. `slice::sort_unstable` allows for arbitrary logic in the user-defined comparison function, which may do any combination of: returning correct results, violating strict weak ordering, modify values as they are being compared via interior mutability, and/or panic. In combination with use of auxiliary memory an implementation can easily invoke UB, hang forever, and/or return the input in a dangerous partially initialized state. Even implementations written using purely safe abstractions are only guaranteed to avoid direct UB, and are still susceptible to the other issues. More information about the different safety categories and effects, as well as comparison to C and C++ implementations can be found [here](https://github.com/Voultapher/sort-research-rs/blob/main/writeup/sort_safety/text.md).
 
 The bespoke test suite involves tests that trigger all these scenarios for various types, pattern and input sizes. In addition, care was taken to isolate `unsafe` abstractions where possible, localize `unsafe` invariants to small scopes, with each `unsafe` block accompanied by a `SAFETY:` comment explaining the assumptions. In addition some components were model checked with [kani](https://github.com/model-checking/kani), checking the full gamut of possible comparison result and input combinations. The implementations have also been fuzzed with libfuzzer and AFL, however the employed harnesses did assume simple comparisons. In addition the test suite is also run with [miri](https://github.com/rust-lang/miri) both under Stacked borrows and Tree borrows.
 
@@ -117,7 +117,7 @@ Result: (rip)grepping the source code for "arch" yields no relevant match.
 
 ### Generic
 
-The ipnsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort_unstable`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The performance characteristics and the order in which comparison operators are called are noticeably different for `u64` vs `Cell<u64>`. This is novel and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
+The ipnsort implementation places the exact same type system trait bounds on its interface as the current `slice::sort_unstable`. In addition type introspection is performed via `mem::size_of`, and whether a type implements the `Copy` and/or `Freeze` trait. Those traits are not restricted to builtin types, treating user-defined types and builtin types the same way. The performance characteristics and the order in which comparison operators are called are noticeably different for `u64` vs `Cell<u64>`. This is novel and could surprise users. However it's not a case of degrading the performance for `Cell<u64>` but rather improving it for `u64`, `String` and more. All of the current documented properties and more are still upheld. Alternatives would need to sacrifice some of the desired goals.
 
 Result: The interface remains the same.
 
@@ -423,7 +423,7 @@ release_lto_thin             | `String` | 7365                 | 4941
 release_lto_thin_opt_level_s | `u64`    | 2712                 | 3096
 release_lto_thin_opt_level_s | `String` | 5066                 | 4487
 
-The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort_unstable`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has ipnsort only use an inlined insertion sort using less than 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
+The instruction cache (i-cache) is a shared resource and most programs do more than just call `slice::sort_unstable`. The actual i-cache usage will depend on the input length, type, pattern and ISA. For example the very common case of N <= 20 has ipnsort only use an inlined insertion sort using less than 200 bytes of i-cache. The total size represents the upper limit worst case if everything is being used. Another aspect where binary-size is important, is the impact it has on the size of the final binary. This can be particularly important for embedded and Wasm targets. In cases where binary-size and/or compile-time are prioritized above everything else [tiny_sort](https://github.com/Voultapher/tiny-sort-rs) is a better fit.
 
 Result: ipnsort improves the binary-size in every tested scenario, compared to the current `slice::sort_unstable`. With a relatively larger gain for non-integer like types like `String`.
 
@@ -494,7 +494,7 @@ Result: ipnsort improves debug performance both in terms of wall clock and total
 ### Reasons that speak against adoption
 
 - The implementation contains significant amounts of new `unsafe` code. Despite extensive testing, fuzzing, partial model checking and code review, it's possible that users could encounter novel UB in their programs.
-- On machines without multi-threading capabilities and or lacking free multi-threading resources, debug builds can suffer a small compile-time regression.
+- On machines without multi-threading capabilities and/or lacking free multi-threading resources, debug builds can suffer a small compile-time regression.
 
 ### Reasons that speak for adoption
 
