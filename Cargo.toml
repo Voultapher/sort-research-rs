@@ -62,7 +62,7 @@ harness = false
 [features]
 default = [
     "large_test_sizes",
-    "cold_benchmarks",
+    # "cold_benchmarks",
     # "evolution",
     # "small_sort",
     # "partition",
