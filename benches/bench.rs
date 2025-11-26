@@ -610,6 +610,78 @@ fn criterion_benchmark(c: &mut Criterion) {
                     .collect()
             });
         }
+
+        #[allow(unused)]
+        macro_rules! bench_type_u64_x_bytes {
+            ($bytes:expr, $name:expr) => {
+                #[derive(Debug)]
+                #[repr(C)]
+                struct U64XBytes {
+                    val: u64,
+                    _padding: [u8; ($bytes - 8)],
+                }
+
+                impl U64XBytes {
+                    fn new(val: i32) -> Self {
+                        Self {
+                            val: extend_i32_to_u64(val),
+                            _padding: [0; ($bytes - 8)],
+                        }
+                    }
+                }
+
+                impl PartialEq for U64XBytes {
+                    fn eq(&self, other: &Self) -> bool {
+                        self.cmp(other) == cmp::Ordering::Equal
+                    }
+                }
+
+                impl Eq for U64XBytes {}
+
+                impl PartialOrd for U64XBytes {
+                    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+                        Some(self.cmp(other))
+                    }
+                }
+
+                impl Ord for U64XBytes {
+                    fn cmp(&self, other: &Self) -> cmp::Ordering {
+                        self.val.cmp(&other.val)
+                    }
+                }
+
+                assert_eq!(std::mem::size_of::<U64XBytes>(), $bytes);
+
+                bench_patterns(c, test_len, $name, |values| -> Vec<U64XBytes> {
+                    values.into_iter().map(U64XBytes::new).collect()
+                });
+            };
+        }
+
+        #[cfg(feature = "bench_type_u64_16b")]
+        {
+            bench_type_u64_x_bytes!(16, "u64_16b");
+        }
+
+        #[cfg(feature = "bench_type_u64_32b")]
+        {
+            bench_type_u64_x_bytes!(32, "u64_32b");
+        }
+
+        #[cfg(feature = "bench_type_u64_64b")]
+        {
+            bench_type_u64_x_bytes!(64, "u64_64b");
+        }
+
+        #[cfg(feature = "bench_type_u64_96b")]
+        {
+            bench_type_u64_x_bytes!(96, "u64_96b");
+        }
+
+        #[cfg(feature = "bench_type_u64_128b")]
+        {
+            bench_type_u64_x_bytes!(128, "u64_128b");
+        }
     }
 }
 

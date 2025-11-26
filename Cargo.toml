@@ -78,6 +78,11 @@ default = [
     # "bench_type_f64",
     # "bench_type_f32_total",
     # "bench_type_f64_total",
+    # "bench_type_u64_16b",
+    # "bench_type_u64_32b",
+    # "bench_type_u64_64b",
+    # "bench_type_u64_96b",
+    # "bench_type_u64_128b",
 
     # "cpp_std_sys",
     # "cpp_std_libcxx",
@@ -290,5 +295,20 @@ bench_type_f32_total = []
 
 # Enable the "f64_total" type for benchmarks
 bench_type_f64_total = []
+
+# Enable the "u64_16b" type for benchmarks, u64 in a struct of size 16 bytes.
+bench_type_u64_16b = []
+
+# Enable the "u64_32b" type for benchmarks, u64 in a struct of size 32 bytes.
+bench_type_u64_32b = []
+
+# Enable the "u64_64b" type for benchmarks, u64 in a struct of size 64 bytes.
+bench_type_u64_64b = []
+
+# Enable the "u64_96b" type for benchmarks, u64 in a struct of size 96 bytes.
+bench_type_u64_96b = []
+
+# Enable the "u64_128b" type for benchmarks, u64 in a struct of size 128 bytes.
+bench_type_u64_128b = []
 
 large_test_sizes = ["sort_test_tools/large_test_sizes"]
