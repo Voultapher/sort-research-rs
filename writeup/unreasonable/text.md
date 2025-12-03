@@ -51,13 +51,13 @@ This approach uses a `BTreeMap` to count the occurrences of each value and, sinc
 
 Plotting throughput on the Y axis derived from the time to sort N values as shown on the X axis in log steps. A value of ~145 million elements per second at input length 1_000 (10^3 or 1e3) implies that it took a median of ~6.9us to sort the 1_000 elements.
 
-These are cold and not hot benchmarks, L1i - but not L1d - and the branch-target-buffer (BTB) are flushed before each measurement. The input is random for each iteration. This measures one-off calls to sort as part of a larger program and not throughput in the classical sense as typical hot micro-benchmarks would. The differences between hot and cold benchmarks is negligible past an input length of 1e3.
+These are cold and not hot benchmarks; L1i - but not L1d - and the branch-target-buffer (BTB) are flushed before each measurement. The input is random for each iteration. This measures one-off calls to sort as part of a larger program and not throughput in the classical sense as typical hot micro-benchmarks would. The differences between hot and cold benchmarks is negligible past an input length of 1e3.
 
-Measured throughput starts low as L1i, BTB and uop cache misses dominate as well as the cost of memory allocation. For larger inputs fixed costs are amortized and caches are hot and throughput increases.
+Measured throughput starts low as L1i, BTB and uop cache misses dominate as well as the cost of memory allocation. For larger inputs fixed costs are amortized and caches are hot so throughput increases.
 
 Of the 64KB L1d, 512KB L2 and 32MB L3 caches, accessible by the single thread doing the computation in the benchmark, the L3 is the biggest and slowest, with a latency of ~47 cycles. Given an average ~32.7 cycles per element at a throughput of 150 million elements per second, the CPU clearly can't wait to compute each value individually and then fetch the next one. Modern CPUs are pipelined, which means they fetch data and instructions before they are needed and attempt to hide latency by being ahead *enough* to never have to wait for them. Ideally the CPU would like to know that it has to process element XN and then fill the time it has to wait for XN with processing X0, X1, X2 ...  XN-1.
 
-At the very minimum the sort function will have to read the data in `v` once into registers to process it and then write it back. With a single-threaded L3 read and write bandwidth of ~122GB/s this puts an upper limit on the possible throughput for L3 sized inputs at 0.6 cycles per element. The data access pattern in `for elem in v.iter()` and `v[offset..offset + count].fill(elem);` is a linear scan that is easy to predict, prefetch, pipeline and batch.
+At the very minimum the sort function will have to read the data in `v` once into registers to process it and then write it back. With a single-threaded L3 read and write bandwidth of ~122GB/s this puts an upper limit on the possible throughput for L3 sized inputs at 0.6 cycles per element. The data access pattern in `for elem in v.iter()` and `v[offset..offset + count].fill(elem);` is a linear scan that is easy to predict, prefetch, pipeline, and batch.
 
 Since the implementation is spending ~32 cycles longer than absolutely necessary per element, it is either compute bound or doing other memory accesses that are hidden by abstraction.
 
@@ -86,9 +86,9 @@ Hash maps offer similar key value mapping functionality to `BTreeMap` and, given
 
 <img src="assets/scaling-bucket-only-2.webp" width=960 />
 
-The hash map approach is significantly faster than the B-tree. This will vary with the used hash function and data structure implementations.
+The hash map approach is significantly faster than the B-tree one. This will vary depending on the used hash function and data structure implementations.
 
-An effect that was visible before but is more pronounced here, is that for the measured inputs larger than `8B * 2e6 = 16MB` throughput decreases for both approaches. This is indicative of pipeline stalls caused by the high latency inherent to large off-chip memory (DRAM). Specifically the CPU was not able to fill the ~400 cycles it has to wait for data from DRAM with work and spends an increasing amount of time waiting instead of working.
+An effect that was visible before but is more pronounced here is that, for the measured inputs larger than `8B * 2e6 = 16MB`, throughput decreases for both approaches. This is indicative of pipeline stalls caused by the high latency inherent to large off-chip memory (DRAM). Specifically, the CPU was not able to fill the ~400 cycles it has to wait for data from DRAM with work and spends an increasing amount of time waiting instead of working.
 
 ### Match
 
@@ -141,7 +141,7 @@ fn bucket_sort(v: &mut [u64]) {
 }
 ```
 
-Four possible values invites the option to explicitly handle each one with a custom code path. This requires the values to be encoded in the program which can lead to issues if the values ever change.
+Having only four possible values invite the option to explicitly handle each one with a custom code path. This requires the values to be encoded in the program which can lead to issues if the values ever change.
 
 The specific numbers are the values found in the u64-random_d4 pattern and were not chosen specifically for this comparison.
 
@@ -248,11 +248,11 @@ fn bucket_sort(v: &mut [u64]) {
 }
 ```
 
-A perfect hash function (phf) is a mathematical object that allows mapping from one key space to another key space without collisions but only works for a predefined set of keys. In addition to being a phf, `3 - ((val + 3) % 4)` also maps the values to their corresponding index in the final output, effectively sorting them.
+A perfect hash function (phf) is a mathematical object that allows mapping from one key space to another key space without collisions, but only works for a predefined set of keys. In addition to being a phf, `3 - ((val + 3) % 4)` also maps the values to their corresponding index in the final output, effectively sorting them.
 
 <img src="assets/scaling-bucket-only-5.webp" width=960 />
 
-For L3 sized inputs bucket_phf can do ~1.7 billion elements per second, implying the CPU spends ~2.9 cycles per element. At this point anything else  done with the data will likely be the bottleneck, not sorting.
+For L3 sized inputs bucket_phf can do ~1.7 billion elements per second, implying the CPU spends ~2.9 cycles per element. At this point anything else done with the data will likely be the bottleneck, not sorting.
 
 It's possible to improve throughput further with automatic or manual vectorization.
 
@@ -294,7 +294,7 @@ Phf, branchless and match bucket sorting results are omitted from this graph to 
 
 The peculiar shape of the rust_std_stable results stands out. Additional testing with other pdqsort-derived stable quicksorts, fluxsort and glidesort shows similar results. Despite all three using somewhat different partitioning approaches, this seems to be caused by the memory access pattern as part of stable partitioning and quirks in the Zen 3 prefetcher and L2<->L3 interactions.
 
-All the best performing sort implementations, such as driftsort (rust_std_stable), ipnsort (rust_std_unstable) and crumsort, derive their low-cardinality handling from pdqsort.
+All the best performing sort implementations, such as driftsort (rust_std_stable), ipnsort (rust_std_unstable), and crumsort, derive their low-cardinality handling from pdqsort.
 
 Radsort is a radix sort and as such is unable to adapt to patterns in the data.
 
@@ -309,4 +309,4 @@ It's absolutely possible to beat even the best sort implementations with domain 
 
 The title is an homage to Eugene Wigner's 1960 paper "The Unreasonable Effectiveness of Mathematics in the Natural Sciences".
 
-Orson Peters and Roland Bock helped as a technical reviewers.
+Orson Peters and Roland Bock helped as technical reviewers.
