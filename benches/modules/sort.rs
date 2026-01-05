@@ -131,6 +131,9 @@ pub fn bench<T: Ord + std::fmt::Debug>(
     #[cfg(feature = "c_fluxsort")]
     bench_inst!(stable::c_fluxsort);
 
+    #[cfg(feature = "c_logsort")]
+    bench_inst!(stable::c_logsort);
+
     #[cfg(feature = "golang_std")]
     bench_inst!(stable::golang_std);
 

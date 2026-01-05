@@ -102,6 +102,7 @@ default = [
     # "c_idisort",
     # "c_crumsort",
     # "c_fluxsort",
+    # "c_logsort",
     # "singeli_singelisort",
     # "golang_std",
     # "rust_std_vendored",
@@ -189,6 +190,10 @@ c_crumsort = []
 # Enable fluxsort by Igor van den Hoven.
 # Uses system C++ standard lib.
 c_fluxsort = []
+
+# Enable support for C logsort by aphitorite
+# Vendored 96d3fcf
+c_logsort = []
 
 # Enable SingeliSort by Marshall Lochbaum.
 # Uses system C++ standard lib.

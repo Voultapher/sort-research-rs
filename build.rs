@@ -331,6 +331,21 @@ fn build_and_link_c_fluxsort() {
 #[cfg(not(feature = "c_fluxsort"))]
 fn build_and_link_c_fluxsort() {}
 
+#[cfg(feature = "c_logsort")]
+fn build_and_link_c_logsort() {
+    build_and_link_cpp_sort(
+        "c_logsort",
+        Some(|builder: &mut cc::Build| {
+            builder.compiler(CLANG_PATH); // clang can generate cmov which yields better perf.
+
+            None
+        }),
+    );
+}
+
+#[cfg(not(feature = "c_logsort"))]
+fn build_and_link_c_logsort() {}
+
 #[cfg(feature = "cpp_std_sys")]
 fn build_and_link_cpp_std_sys() {
     build_and_link_cpp_sort(
@@ -411,6 +426,7 @@ fn main() {
     build_and_link_c_idisort();
     build_and_link_c_crumsort();
     build_and_link_c_fluxsort();
+    build_and_link_c_logsort();
     build_and_link_cpp_std_sys();
     build_and_link_cpp_std_libcxx();
     build_and_link_cpp_std_gcc4_3();

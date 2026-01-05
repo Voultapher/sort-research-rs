@@ -47,6 +47,10 @@ pub mod cpp_wikisort;
 #[cfg(feature = "c_fluxsort")]
 pub mod c_fluxsort;
 
+// Call logsort sort via FFI.
+#[cfg(feature = "c_logsort")]
+pub mod c_logsort;
+
 // Call golang slices.SortStable
 #[cfg(feature = "golang_std")]
 pub mod golang_std;
