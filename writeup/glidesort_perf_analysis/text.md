@@ -7,15 +7,15 @@ This is a limited performance analysis of the recently released novel sort imple
 
 Bias disclaimer. The author of this analysis is the author of the ipn family of sort implementations.
 
-The words sort implementation and sort algorithm, are expressly *not* used interchangeably. Practically all modern implementations are hybrids, using multiple sort algorithms. As such, the words 'sort algorithm' will only be used to talk about the algorithmic nature of specific building blocks.
+The words sort implementation and sort algorithm are expressly *not* used interchangeably. Practically all modern implementations are hybrids, using multiple sort algorithms. As such, the words 'sort algorithm' will only be used to talk about the algorithmic nature of specific building blocks.
 
-Graphs with logarithmic axis are marked as such, these are only useful to examine the change of a property, *not* it's absolute values.
+Graphs with logarithmic axes are marked as such, these are only useful to examine the change of a property, *not* its absolute values.
 
 ## Benchmarks
 
 ### Benchmark setup
 
-Benchmarking is notoriously tricky, and especially synthetic benchmarks may not be representative. An incomplete list of relevant factors:
+Benchmarking is notoriously tricky and, especially, synthetic benchmarks may not be representative. An incomplete list of relevant factors:
 
 - Input size
 - Input type (price to move and price to compare)
@@ -45,7 +45,7 @@ Modern sort implementations are adaptive, they will try to exploit existing patt
 - `random_d20`, uniform random numbers in the range `0..=20`
 - `random_5p`, 95% 0 and 5% random data, not uniform
 - `saws_long`, `(size as f64).log2().round()` number of randomly selected ascending and descending streaks
-- `saws_short`, randomly selected ascending and descending streaks of in the range of `20..70`
+- `saws_short`, randomly selected ascending and descending streaks in the range `20..70`
 
 The contestants are:
 
@@ -57,9 +57,9 @@ The contestants are:
 - c_fluxsort_stable          | https://github.com/scandum/fluxsort
 ```
 
-rust_ipn_stable is in a solid state, but still work in progress. A larger writeup and introduction together with rust_ipn_unstable are in progress. The benchmarks for non `Copy` types without interior mutability were performed as if it could detect that property, as it may be able to in the future with language support [[3](https://internals.rust-lang.org/t/pre-rfc-type-property-functions/18233)].
+rust_ipn_stable is in a solid state, but is still a work in progress. A larger writeup and introduction together with rust_ipn_unstable are in progress. The benchmarks for non `Copy` types without interior mutability were performed as if it could detect that property, as it may be able to in the future with language support [[3](https://internals.rust-lang.org/t/pre-rfc-type-property-functions/18233)].
 
-rust_glidesort_stable, is compiled with the unstable rustc feature enabled. Published version 0.1.2.
+rust_glidesort_stable is compiled with the unstable rustc feature enabled. Published version 0.1.2.
 
 cpp_powersort_stable uses the powersort and not the powersort_4way implementation. powersort_4way requires sentinel values to be faster than powersort, and is thus not compatible with the general purpose testing done here. rust_glidesort_stable has a main loop based on the powersort algorithm, in that sense these two implementations are related.
 
@@ -67,11 +67,11 @@ c_fluxsort_stable is compiled with `#define cmp(a, b) (*(a) > *(b))`. This is re
 
 ### Results `u64`
 
-A good benchmark to shine light into the ability of the sort to exploit instruction-level parallelism (ILP) is hot-u64-10000. The input are 10k `u64` values, which fits into the core private L2 data cache for the used Zen3 test machine. The upper limit should be in the order of 4-5 instructions per cycle for such a dataset. 10k elements is enough to reliably exploit existing patterns in the input data. This can be reproduced by running `cargo bench hot-u64-<pattern>-10000`
+A good benchmark to shine light into the ability of the sort to exploit instruction-level parallelism (ILP) is hot-u64-10000. The input is 10k `u64` values, which fits into the core private L2 data cache for the used Zen3 test machine. The upper limit should be in the order of 4-5 instructions per cycle for such a dataset. 10k elements is enough to reliably exploit existing patterns in the input data. This can be reproduced by running `cargo bench hot-u64-<pattern>-10000`
 
 <img src="assets/general_zen3-hot-u64-10000.png" width="600" />
 
-Starting with the fully ascending and descending patterns. Both rust_ipn_stable and c_fluxsort_stable can sort these by doing a forward scan, and reversing the input if necessary. rust_std_stable will also scan them in one go, but does so starting at the end of the input. Effectively scannings backwards. A mix of code-gen and hardware prefetchers may be responsible for the observed differences. Curiously gcc seems able to generate better code for the simple act of scanning forward.
+Starting with the fully ascending and descending patterns. Both rust_ipn_stable and c_fluxsort_stable can sort these by doing a forward scan, and reversing the input if necessary. rust_std_stable will also scan them in one go, but does so starting at the end of the input, effectively scanning backwards. A mix of code-gen and hardware prefetchers may be responsible for the observed differences. Curiously, gcc seems able to generate better code for the simple act of scanning forward.
 
 The bread and butter of sort algorithms is their performance, or viewed differently their power efficiency, when sorting random inputs. Here rust_ipn_stable, c_fluxsort_stable and rust_glidesort_stable are very closely matched, even though they have completely different implementations. All of them are more than 2.2x faster than the existing Rust standard implementation. The slowest and least energy efficient out of the tested implementations in this scenario is cpp_powersort_stable.
 
@@ -89,7 +89,7 @@ All tested implementations can leverage this property, rust_ipn_stable, rust_std
 
 Long existing streaks in saws_long are perfect for rust_glidesort_stable, it uses a strategy that allows it to simultaneously merge multiple found streaks. In second place comes rust_ipn_stable ~1.2x slower than rust_glidesort_stable. Then rust_std_stable at ~2x, then c_fluxsort_stable at ~2.3x and in last place cpp_powersort_stable at ~3x slower than rust_glidesort_stable.
 
-saws_short test the ability of a sort to leverage short existing streaks and its unbalanced merging capabilities. rust_ipn_stable does the best, improving on random performance by ~1.2x, c_fluxsort_stable exhibits nearly exactly its random performance. rust_glidesort_stable regresses over random performance by ~1.07x. While rust_std_stable sees the largest improvement over random performance, with ~1.78x. It does so, by spending less time in insertion sort, which it uses to generate small sorted batches if it didn't find a long enough streak. While the more advanced sorts use other mechanisms to generate small sorted batches, eg. rust_ipn_stable uses an 8 element transposition sorting network. Which makes them spend relatively less time in that part of the sort implementation.
+saws_short test the ability of a sort to leverage short existing streaks and its unbalanced merging capabilities. rust_ipn_stable does the best, improving on random performance by ~1.2x, c_fluxsort_stable exhibits nearly exactly its random performance. rust_glidesort_stable regresses over random performance by ~1.07x. While rust_std_stable sees the largest improvement over random performance, with ~1.78x. It does so, by spending less time in insertion sort, which it uses to generate small sorted batches if it didn't find a long enough streak. While the more advanced sorts use other mechanisms to generate small sorted batches, e.g. rust_ipn_stable uses an 8 element transposition sorting network. Which makes them spend relatively less time in that part of the sort implementation.
 
 Plotting random pattern throughput across different sizes yields:
 
@@ -161,7 +161,7 @@ Comparing rust_ipn_stable to rust_glidesort_stable, yields a mixed result. Both 
 
 <img src="assets/zen3-rust_ipn_stable-vs-rust_std_stable-hot-u64.png" width="600" />
 
-Comparing rust_ipn_stable to rust_std_stable, shows near universal improvements across patterns and sizes. Random performance improvements stays at ~2x for most sizes. random_d2 and random_p5 shoot up to ~22x and ~16x respectively at 1m.
+Comparing rust_ipn_stable to rust_std_stable shows near universal improvements across patterns and sizes. Random performance improvements stays at ~2x for most sizes. random_d2 and random_p5 shoot up to ~22x and ~16x respectively at 1m.
 
 <img src="assets/zen3-rust_glidesort_stable-vs-rust_std_stable-hot-u64.png" width="600" />
 
@@ -170,7 +170,7 @@ Comparing rust_glidesort_stable to rust_std_stable, shows a more mixed result es
 
 ## Debug performance
 
-All the benchmarks above have been performed using highly optimized builds. And while performance of optimized builds is crucial. Performance of debug builds has a widespread effect, from developer experience to test iteration time, CI test times and more. As such this property should not be neglected. Running the sort-research-rs test suite as debug build via hyperfine yields:
+All the benchmarks above have been performed using highly optimized builds. While performance of optimized builds is crucial, performance of debug builds has a widespread effect, from developer experience to test iteration time, CI test times and more. As such, this property should not be neglected. Running the sort-research-rs test suite as debug build via hyperfine yields:
 
 ```
 rust_std_stable:
@@ -206,7 +206,7 @@ rust_std_stable is by far the simplest implementation. An source of complexity c
 
 > Our methodology starts by searching in Google’s entire source code depot for occurrences of std::sort and the wrapper function absl::c_sort. A small fraction of these are excluded based on their filename (e.g. nonsource files) or path (e.g. compiler test suites). We then exclude the vast majority whose directories do not account for a relevant number of samples in Google-wide CPU usage measurements. This leaves several hundred occurrences, which are still too numerous for manual inspection. We further filter out calls (about half) which have an extra comparator argument. Note that some of them may define a lexicographical ordering within 128 or fewer bits of data, which could be supported by vqsort. However, this would be laborious to prove, so we exclude them from our analysis. We then manually inspect the code, finding that the total CPU time for sort calls with up to 128-bit keys outnumbers the total for other sorts (e.g. strings and tuples) by a factor of two.
 
-A worst case scenario for rust_ipn_stable would be such a type, relatively small, and the comparison is done using an integer.
+A worst case scenario for rust_ipn_stable would be such a type, relatively small, and the comparison done using an integer.
 
 ```rust
 struct ValWithMutex {
@@ -265,7 +265,7 @@ M1 Pro 8-Core Processor (Firestorm P-core micro-architecture)
 
 <img src="assets/firestorm-hot-u64-scaling-random.png" width=600 />
 
-Out of all the tested micro-architectures it reaches the highest random throughput peak, of ~0.1 elements per cycle (elem/cycle) for size 16 inputs. Assuming ~80 comparisons required for such an input, would mean one compare and swap every second cycle for rust_glidesort_stable. rust_std_stable in contrast that uses insertion sort, only manages ~0.037 (aka 3.7e-2) elem/cycle for the same input. rust_ipn_stable shows throughput very close to that on Zen3, eg. 10k 1.85e-2 elem/cycle vs 0.188e-2 elem/cycle, 1m 1.15e-2 elem/cycle vs 1.12e-2 elem/cycle. In contrast rust_glidesort_stable, c_fluxsort_stable and cpp_powersort_stable see large improvements in throughput. Eg. rust_glidesort_stable 10k 1.75e-2 elem/cycle vs 3e-2 elem/cycle, 1m 1.3e-2 elem/cycle vs 2.21e-2 elem/cycle. Clearly their implementations allow the Firestorm micro-architecture to exploit more ILP.
+Out of all the tested micro-architectures it reaches the highest random throughput peak, of ~0.1 elements per cycle (elem/cycle) for size 16 inputs. Assuming ~80 comparisons required for such an input, would mean one compare and swap every second cycle for rust_glidesort_stable. rust_std_stable in contrast that uses insertion sort, only manages ~0.037 (aka 3.7e-2) elem/cycle for the same input. rust_ipn_stable shows throughput very close to that on Zen3, eg. 1.85e-2 elem/cycle vs 0.188e-2 elem/cycle for 10k inputs, and  1.15e-2 elem/cycle vs 1.12e-2 elem/cycle for 1m inputs. In contrast rust_glidesort_stable, c_fluxsort_stable and cpp_powersort_stable see large improvements in throughput. Eg. rust_glidesort_stable has 1.75e-2 elem/cycle vs 3e-2 elem/cycle for 10k inputs, and 1.3e-2 elem/cycle vs 2.21e-2 elem/cycle for 1m inputs. Clearly their implementations allow the Firestorm micro-architecture to exploit more ILP.
 
 <img src="assets/firestorm-rust_ipn_stable-vs-rust_glidesort_stable-hot-u64.png" width=600 />
 
@@ -291,11 +291,11 @@ The architecture shows its age, peeking at 4.68e-2 elem/cycle for 16 element inp
 
 <img src="assets/broadwell-rust_ipn_stable-vs-rust_glidesort_stable-hot-u64.png" width=600 />
 
-In a head to head comparison, rust_ipn_stable performs better than rust_glidesort_stable on Broadwell for most patterns. Eg. saws_short being ~2.1x faster at 1k elements, and random ~1.6x faster at 1k. For very large data sets 1m+ rust_glidesort_stable pulls ahead.
+In a head to head comparison, rust_ipn_stable performs better than rust_glidesort_stable on Broadwell for most patterns. Eg. saws_short being ~2.1x faster at 1k elements, and random ~1.6x faster at 1k. For very large data sets (1m+) rust_glidesort_stable pulls ahead.
 
 ## Author's conclusion and opinion
 
-Glidesort is an impressive sort implementation! Even more so, given it passes the sort-research-rs test suite. Something none of the tested cpp and c based sort implementations do, not even all the tested Rust ones [[5](https://github.com/emilk/drop-merge-sort/issues/23)]. It tries to be good in all scenarios, and given large enough inputs, will outperform all tested implementations except fluxsort. It is particularly good when running on the Arm based M1 Pro chip. At the same time it is very complex, which shows on older hardware where it needs very large inputs to outperform ipn_stable. One stated goal of glidesort's author Orson Peters, is adoption as the Rust standard library `slice::sort` implementation. I'm pursuing the same goal with my ipn family of sort implementations, for both `slice::sort` and `slice::sort_unstable`. Our approaches are quite different, glidesort is a ground up novel implementation, while ipn_stable and ipn_unstable take the existing standard library implementations as base and tweak or replace components. With the explicit goal of improving performance with very little performance regression across the wider Rust ecosystem. The major limiting factor in getting things into the Rust standard library is reviewer bandwidth. At the time of writing, there are a total 4 people doing all the reviews for the Rust standard library. Sort implementations are particularly difficult to review, as it combines lots of unsafe code with user provided logic in the user-provided comparison function. The core performance of ipn_stable can be achieved with ~500 LoC, with the rest responsible for low cardinality exploitation. In addition the formally verified Timsort algorithm stays the same in ipn_stable. The graphs comparing rust_ipn_stable to rust_std_stable shows near universal improvements. In contrast rust_glidesort_stable is unable to efficiently sort small inputs with existing streaks. This could be fixed relatively simply, but even then some patterns remain where it is a performance regression up to ~2k elements. A standard library implementation should be good in the widest imaginable set of circumstances, or at least not bad. And what looks good in a benchmark like a 4 element sorting network for size 4 inputs, is worse than insertion sort when tested with cold CPU caches. Not to be ignored is binary size. All of the complexity in glidesort comes with a hefty binary size overhead. ipn_stable also incurs a large binary size increase compared to the existing implementation, but significantly less than glidesort. As noted before, debug performance can have wide ranging developer experience impacts. Here both glidesort and ipn_stable show performance regressions, but again ipn_stable significantly less so. Where glidesort really shines is very large inputs, yet if your program spends several milliseconds or more inside a single `slice::sort` call, you should probably consider using a multi-threaded sort implementation like ips4o [[6](https://github.com/ips4o/ips4o)] that can use your hardware resources more efficiently. The standard library implementation should also work well on a wide range of hardware, ipn_stable seems to better utilize weaker and older designs, but the data is not sufficient to say this with any confidence. Another issue with the current implementation of glidesort is, it always requires a stack array of 48 elements. The elements can have nearly arbitrary sizes, as they are user-defined types. Certain types could overflow the stack, especially on embedded devices. ipn_stable also uses a stack array of 32 elements, but only if the user-defined type is ` mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()`, otherwise falling back to slower code. As a potential standard library implementation, I think the advantages glidesort has over ipn_stable are too narrow to justify the added complexity, potential embedded problems, additional binary size and debug performance regression.
+Glidesort is an impressive sort implementation! Even more so, given it passes the sort-research-rs test suite. Something none of the tested cpp and c based sort implementations do, not even all the tested Rust ones [[5](https://github.com/emilk/drop-merge-sort/issues/23)]. It tries to be good in all scenarios, and given large enough inputs, will outperform all tested implementations except fluxsort. It is particularly good when running on the Arm based M1 Pro chip. At the same time it is very complex, which shows on older hardware where it needs very large inputs to outperform ipn_stable. One stated goal of glidesort's author Orson Peters, is adoption as the Rust standard library `slice::sort` implementation. I'm pursuing the same goal with my ipn family of sort implementations, for both `slice::sort` and `slice::sort_unstable`. Our approaches are quite different, glidesort is a ground up novel implementation, while ipn_stable and ipn_unstable take the existing standard library implementations as base and tweak or replace components. With the explicit goal of improving performance with very little performance regression across the wider Rust ecosystem. The major limiting factor in getting things into the Rust standard library is reviewer bandwidth. At the time of writing, there are a total 4 people doing all the reviews for the Rust standard library. Sort implementations are particularly difficult to review, as it combines lots of unsafe code with user provided logic in the user-provided comparison function. The core performance of ipn_stable can be achieved with ~500 LoC, with the rest responsible for low cardinality exploitation. In addition the formally verified Timsort algorithm stays the same in ipn_stable. The graphs comparing rust_ipn_stable to rust_std_stable show near universal improvements. In contrast rust_glidesort_stable is unable to efficiently sort small inputs with existing streaks. This could be fixed relatively simply, but even then some patterns remain where it is a performance regression up to ~2k elements. A standard library implementation should be good in the widest imaginable set of circumstances, or at least not bad. And what looks good in a benchmark like a 4 element sorting network for size 4 inputs, is worse than insertion sort when tested with cold CPU caches. Not to be ignored is binary size. All of the complexity in glidesort comes with a hefty binary size overhead. ipn_stable also incurs a large binary size increase compared to the existing implementation, but significantly less than glidesort. As noted before, debug performance can have wide ranging developer experience impacts. Here both glidesort and ipn_stable show performance regressions, but again ipn_stable significantly less so. Where glidesort really shines is very large inputs, yet if your program spends several milliseconds or more inside a single `slice::sort` call, you should probably consider using a multi-threaded sort implementation like ips4o [[6](https://github.com/ips4o/ips4o)] that can use your hardware resources more efficiently. The standard library implementation should also work well on a wide range of hardware, ipn_stable seems to better utilize weaker and older designs, but the data is not sufficient to say this with any confidence. Another issue with the current implementation of glidesort is, it always requires a stack array of 48 elements. The elements can have nearly arbitrary sizes, as they are user-defined types. Certain types could overflow the stack, especially on embedded devices. ipn_stable also uses a stack array of 32 elements, but only if the user-defined type is ` mem::size_of::<T>() <= mem::size_of::<[usize; 4]>()`, otherwise falling back to slower code. As a potential standard library implementation, I think the advantages glidesort has over ipn_stable are too narrow to justify the added complexity, potential embedded problems, additional binary size and debug performance regression.
 
 That said, this analysis looks at the current state of the respective implementations. Both may change in the future, and there is a possible future where the best of glidesort and ipn_stable is combined. Most modern sort implementations have a long lineage of ideas and concepts they incorporate from earlier implementations and designs.
 
