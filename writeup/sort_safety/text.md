@@ -316,4 +316,4 @@ As seen in the benchmarks, the current Rust standard library unstable sort imple
 
 ## Thanks
 
-Thank you Klaus Iglberger for providing detailed feedback and valuable suggestions on improving the readability of this writeup.
+Thank you Klaus Iglberger for providing detailed feedback and valuable suggestions on improving the readability of this writeup. Thank you Lumine for the detailed proofread.

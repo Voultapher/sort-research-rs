@@ -410,7 +410,7 @@ All the results are a snapshot of the respective implementations. After performi
 
 ## Thanks
 
-Thank you Jan Wassenberg for your detailed feedback, extensive help in running benchmarks and helping me understand some of the observations. Thank you Roland Bock for your detailed feedback and ideas how to make this writeup more readable.
+Thank you Jan Wassenberg for your detailed feedback, extensive help in running benchmarks and helping me understand some of the observations. Thank you Roland Bock for your detailed feedback and ideas how to make this writeup more readable. Thank you Lumine for the detailed proofread.
 
 ## Addendum
 

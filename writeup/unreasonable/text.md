@@ -309,4 +309,4 @@ It's absolutely possible to beat even the best sort implementations with domain 
 
 The title is an homage to Eugene Wigner's 1960 paper "The Unreasonable Effectiveness of Mathematics in the Natural Sciences".
 
-Orson Peters and Roland Bock helped as technical reviewers.
+Orson Peters and Roland Bock helped as technical reviewers. Lumine helped as proofreader.

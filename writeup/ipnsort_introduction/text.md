@@ -513,4 +513,4 @@ Orson: Sorting has always caught my interest, but was always a solo endeavor. Af
 
 ## Acknowledgements
 
-None of this would have been possible without the work of all those that came before me. We stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, Igor van den Hoven and many others have been invaluable in building ipnsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements. Roland Bock as reviewer for the technical writing helped us communicate our work.
+None of this would have been possible without the work of all those that came before me. We stand on a mountain of research conducted by others. The domain specific contributions of Tony Hoare, Stefan Edelkamp, Armin Weiß, Igor van den Hoven and many others have been invaluable in building ipnsort. The micro-architecture deep-dives by clamchowder were instrumental in analyzing and understanding the performance measurements. Roland Bock and Lumine as reviewers for the technical writing helped us communicate our work.

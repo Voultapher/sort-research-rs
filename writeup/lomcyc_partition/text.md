@@ -904,4 +904,4 @@ Stay curious.
 
 ## Thanks
 
-Thank you Orson Peters for all the help and thoughtful discussions. Thank you Roland Bock for your detailed feedback and ideas how to make this writeup more readable.
+Thank you Orson Peters for all the help and thoughtful discussions. Thank you Roland Bock for your detailed feedback and ideas how to make this writeup more readable. Thank you Lumine for the detailed proofread.

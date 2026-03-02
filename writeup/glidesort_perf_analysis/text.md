@@ -303,4 +303,4 @@ If you as a reader have access to small embedded chips that could be used for be
 
 ## Thanks
 
-I want to thank Orson Peters for the detailed feedback and help.
+I want to thank Orson Peters for the detailed feedback and help and Lumine for their detailed proofreading.
